@@ -2,7 +2,7 @@
 
 from contextlib import closing
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from northstar import config, db, sessions, users
@@ -18,6 +18,14 @@ def current_user(request: Request):
     inside a protected route.
     """
     return request.state.user
+
+
+def require_admin(request: Request):
+    """A route dependency: only admins get through. Signed-out users never reach it (see app.py)."""
+    user = current_user(request)
+    if not user["is_admin"]:
+        raise HTTPException(status_code=403, detail="Only admins can do that.")
+    return user
 
 
 def safe_next(target: str) -> str:

@@ -3,6 +3,7 @@ import { fetchMe, type Me, type Theme, updateMe } from "./api";
 import { Dashboard } from "./Dashboard";
 import { Profile } from "./Profile";
 import { routeFromHash } from "./routes";
+import { Users } from "./Users";
 
 /** Show a theme now, and remember it in the browser so the sign-in page and the first paint match. */
 function applyTheme(theme: Theme) {
@@ -63,6 +64,7 @@ export function App() {
         <a href="/accounts">Accounts</a>
         <div className="group">Admin</div>
         <a href="/types">Account types</a>
+        {me?.is_admin && <a className={route === "users" ? "active" : ""} href="#/users">Users</a>}
         <div className="spacer" />
         <a className={route === "profile" ? "active" : ""} href="#/profile">{me ? me.display_name : "Profile"}</a>
         <form method="post" action="/logout">
@@ -70,10 +72,14 @@ export function App() {
         </form>
       </nav>
       <main>
-        {route === "profile" && me ? (
-          <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
-        ) : route === "profile" ? null : (
+        {route === "dashboard" ? (
           <Dashboard />
+        ) : !me ? null : route === "profile" ? (
+          <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
+        ) : me.is_admin ? (
+          <Users me={me} />
+        ) : (
+          <p className="empty">Only admins can manage users.</p>
         )}
       </main>
     </div>

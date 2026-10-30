@@ -20,10 +20,10 @@ def anon_client(tmp_path):
     return TestClient(create_app(tmp_path / "web.db"), follow_redirects=False)
 
 
-def sign_in(test_client):
-    """Create a synthetic admin and sign the client in as them."""
+def sign_in(test_client, email="test@example.com", name="Test User", is_admin=True):
+    """Create a synthetic user (an admin unless said otherwise) and sign the client in as them."""
     with db.connect(test_client.app.state.db_path) as connection:
-        user_id = users.create_user(connection, "test@example.com", "Test User", "test-password-123", is_admin=True)
+        user_id = users.create_user(connection, email, name, "test-password-123", is_admin=is_admin)
         test_client.cookies.set("northstar_session", sessions.create_session(connection, user_id))
     return test_client
 
@@ -32,6 +32,12 @@ def sign_in(test_client):
 def client(tmp_path):
     """A client signed in as a synthetic admin, so existing page tests need no login step."""
     return sign_in(TestClient(create_app(tmp_path / "web.db")))
+
+
+@pytest.fixture
+def member_client(tmp_path):
+    """A client signed in as an ordinary user who is not an admin."""
+    return sign_in(TestClient(create_app(tmp_path / "web.db")), "member@example.com", "Member", is_admin=False)
 
 
 def with_db(client):

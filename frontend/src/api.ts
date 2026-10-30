@@ -62,3 +62,26 @@ export async function updateMe(change: { display_name?: string; theme?: Theme })
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await send("POST", "/api/me/password", { current_password: currentPassword, new_password: newPassword });
 }
+
+/** One row of the admin Users page. created_at is UTC text. */
+export type UserRow = { id: number; email: string; display_name: string; is_admin: boolean; created_at: string };
+
+export async function fetchUsers(): Promise<UserRow[]> {
+  return (await send<UserRow[]>("GET", "/api/users", undefined))!;
+}
+
+export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean }): Promise<UserRow> {
+  return (await send<UserRow>("POST", "/api/users", user))!;
+}
+
+export async function setAdmin(id: number, isAdmin: boolean): Promise<UserRow> {
+  return (await send<UserRow>("PATCH", `/api/users/${id}`, { is_admin: isAdmin }))!;
+}
+
+export async function resetPassword(id: number, password: string): Promise<void> {
+  await send("POST", `/api/users/${id}/password`, { password });
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  await send("DELETE", `/api/users/${id}`, undefined);
+}
