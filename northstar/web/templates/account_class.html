@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Change class - Northstar{% endblock %}
+{% block content %}
+<h1>Change class: {{ account.name }}</h1>
+
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<p>Change from <strong>{{ account.class_name }}</strong> to <strong>{{ target.name }}</strong>.</p>
+
+<p class="warning">
+  {% if impact.balance_count == 0 %}
+  This account has no balances, so past net worth does not change.
+  {% else %}
+  This account has {{ impact.balance_count }} balance{{ "" if impact.balance_count == 1 else "s" }},
+  the earliest on {{ impact.earliest_date }}. Net worth changes from that date onward.
+  {% endif %}
+</p>
+
+{% if not types %}
+<p>There are no {{ target.name|lower }} types yet. <a href="/types">Add one on the Account types page</a> first.</p>
+<p><a href="/accounts/{{ account.id }}/edit">Back</a></p>
+{% else %}
+<form method="post" action="/accounts/{{ account.id }}/change-class" class="stack">
+  <label>New type
+    <select name="type_id" required>
+      <option value="" selected disabled>Choose a {{ target.name|lower }} type</option>
+      {% for t in types %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <p><button>Confirm change to {{ target.name }}</button> <a href="/accounts/{{ account.id }}/edit">Cancel</a></p>
+</form>
+{% endif %}
+{% endblock %}

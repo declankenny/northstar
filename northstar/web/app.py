@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from northstar import db
-from northstar.web import types_routes
+from northstar.web import accounts_routes, types_routes
 
 WEB_DIR = Path(__file__).parent
 DEFAULT_DB_PATH = "data/northstar.db"
@@ -43,11 +43,12 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.state.templates = Jinja2Templates(directory=WEB_DIR / "templates")
     app.middleware("http")(refuse_cross_site_posts)
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
+    app.include_router(accounts_routes.router)
     app.include_router(types_routes.router)
 
     @app.get("/")
     def home():
         # Temporary: the Dashboard replaces this when it exists.
-        return RedirectResponse("/types", status_code=307)
+        return RedirectResponse("/accounts", status_code=307)
 
     return app
