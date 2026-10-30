@@ -35,7 +35,7 @@
       <tr class="group"><th colspan="6">{{ "Assets" if r.class_name == "Asset" else "Liabilities" }}</th></tr>
       {% endif %}
       <tr>
-        <td>{{ r.name }}</td>
+        <td><a href="/accounts/{{ r.id }}">{{ r.name }}</a></td>
         <td>{{ r.type_name }}</td>
         <td class="num">{% if r.last_cents is not none %}{{ r.last_cents|money }}{% else %}&ndash;{% endif %}</td>
         <td>{{ r.last_date or "" }}</td>

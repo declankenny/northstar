@@ -5,7 +5,7 @@ from contextlib import closing
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import RedirectResponse
 
-from northstar import accounts, db
+from northstar import accounts, clock, db
 from northstar.errors import ValidationError
 
 router = APIRouter()
@@ -31,8 +31,8 @@ def _render(request: Request, template: str, context: dict, status_code: int = 2
     )
 
 
-def _done() -> RedirectResponse:
-    return RedirectResponse("/accounts", status_code=303)
+def _done(to: str = "/accounts") -> RedirectResponse:
+    return RedirectResponse(to, status_code=303)
 
 
 def _list_page(request: Request, closed: bool = False, error: str | None = None,
@@ -64,6 +64,18 @@ def new_account_page(request: Request, account_class: str = Query("", alias="cla
         except ValidationError as err:
             return _list_page(request, error=str(err), status_code=400)
         return _form_page(request, conn, cls, {"name": "", "type_id": None, "notes": ""})
+
+
+@router.get("/accounts/{account_id}")
+def account_detail_page(request: Request, account_id: int):
+    # Registered after /accounts/new, so "new" is never read as an account id.
+    with _conn(request) as conn:
+        try:
+            summary = accounts.account_summary(conn, account_id, clock.today())
+        except ValidationError as err:
+            return _list_page(request, error=str(err), status_code=404)
+        history = accounts.balance_history(conn, account_id)
+    return _render(request, "account_detail.html", {"a": summary, "history": history})
 
 
 @router.post("/accounts")
@@ -108,7 +120,7 @@ def update_account(request: Request, account_id: int, name: str = Form(""),
             cls = {"id": account["class_id"], "name": account["class_name"]}
             form = {"name": name, "type_id": _int(type_id), "notes": notes}
             return _form_page(request, conn, cls, form, account=account, error=str(err), status_code=400)
-    return _done()
+    return _done(f"/accounts/{account_id}")
 
 
 def _class_page(request: Request, conn, account, error: str | None = None, status_code: int = 200):
@@ -142,7 +154,7 @@ def change_class(request: Request, account_id: int, type_id: str | None = Form(N
             accounts.change_class(conn, account_id, _int(type_id))
         except ValidationError as err:
             return _class_page(request, conn, account, str(err), 400)
-    return _done()
+    return _done(f"/accounts/{account_id}")
 
 
 @router.post("/accounts/{account_id}/close")

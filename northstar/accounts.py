@@ -1,7 +1,9 @@
 """Account rules. Plain functions, no web code."""
 
 import sqlite3
+from datetime import date
 
+from northstar import staleness
 from northstar.errors import ValidationError
 
 _SELECT = (
@@ -27,6 +29,39 @@ def get_account(conn: sqlite3.Connection, account_id: int) -> sqlite3.Row:
     if row is None:
         raise ValidationError("That account no longer exists.")
     return row
+
+
+def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> dict:
+    """The account plus what its page shows: balance count, earliest date, latest balance,
+    its age in days and whether that is stale for the account's type."""
+    summary = dict(get_account(conn, account_id))
+    summary["stale_after_days"] = conn.execute(
+        "SELECT stale_after_days FROM account_types WHERE id = ?", (summary["type_id"],)
+    ).fetchone()[0]
+    summary["earliest_date"] = conn.execute(
+        "SELECT MIN(as_of_date) FROM balances WHERE account_id = ?", (account_id,)
+    ).fetchone()[0]
+    latest = conn.execute(
+        "SELECT as_of_date, amount_cents FROM balances WHERE account_id = ? "
+        "ORDER BY as_of_date DESC LIMIT 1",
+        (account_id,),
+    ).fetchone()
+    summary["last_date"] = latest["as_of_date"] if latest else None
+    summary["last_cents"] = latest["amount_cents"] if latest else None
+    summary["days_since"] = staleness.days_since(summary["last_date"], today)
+    # Closed accounts are never flagged: their last balance is meant to be old.
+    summary["stale"] = bool(summary["is_open"]) and staleness.is_stale(
+        summary["last_date"], today, summary["stale_after_days"])
+    return summary
+
+
+def balance_history(conn: sqlite3.Connection, account_id: int) -> list[sqlite3.Row]:
+    """Every balance of the account, newest date first."""
+    return conn.execute(
+        "SELECT id, as_of_date, amount_cents, note, source FROM balances "
+        "WHERE account_id = ? ORDER BY as_of_date DESC",
+        (account_id,),
+    ).fetchall()
 
 
 def get_class_by_slug(conn: sqlite3.Connection, slug: str | None) -> sqlite3.Row:

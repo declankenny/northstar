@@ -27,4 +27,11 @@ td input.invalid { border: 2px solid #c33; }
 .field-error { color: #a11; font-size: 0.85rem; margin-top: 0.2rem; }
 .stale { color: #a11; font-weight: 600; font-size: 0.85rem; }
 tr.group th { background: #f4f4f4; font-size: 0.9rem; }
+.summary { display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1.2rem; margin: 1rem 0; }
+.summary dt { color: #555; }
+.summary dd { margin: 0; }
+.summary dd.notes { white-space: pre-line; }
+.badge { font-size: 0.9rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 3px; background: #eee; vertical-align: middle; }
+.actions form { display: inline; }
+p.actions { display: flex; gap: 0.8rem; align-items: baseline; flex-wrap: wrap; }
 .warning { background: #fff7e0; border: 1px solid #e0cd8a; padding: 0.6rem 0.8rem; border-radius: 4px; }

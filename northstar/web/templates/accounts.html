@@ -24,13 +24,12 @@
   <tbody>
     {% for a in accounts %}
     <tr>
-      <td>{{ a.name }}</td>
+      <td><a href="/accounts/{{ a.id }}">{{ a.name }}</a></td>
       <td>{{ a.type_name }}</td>
       <td>{{ a.class_name }}</td>
       <td>{{ a.balance_count }}</td>
       <td>{{ a.notes or "" }}</td>
       <td class="actions">
-        <a href="/accounts/{{ a.id }}/edit">Edit</a>
         {% if a.is_open %}
         <form method="post" action="/accounts/{{ a.id }}/close"><button>Close</button></form>
         {% else %}

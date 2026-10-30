@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ a.name }} - Northstar{% endblock %}
+{% block content %}
+<p><a href="/accounts">&larr; Accounts</a></p>
+
+<h1>{{ a.name }}{% if not a.is_open %} <span class="badge">Closed</span>{% endif %}</h1>
+
+<dl class="summary">
+  <dt>Class</dt><dd>{{ a.class_name }}</dd>
+  <dt>Type</dt><dd>{{ a.type_name }}</dd>
+  <dt>Latest balance</dt>
+  <dd>
+    {% if a.last_cents is none %}None yet
+    {% else %}<strong>{{ a.last_cents|money }}</strong> as of {{ a.last_date }}{% endif %}
+  </dd>
+  <dt>Age</dt>
+  <dd>
+    {% if a.days_since is none %}<span class="{{ 'stale' if a.is_open }}">No balance yet</span>
+    {% else %}{{ a.days_since }} day{{ "" if a.days_since == 1 else "s" }}{% if a.stale %} <span class="stale">Stale</span>{% endif %}
+    {% endif %}
+  </dd>
+  <dt>Balances</dt>
+  <dd>
+    {% if a.balance_count == 0 %}0
+    {% else %}{{ a.balance_count }} since {{ a.earliest_date }}{% endif %}
+  </dd>
+  <dt>Notes</dt><dd class="notes">{{ a.notes or "None" }}</dd>
+</dl>
+
+<p class="actions">
+  <a href="/accounts/{{ a.id }}/edit" class="button">Edit</a>
+  {% if a.is_open %}
+  <form method="post" action="/accounts/{{ a.id }}/close"><button>Close</button></form>
+  {% else %}
+  <form method="post" action="/accounts/{{ a.id }}/reopen"><button>Reopen</button></form>
+  {% endif %}
+  <a href="/accounts/{{ a.id }}/delete" class="danger">Delete</a>
+</p>
+
+<h2>Balances</h2>
+{% if history %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Date</th><th class="num">Amount</th><th>Note</th><th>Source</th></tr>
+  </thead>
+  <tbody>
+    {% for b in history %}
+    <tr>
+      <td>{{ b.as_of_date }}</td>
+      <td class="num">{{ b.amount_cents|money }}</td>
+      <td>{{ b.note or "" }}</td>
+      <td>{{ b.source }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p>No balances yet.
+  {% if a.is_open %}<a href="/balances/update">Enter one on the Update balances page</a>.
+  {% else %}Reopen the account to enter one.{% endif %}
+</p>
+{% endif %}
+{% endblock %}

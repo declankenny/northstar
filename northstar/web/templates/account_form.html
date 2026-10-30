@@ -21,7 +21,7 @@
     </select>
   </label>
   <label>Notes (optional) <textarea name="notes" rows="3">{{ form.notes }}</textarea></label>
-  <p><button>{% if account %}Save{% else %}Add account{% endif %}</button> <a href="/accounts">Cancel</a></p>
+  <p><button>{% if account %}Save{% else %}Add account{% endif %}</button> <a href="{{ '/accounts/' ~ account.id if account else '/accounts' }}">Cancel</a></p>
 </form>
 {% endif %}
 {% endblock %}
