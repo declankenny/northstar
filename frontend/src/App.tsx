@@ -1,52 +1,80 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { fetchMe, type Me, type Theme, updateMe } from "./api";
 import { Dashboard } from "./Dashboard";
+import { Profile } from "./Profile";
+import { routeFromHash } from "./routes";
 
-type Theme = "light" | "dark";
+/** Show a theme now, and remember it in the browser so the sign-in page and the first paint match. */
+function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem("northstar-theme", theme); // a convenience only: the page works without it
+  } catch {
+    /* storage can be blocked */
+  }
+}
 
-function useTheme(): [Theme, (theme: Theme) => void] {
-  const [theme, setTheme] = useState<Theme>(
-    document.documentElement.dataset.theme === "light" ? "light" : "dark",
-  );
-  const choose = (next: Theme) => {
-    document.documentElement.dataset.theme = next;
-    setTheme(next);
-    try {
-      localStorage.setItem("northstar-theme", next); // a convenience only: the page works without it
-    } catch {
-      /* storage can be blocked */
-    }
-  };
-  return [theme, choose];
+function useRoute() {
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  return routeFromHash(hash);
 }
 
 // The other screens are still the server-rendered pages, so these are ordinary links to them.
 export function App() {
-  const [theme, setTheme] = useTheme();
+  const route = useRoute();
+  const [me, setMe] = useState<Me | null>(null);
+
+  // The account's theme wins over whatever this browser remembered.
+  useEffect(() => {
+    fetchMe().then((loaded) => {
+      setMe(loaded);
+      applyTheme(loaded.theme);
+    }, () => {});
+  }, []);
+
+  const chooseTheme = async (theme: Theme) => {
+    const before = me;
+    applyTheme(theme); // show it at once
+    setMe((current) => (current ? { ...current, theme } : current));
+    try {
+      setMe(await updateMe({ theme }));
+    } catch (error) {
+      if (before) {
+        applyTheme(before.theme);
+        setMe(before);
+      }
+      throw error;
+    }
+  };
+
   return (
     <div className="app">
       <nav>
         <div className="brand">
           <i>★</i> Northstar
         </div>
-        <a className="active" href="/app/">Dashboard</a>
+        <a className={route === "dashboard" ? "active" : ""} href="#/">Dashboard</a>
         <a href="/balances/update">Update balances</a>
         <a href="/accounts">Accounts</a>
         <div className="group">Admin</div>
         <a href="/types">Account types</a>
         <div className="spacer" />
+        <a className={route === "profile" ? "active" : ""} href="#/profile">{me ? me.display_name : "Profile"}</a>
         <form method="post" action="/logout">
           <button className="signout">Sign out</button>
         </form>
-        <div className="theme" role="group" aria-label="Theme">
-          {(["light", "dark"] as const).map((t) => (
-            <button key={t} className={theme === t ? "on" : ""} aria-pressed={theme === t} onClick={() => setTheme(t)}>
-              {t === "light" ? "Light" : "Dark"}
-            </button>
-          ))}
-        </div>
       </nav>
       <main>
-        <Dashboard />
+        {route === "profile" && me ? (
+          <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
+        ) : route === "profile" ? null : (
+          <Dashboard />
+        )}
       </main>
     </div>
   );

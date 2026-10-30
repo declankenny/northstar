@@ -50,3 +50,11 @@ def user_for_token(conn: sqlite3.Connection, token: str | None, now: datetime | 
 def end_session(conn: sqlite3.Connection, token: str | None) -> None:
     if token:
         conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_hash(token),))
+
+
+def end_sessions(conn: sqlite3.Connection, user_id: int, except_token: str | None = None) -> None:
+    """Sign a user out everywhere, optionally keeping the browser that holds except_token."""
+    if except_token:
+        conn.execute("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?", (user_id, _hash(except_token)))
+    else:
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))

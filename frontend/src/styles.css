@@ -67,3 +67,19 @@ svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .signout { width: 100%; border: 0; background: none; color: var(--muted); padding: 9px 10px; margin-bottom: 10px;
   border-radius: 8px; font: inherit; text-align: left; cursor: pointer; }
 .signout:hover { color: var(--text); }
+
+/* Profile page */
+.page { overflow: auto; padding-bottom: 28px; }
+.panels { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; max-width: 520px; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.panel h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.panel label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.panel input { font: inherit; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; }
+.panel input[readonly] { color: var(--muted); }
+.panel input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.panel .ranges { align-self: flex-start; }
+.hint { color: var(--muted); font-size: 13px; }
+.notice { margin: 0; font-size: 14px; }
+.notice.ok { color: var(--pos); } .notice.bad { color: var(--neg); }
+button.btn { border: 0; font: inherit; font-weight: 600; cursor: pointer; align-self: flex-start; }
+button.btn:disabled { opacity: .45; cursor: default; }
