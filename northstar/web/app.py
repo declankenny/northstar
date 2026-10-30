@@ -1,6 +1,5 @@
 """App setup. Page routes live in their own modules and call plain functions."""
 
-import os
 from contextlib import closing
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -10,12 +9,11 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from northstar import db
+from northstar import config, db
 from northstar.money import cents_to_input, format_cents
 from northstar.web import accounts_routes, balances_routes, dashboard_routes, types_routes
 
 WEB_DIR = Path(__file__).parent
-DEFAULT_DB_PATH = "data/northstar.db"
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 
@@ -34,7 +32,7 @@ async def refuse_cross_site_posts(request: Request, call_next):
 
 
 def create_app(db_path: str | Path | None = None) -> FastAPI:
-    db_path = Path(db_path or os.environ.get("NORTHSTAR_DB", DEFAULT_DB_PATH))
+    db_path = Path(db_path) if db_path else config.database_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with closing(db.connect(db_path)) as conn:
         db.migrate(conn)
