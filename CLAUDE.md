@@ -27,7 +27,7 @@ A self-hosted tracker of household financial position over time, run as a docker
 ## Code
 
 - Money is integer cents. Never floating point.
-- Balances are calendar dates with no timezone. TODO decide the application timezone for "today".
+- Balances are calendar dates with no timezone. The app has no timezone logic in v1: "today" is the machine's date, read in one `today()` function.
 - Keep dependencies few. Each new one needs a stated reason.
 - Schema changes ship as migrations and are tested on a copy of the database first.
 
