@@ -21,7 +21,7 @@ packages = ["northstar", "northstar.web"]
 
 [tool.setuptools.package-data]
 northstar = ["migrations/*.sql"]
-"northstar.web" = ["templates/*.html", "static/*"]
+"northstar.web" = ["templates/*.html", "static/*", "spa/*", "spa/assets/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
