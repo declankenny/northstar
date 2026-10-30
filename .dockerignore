@@ -1,0 +1,19 @@
+.git
+.venv
+venv
+__pycache__
+*.egg-info
+.pytest_cache
+
+# Real financial data and secrets never go into an image
+data/
+backups/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.bak
+*.partial
+*.before-restore-*
+.env
+.env.*
