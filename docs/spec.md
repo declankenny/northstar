@@ -1,6 +1,6 @@
-# Northstar: v1 spec (DRAFT)
+# Northstar: v1 spec
 
-Status: draft for Declan's approval. Items marked TODO or "Decision" are unresolved. Do not guess them.
+Status: v1 complete (2026-10-30). Every acceptance item is met, including a restart of the container running in Docker Desktop on the development PC. It is not deployed to the deployment host. The next phase is described under "After v1". Items marked TODO or "Decision" are unresolved. Do not guess them.
 
 Northstar is the app name. The repo is `github.com/declankenny/northstar` (private).
 
@@ -28,7 +28,7 @@ Track the household's financial position over time. v1 records dated balances fo
 - Multiple currencies (decided for v1). Every amount is US dollars in integer cents, and no currency is stored in the database. A balance held in another currency, or in bitcoin or another crypto asset, is entered as its US dollar value at the time of the update. Quantities of units held are holdings, which are also not in v1. Supporting more currencies later means a currency on each account, a rate per balance and rounding rules. That is a separate design, and existing balances stay valid because they would default to USD.
 - Loan schedules. A loan is just a liability with a balance history.
 - Charts (decided). Net worth and balance history are shown as tables in v1. Charts wait for a modernized UI (see "After v1").
-- A JSON API or a JavaScript frontend such as React. Pages are server-rendered (see "Technical shape").
+- A JSON API or a JavaScript frontend such as React. Pages are server-rendered (see "Technical shape"). Both are in scope for the next phase (see "After v1", item 6).
 
 ## Data model
 
@@ -89,11 +89,11 @@ Deletion rules:
 
 ## Technical shape
 
-Stack, architecture, authentication and backup are decided. Packaging and deployment are still proposals.
+Stack, architecture, packaging, authentication and backup are decided. Deployment is still a proposal.
 
 - **Stack (decided)**: Python, FastAPI, server-rendered HTML templates, and SQLite. No charting library, no React and no frontend build step in v1.
 - **Architecture (decided)**: business logic lives in plain Python functions, separate from the page routes and templates. This covers the net worth calculation, the close rules and staleness. Routes call these functions and templates only display the results. Reason: a React frontend could be added later by putting JSON endpoints over the same functions. Do not build a JSON API in v1.
-- **Packaging (proposed)**: one docker container and one SQLite file on a mounted volume. Reason: household scale, fewest moving parts, simple backup.
+- **Packaging (decided)**: one docker container and one SQLite file on a mounted volume. Reason: household scale, fewest moving parts, simple backup.
 - **Backup (decided)**: never copy a live SQLite file by hand while the app runs. A command line tool does it with SQLite's online backup: `python -m northstar.backup create FILE` and `python -m northstar.backup restore FILE [--replace]`. The database is `NORTHSTAR_DB` (default `data/northstar.db`).
   - A backup is written to a temporary file, checked (SQLite integrity check, foreign keys, the expected tables) and only then renamed into place. It never overwrites an existing file, and a failure leaves no partial file.
   - A restore checks the backup first and needs the app stopped. It refuses to replace an existing database unless `--replace` is given, and then it moves the old file aside as `<name>.before-restore-<time>` instead of deleting it. Leftover journal files are moved aside too, so an old journal can't corrupt the restored file.
@@ -125,10 +125,21 @@ Stack, architecture, authentication and backup are decided. Packaging and deploy
 3. CSV import and export.
 4. Transactions, only if a real need appears.
 5. Retirement planning. A future goal, not yet scoped.
-6. Modern UI and charts. A React or similar frontend, with charts for net worth and balance history. It needs JSON endpoints over the existing logic functions, which are deliberately not built in v1.
+6. **Modern UI and charts (next phase, active).** A React frontend, with charts for net worth and balance history, over JSON endpoints on the existing logic functions.
+   - **Proposed stack**: React, TypeScript and Vite, built to a static bundle that FastAPI serves from the same container and the same origin, so there is no CORS setup. The old server-rendered pages stay in place until the new UI matches them. Reason: it has the most documentation, and it can be served without a second container. Each frontend dependency needs a stated reason. Chart library: TODO choose once the charts are decided.
+   - **First step, a sliver**: one read-only endpoint over the month-end net worth series in `networth.py`, with a test on synthetic data, and one React page that charts it, served at `/app`. Its purpose is to prove the toolchain and the Docker build before more screens move over.
+   - **Read-only first**: until access is protected (see "Authentication"), endpoints are `GET` only. Endpoints that change data wait for the auth decision.
+   - **Dates** stay as `YYYY-MM-DD` strings in JSON and in the frontend, never converted to JavaScript `Date` objects, so the no-timezone rule holds. Money stays integer cents.
+   - The Dockerfile gains a Node build stage that produces the bundle. Deployment is still out of scope until Declan approves.
 
 ## Open decisions
 
 Resolved: app name and repo (Northstar, `github.com/declankenny/northstar`), stack and database (see "Technical shape"), sign convention for liabilities (positive amount plus a class, see "Rules"), account types (user configurable, with a fixed Asset/Liability class table), editable account class, deletable accounts and types, carry-forward, closing accounts, authentication (none in v1, with a deployment gate), currency (USD only in v1), stale threshold (per account type, with starting values), no timezone awareness in v1.
 
-None. All v1 decisions in this list are settled. New questions that come up while building get added here.
+All v1 decisions in this list are settled. New questions that come up while building get added here.
+
+Open for the next phase:
+
+- Frontend stack: React, TypeScript and Vite proposed (see "After v1", item 6). Needs Declan's approval.
+- Chart library and which charts to build first. TODO.
+- Authentication and the deployment gate, which must be settled before any endpoint that changes data and before deployment to the deployment host. TODO.
