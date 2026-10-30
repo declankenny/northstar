@@ -16,7 +16,7 @@
       <a href="/accounts">Accounts</a>
       <a href="/types">Account types</a>
       <form method="post" action="/logout" class="signout">
-        <span>{{ request.state.user.display_name }}</span>
+        <a href="/app/#/profile">{{ request.state.user.display_name }}</a>
         <button>Sign out</button>
       </form>
     </nav>

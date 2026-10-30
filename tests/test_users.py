@@ -131,7 +131,7 @@ def test_users_migration_applies_to_a_populated_database_without_touching_it(tmp
     assert db.migrate(conn, old) == ["0001_initial"]
     account = add_account(conn, "Test checking", 1, "Checking")
     add_balance(conn, account, "2026-01-31", 123456)
-    assert db.migrate(conn) == ["0002_users"]
+    assert db.migrate(conn) == ["0002_users", "0003_user_theme"]
     assert conn.execute("SELECT amount_cents FROM balances").fetchone()[0] == 123456
     assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0     # no default user
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []

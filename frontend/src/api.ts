@@ -20,3 +20,45 @@ export async function fetchNetWorth(query: { start?: string; period?: Period } =
   if (!response.ok) throw new Error(`The server answered ${response.status}`);
   return response.json();
 }
+
+export type Theme = "light" | "dark";
+
+/** The signed-in user. The email and is_admin are read-only here. */
+export type Me = { id: number; email: string; display_name: string; is_admin: boolean; theme: Theme };
+
+/** Send a change and return the JSON answer, or throw an Error whose message is fit to show the user. */
+async function send<T>(method: string, url: string, body: unknown): Promise<T | null> {
+  const response = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (response.status === 401) {
+    window.location.href = "/login"; // the session ended: sign in again
+    throw new Error("You are signed out.");
+  }
+  if (!response.ok) {
+    const detail = (await response.json().catch(() => null))?.detail;
+    throw new Error(typeof detail === "string" ? detail : `The server answered ${response.status}`);
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+export async function fetchMe(): Promise<Me> {
+  const response = await fetch("/api/me");
+  if (response.status === 401) {
+    window.location.href = "/login";
+    throw new Error("You are signed out.");
+  }
+  if (!response.ok) throw new Error(`The server answered ${response.status}`);
+  return response.json();
+}
+
+/** Change the display name and/or the theme. Only the fields given change. */
+export async function updateMe(change: { display_name?: string; theme?: Theme }): Promise<Me> {
+  return (await send<Me>("PATCH", "/api/me", change))!;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await send("POST", "/api/me/password", { current_password: currentPassword, new_password: newPassword });
+}

@@ -18,10 +18,12 @@ import sqlite3
 import sys
 from contextlib import closing
 
-from northstar import config, db
+from northstar import config, db, sessions
 from northstar.errors import ValidationError
 
 MIN_PASSWORD_LENGTH = 12
+MAX_NAME_LENGTH = 100
+THEMES = ("light", "dark")
 _SCRYPT = {"n": 2**15, "r": 8, "p": 1}
 _SCRYPT_MAXMEM = 2**27
 
@@ -91,16 +93,58 @@ def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3
     return row if verify_password(password, row["password_hash"]) else None
 
 
+def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
+    row = conn.execute(
+        "SELECT id, email, display_name, is_admin, theme FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if row is None:
+        raise ValidationError("That user no longer exists.")
+    return row
+
+
 def set_password(conn: sqlite3.Connection, email: str, password: str) -> None:
-    """Change a password and sign that user out everywhere."""
-    _check_password(password)
+    """Change a password by email (the command line) and sign that user out everywhere."""
     row = conn.execute("SELECT id FROM users WHERE email = ?", (email.strip(),)).fetchone()
     if row is None:
         raise ValidationError("There is no user with that email.")
+    set_user_password(conn, row["id"], password)
+
+
+def set_user_password(conn: sqlite3.Connection, user_id: int, password: str,
+                      keep_token: str | None = None) -> None:
+    """Change a password and end the user's sessions, except the one holding keep_token."""
+    _check_password(password)
+    get_user(conn, user_id)
     conn.execute("BEGIN")
-    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(password), row["id"]))
-    conn.execute("DELETE FROM sessions WHERE user_id = ?", (row["id"],))
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(password), user_id))
+    sessions.end_sessions(conn, user_id, except_token=keep_token)
     conn.execute("COMMIT")
+
+
+def change_own_password(conn: sqlite3.Connection, user_id: int, current: str, new: str,
+                        keep_token: str | None) -> None:
+    """A user changes their own password. Needs the current one. Their other browsers are signed out."""
+    row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None or not verify_password(current, row["password_hash"]):
+        raise ValidationError("The current password is wrong.")
+    set_user_password(conn, user_id, new, keep_token=keep_token)
+
+
+def set_display_name(conn: sqlite3.Connection, user_id: int, display_name: str) -> None:
+    display_name = display_name.strip()
+    if not display_name:
+        raise ValidationError("Enter a name.")
+    if len(display_name) > MAX_NAME_LENGTH:
+        raise ValidationError(f"The name can be at most {MAX_NAME_LENGTH} characters.")
+    get_user(conn, user_id)
+    conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (display_name, user_id))
+
+
+def set_theme(conn: sqlite3.Connection, user_id: int, theme: str) -> None:
+    if theme not in THEMES:
+        raise ValidationError("The theme must be light or dark.")
+    get_user(conn, user_id)
+    conn.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, user_id))
 
 
 def list_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
