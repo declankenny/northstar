@@ -6,10 +6,10 @@ def type_row(client, name):
         return conn.execute("SELECT * FROM account_types WHERE name = ?", (name,)).fetchone()
 
 
-def test_home_redirects_to_accounts_page(client):
+def test_home_is_the_dashboard(client):
     response = client.get("/")
-    assert response.status_code == 200
-    assert response.url.path == "/accounts"
+    assert response.status_code == 200 and response.url.path == "/"
+    assert "Dashboard" in response.text
 
 
 def test_types_page_lists_the_starting_types(client):
