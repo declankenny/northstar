@@ -44,9 +44,10 @@ Liabilities: credit card, loan, mortgage, other liability.
 
 Type sets the side by default. The side is stored explicitly so an unusual account can override it.
 
-### Rules (Decision: confirm each)
+### Rules (Decision: confirm each, except where marked decided)
 
-- Amounts are integer cents, never floating point. A liability is entered as the positive amount owed. Net worth subtracts it.
+- Amounts are integer cents, never floating point.
+- **Sign convention (decided)**: each account has a side, asset or liability, and balances are stored as entered, the way a statement shows them. A mortgage of 250,000.00 is stored as 25000000 on a liability account. Net worth = sum of asset balances minus sum of liability balances. Balances may be negative on either side: an overdrawn checking account is a negative asset, and an overpaid credit card is a negative liability. Net worth needs no special cases for these. Reason: it matches how a balance sheet and a statement read, and it avoids sign mistakes when entering many balances at once.
 - Net worth on date D uses each account's latest balance on or before D. An account with no balance on or before D contributes nothing.
 - An archived account counts toward net worth for dates before its archived_at date and not after. Its history is kept.
 - Each account shows days since its last balance. Flag it as stale past a threshold. TODO choose the default threshold.
@@ -94,7 +95,7 @@ Stack and architecture are decided. Packaging, backup, authentication and deploy
 
 ## Open decisions
 
-Resolved: app name and repo (Northstar, `github.com/declankenny/northstar`), stack and database (see "Technical shape").
+Resolved: app name and repo (Northstar, `github.com/declankenny/northstar`), stack and database (see "Technical shape"), sign convention for liabilities (positive amount plus a side, see "Rules").
 
 1. Account type list.
 2. Net worth carry-forward and archive rules above.
