@@ -81,7 +81,7 @@ Deletion rules:
 
 ## Screens
 
-1. **Dashboard**: current net worth, total assets, total liabilities, net worth over time as a table with one row for each date on which any balance changed, newest first, and a table of accounts with latest balance, as-of date, and days since update.
+1. **Dashboard**: the home page. Current net worth, total assets and total liabilities as of today, net worth over time as a table with one row for each month, newest first, showing assets, liabilities and net worth at the end of the month. Rows run from the first month with a balance through the current month. A month with no entries carries the previous values forward, and the current month is as of today and marked "to date". Entries made mid-month appear in that month's end value. Below it, a table of open accounts with latest balance, as-of date, and days since update.
 2. **Update balances**: all open accounts in one table, one date field defaulting to today, one amount field per account. Blank rows are skipped, and a zero must be typed as 0. Each row also shows the account's last balance, its date, its age in days and the stale flag. Choosing another date reloads the page with that date's existing amounts filled in, and saving a date that already has a balance edits it. A save is all or nothing: if any amount is invalid, nothing is saved and each bad row says why.
 3. **Account detail**: reached by clicking an account's name. A summary at the top (class, type, latest balance and its date, age and stale flag, number of balances and the earliest date, notes) with Edit, Close or Reopen, and Delete. Below it, the balance history table, newest first, with date, amount, note and source, and an Edit and a Delete link on each row. Above the table is a plain Add a balance form (date defaulting to today, amount, optional note). Deleting asks for confirmation on its own page. A modal for adding waits for the modern UI.
 4. **Accounts**: add, edit (including class), close, reopen, delete.
@@ -101,7 +101,7 @@ Stack, architecture and authentication are decided. Packaging, backup and deploy
 ## Acceptance for v1
 
 - Accounts of every type can be created, and balances entered on arbitrary dates.
-- The net worth series matches a hand calculation on a small synthetic dataset (automated test).
+- The net worth on each date, and the month-end series built from it, match a hand calculation on a small synthetic dataset (automated test). There is one calculation, net worth on a date, and the series only chooses which dates to ask about.
 - Updating ten accounts takes one screen and one submit.
 - Data survives a container restart. One backup and restore has been tested.
 - Tests use synthetic data only.

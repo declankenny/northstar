@@ -6,13 +6,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from northstar import db
 from northstar.money import cents_to_input, format_cents
-from northstar.web import accounts_routes, balances_routes, types_routes
+from northstar.web import accounts_routes, balances_routes, dashboard_routes, types_routes
 
 WEB_DIR = Path(__file__).parent
 DEFAULT_DB_PATH = "data/northstar.db"
@@ -46,13 +46,9 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.state.templates.env.filters["money_input"] = cents_to_input
     app.middleware("http")(refuse_cross_site_posts)
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
+    app.include_router(dashboard_routes.router)
     app.include_router(balances_routes.router)
     app.include_router(accounts_routes.router)
     app.include_router(types_routes.router)
-
-    @app.get("/")
-    def home():
-        # Temporary: the Dashboard replaces this when it exists.
-        return RedirectResponse("/accounts", status_code=307)
 
     return app
