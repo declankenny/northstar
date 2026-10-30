@@ -1,19 +1,4 @@
-import pytest
-from fastapi.testclient import TestClient
-
-from northstar import db
-from northstar.web.app import create_app
-
-from conftest import add_account, type_id
-
-
-@pytest.fixture
-def client(tmp_path):
-    return TestClient(create_app(tmp_path / "web.db"))
-
-
-def with_db(client):
-    return db.connect(client.app.state.db_path)
+from conftest import add_account, type_id, with_db
 
 
 def type_row(client, name):
@@ -21,10 +6,15 @@ def type_row(client, name):
         return conn.execute("SELECT * FROM account_types WHERE name = ?", (name,)).fetchone()
 
 
-def test_home_redirects_to_types_page(client):
+def test_home_redirects_to_accounts_page(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert response.url.path == "/types"
+    assert response.url.path == "/accounts"
+
+
+def test_types_page_lists_the_starting_types(client):
+    response = client.get("/types")
+    assert response.status_code == 200
     assert "Real estate" in response.text and "365" in response.text
 
 

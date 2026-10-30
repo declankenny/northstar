@@ -1,6 +1,8 @@
 import pytest
+from fastapi.testclient import TestClient
 
 from northstar import db
+from northstar.web.app import create_app
 
 
 @pytest.fixture
@@ -10,6 +12,15 @@ def conn(tmp_path):
     db.migrate(connection)
     yield connection
     connection.close()
+
+
+@pytest.fixture
+def client(tmp_path):
+    return TestClient(create_app(tmp_path / "web.db"))
+
+
+def with_db(client):
+    return db.connect(client.app.state.db_path)
 
 
 def type_id(conn, name):
@@ -22,3 +33,10 @@ def add_account(conn, name, class_id, type_name):
         (name, class_id, type_id(conn, type_name)),
     )
     return cur.lastrowid
+
+
+def add_balance(conn, account_id, as_of_date, amount_cents):
+    conn.execute(
+        "INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, ?, ?)",
+        (account_id, as_of_date, amount_cents),
+    )

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Delete account - Northstar{% endblock %}
+{% block content %}
+<h1>Delete {{ account.name }}?</h1>
+
+<p class="warning">
+  This permanently deletes the account
+  {% if account.balance_count %}and its {{ account.balance_count }} balance{{ "" if account.balance_count == 1 else "s" }}{% endif %}.
+  Net worth history changes to match. This can't be undone.
+  To hide an account but keep its history, close it instead.
+</p>
+
+<form method="post" action="/accounts/{{ account.id }}/delete">
+  <button class="danger">Delete account</button> <a href="/accounts">Cancel</a>
+</form>
+{% endblock %}
