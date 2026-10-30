@@ -34,6 +34,13 @@ def test_posts_are_refused_when_signed_out(anon):
 def test_login_page_and_stylesheet_are_public(anon):
     assert anon.get("/login").status_code == 200
     assert anon.get("/static/style.css").status_code == 200
+    assert anon.get("/static/login.css").status_code == 200
+
+
+def test_login_page_is_the_styled_standalone_page(anon):
+    page = anon.get("/login").text
+    assert "/static/login.css" in page and "northstar-theme" in page and "Sign in" in page
+    assert "<nav>" not in page
 
 
 def test_login_sets_a_http_only_cookie_and_opens_the_app(anon):
