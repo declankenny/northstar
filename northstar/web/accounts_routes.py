@@ -5,10 +5,18 @@ from contextlib import closing
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import RedirectResponse
 
-from northstar import accounts, clock, db
+from northstar import accounts, balances, clock, db
 from northstar.errors import ValidationError
 
 router = APIRouter()
+
+# The only messages the detail page will show for ?saved=..., so the address can't inject text.
+SAVED_NOTICES = {
+    "added": "Balance added.",
+    "updated": "Balance updated.",
+    "unchanged": "Nothing changed. That balance already had those values.",
+    "deleted": "Balance deleted.",
+}
 
 
 def _int(value: str | None) -> int | None:
@@ -66,16 +74,39 @@ def new_account_page(request: Request, account_class: str = Query("", alias="cla
         return _form_page(request, conn, cls, {"name": "", "type_id": None, "notes": ""})
 
 
-@router.get("/accounts/{account_id}")
-def account_detail_page(request: Request, account_id: int):
-    # Registered after /accounts/new, so "new" is never read as an account id.
+def _detail_page(request: Request, account_id: int, form: dict | None = None,
+                 error: str | None = None, saved: str | None = None, status_code: int = 200):
+    today = clock.today()
     with _conn(request) as conn:
         try:
-            summary = accounts.account_summary(conn, account_id, clock.today())
+            summary = accounts.account_summary(conn, account_id, today)
         except ValidationError as err:
             return _list_page(request, error=str(err), status_code=404)
         history = accounts.balance_history(conn, account_id)
-    return _render(request, "account_detail.html", {"a": summary, "history": history})
+    context = {
+        "a": summary, "history": history, "today": today.isoformat(), "error": error,
+        "notice": SAVED_NOTICES.get(saved or ""),
+        "form": form or {"date": today.isoformat(), "amount": "", "note": ""},
+    }
+    return _render(request, "account_detail.html", context, status_code)
+
+
+@router.get("/accounts/{account_id}")
+def account_detail_page(request: Request, account_id: int, saved: str | None = None):
+    # Registered after /accounts/new, so "new" is never read as an account id.
+    return _detail_page(request, account_id, saved=saved)
+
+
+@router.post("/accounts/{account_id}/balances")
+def add_account_balance(request: Request, account_id: int, date_text: str = Form("", alias="date"),
+                        amount: str = Form(""), note: str = Form("")):
+    try:
+        with _conn(request) as conn:
+            result = balances.add_balance(conn, account_id, date_text, amount, note, clock.today())
+    except ValidationError as err:
+        form = {"date": date_text, "amount": amount, "note": note}
+        return _detail_page(request, account_id, form=form, error=str(err), status_code=400)
+    return _done(f"/accounts/{account_id}?saved={result}")
 
 
 @router.post("/accounts")

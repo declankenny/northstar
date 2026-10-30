@@ -55,7 +55,7 @@ def test_detail_page_of_account_without_balances(client):
     acct = make_account(client)
     page = client.get(f"/accounts/{acct}").text
     assert "None yet" in page and "No balance yet" in page and "No balances yet" in page
-    assert "/balances/update" in page
+    assert f'action="/accounts/{acct}/balances"' in page   # the Add a balance form is offered
 
 
 def test_detail_page_of_closed_account_shows_badge_and_reopen(client):
@@ -63,7 +63,7 @@ def test_detail_page_of_closed_account_shows_badge_and_reopen(client):
     client.post(f"/accounts/{acct}/close")
     page = client.get(f"/accounts/{acct}").text
     assert "Closed" in page and f"/accounts/{acct}/reopen" in page and f"/accounts/{acct}/close" not in page
-    assert "Reopen the account to enter one" in page
+    assert "Reopen the account to add or change its balances" in page
 
 
 def test_detail_page_of_closed_account_is_never_flagged_stale(client):
