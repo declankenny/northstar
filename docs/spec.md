@@ -89,12 +89,17 @@ Deletion rules:
 
 ## Technical shape
 
-Stack, architecture and authentication are decided. Packaging, backup and deployment are still proposals.
+Stack, architecture, authentication and backup are decided. Packaging and deployment are still proposals.
 
 - **Stack (decided)**: Python, FastAPI, server-rendered HTML templates, and SQLite. No charting library, no React and no frontend build step in v1.
 - **Architecture (decided)**: business logic lives in plain Python functions, separate from the page routes and templates. This covers the net worth calculation, the close rules and staleness. Routes call these functions and templates only display the results. Reason: a React frontend could be added later by putting JSON endpoints over the same functions. Do not build a JSON API in v1.
 - **Packaging (proposed)**: one docker container and one SQLite file on a mounted volume. Reason: household scale, fewest moving parts, simple backup.
-- **Backup (proposed)**: do not copy a live SQLite file while the app runs, because recent writes can sit in the write-ahead log files. Use SQLite's online backup or stop the container first. TODO align with the deployment host's snapshot and off-site backup setup.
+- **Backup (decided)**: never copy a live SQLite file by hand while the app runs. A command line tool does it with SQLite's online backup: `python -m northstar.backup create FILE` and `python -m northstar.backup restore FILE [--replace]`. The database is `NORTHSTAR_DB` (default `data/northstar.db`).
+  - A backup is written to a temporary file, checked (SQLite integrity check, foreign keys, the expected tables) and only then renamed into place. It never overwrites an existing file, and a failure leaves no partial file.
+  - A restore checks the backup first and needs the app stopped. It refuses to replace an existing database unless `--replace` is given, and then it moves the old file aside as `<name>.before-restore-<time>` instead of deleting it. Leftover journal files are moved aside too, so an old journal can't corrupt the restored file.
+  - The tool reports only counts, never names or amounts. A backup file holds the real financial data, so it stays out of the repository (`backups/` and backup file names are ignored) and in a private place.
+  - There is no backup page in the web app, so there is no new way to read the data over the network.
+  - TODO scheduling backups and the off-site copy, aligned with the deployment host's snapshot setup. That belongs to deployment.
 - **Authentication (decided)**: no login in the app for v1. The app listens only on the local machine while it runs locally. Every page goes through one "current user" function that returns a placeholder in v1, so OIDC (for example Pocket ID) or other login can be added later in one place. There is no users table and no per-user data. **Deployment gate**: the app is not deployed to the deployment host until access is protected, either by a login at the reverse proxy or by limiting it to a network only the household can reach. TODO choose which when deployment starts, after looking at how other the deployment host stacks do it.
 - **Deployment**: a stack in `the deployment repo` through its PR workflow. Out of scope until v1 runs locally.
 

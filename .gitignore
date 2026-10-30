@@ -28,6 +28,12 @@ htmlcov/
 *.db-journal
 data/
 
+# Backups hold real financial data. Keep them out of the repository.
+backups/
+*.bak
+*.partial
+*.before-restore-*
+
 # Editors and OS
 .vscode/
 .idea/
