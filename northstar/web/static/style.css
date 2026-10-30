@@ -1,4 +1,15 @@
 body { font-family: system-ui, sans-serif; margin: 0; }
-main { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; }
+header { border-bottom: 1px solid #ddd; }
+nav { max-width: 60rem; margin: 0 auto; padding: 0.6rem 1rem; display: flex; gap: 1.2rem; align-items: baseline; }
+main { max-width: 60rem; margin: 1.5rem auto; padding: 0 1rem; }
 table { border-collapse: collapse; width: 100%; }
-th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid #ddd; }
+th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid #ddd; vertical-align: middle; }
+td input:not([type]) { width: 100%; min-width: 11rem; box-sizing: border-box; }
+.table-wrap { overflow-x: auto; }
+td input[type="number"] { width: 6rem; }
+.actions { white-space: nowrap; }
+.actions form { display: inline; }
+.add { display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; }
+.add label { display: flex; flex-direction: column; font-size: 0.9rem; }
+.error { background: #fdecea; border: 1px solid #e0a39c; padding: 0.6rem 0.8rem; border-radius: 4px; }
+button.danger { color: #a11; }

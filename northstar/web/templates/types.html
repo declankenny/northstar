@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Account types - Northstar{% endblock %}
+{% block content %}
+<h1>Account types</h1>
+
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Name</th><th>Class</th><th>Stale after (days)</th><th>Accounts</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for t in types %}
+    <tr>
+      <td><input name="name" value="{{ t.name }}" form="edit-{{ t.id }}" required aria-label="Name of {{ t.name }}"></td>
+      <td>
+        {% if t.account_count == 0 %}
+        <select name="class_id" form="edit-{{ t.id }}" aria-label="Class of {{ t.name }}">
+          {% for c in classes %}<option value="{{ c.id }}" {% if c.id == t.class_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+        </select>
+        {% else %}
+        <span title="The class can't change while accounts use this type.">{{ t.class_name }}</span>
+        {% endif %}
+      </td>
+      <td><input name="stale_after_days" type="number" min="1" step="1" value="{{ t.stale_after_days }}" form="edit-{{ t.id }}" required aria-label="Stale after days for {{ t.name }}"></td>
+      <td>{{ t.account_count }}</td>
+      <td class="actions">
+        <form id="edit-{{ t.id }}" method="post" action="/types/{{ t.id }}"><button>Save</button></form>
+        {% if t.account_count == 0 %}
+        <form method="post" action="/types/{{ t.id }}/delete"><button class="danger">Delete</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Add a type</h2>
+<form method="post" action="/types" class="add">
+  <label>Name <input name="name" value="{{ add_form.name }}" required></label>
+  <label>Class
+    <select name="class_id">
+      {% for c in classes %}<option value="{{ c.id }}" {% if c.id == add_form.class_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Stale after (days) <input name="stale_after_days" type="number" min="1" step="1" value="{{ add_form.stale_after_days }}" required></label>
+  <button>Add</button>
+</form>
+{% endblock %}
