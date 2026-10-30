@@ -17,7 +17,7 @@ from northstar.web.app import create_app
 # The hand-calculation household and its expected month-end numbers live in the net worth tests.
 from test_networth import MONTH_ENDS, TODAY, household  # noqa: F401  (a pytest fixture)
 
-from conftest import add_account, add_balance
+from conftest import add_account, add_balance, sign_in
 
 
 def path_of(conn) -> Path:
@@ -99,7 +99,7 @@ def test_backup_does_not_change_the_original(conn, household, tmp_path):
 
 def test_backup_of_a_brand_new_database(conn, tmp_path):
     counts = backup.create_backup(path_of(conn), tmp_path / "empty.bak")
-    assert (counts["accounts"], counts["balances"]) == (0, 0) and counts["migrations"] == 1
+    assert (counts["accounts"], counts["balances"]) == (0, 0) and counts["migrations"] == len(list(db.MIGRATIONS_DIR.glob("*.sql")))
 
 
 # -- backups are refused when they would hurt --
@@ -293,7 +293,8 @@ def test_command_line_restore_without_replace_leaves_the_live_database_alone(
 
 def test_data_survives_restarting_the_app(tmp_path):
     db_file = tmp_path / "app.db"
-    first = TestClient(create_app(db_file))
+    first = sign_in(TestClient(create_app(db_file)))
     first.post("/accounts", data={"class": "asset", "name": "Survivor", "type_id": "1", "notes": ""})
     second = TestClient(create_app(db_file))                 # a fresh app on the same file
+    second.cookies.set("northstar_session", first.cookies["northstar_session"])   # sessions survive too
     assert "Survivor" in second.get("/accounts").text

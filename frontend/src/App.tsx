@@ -34,6 +34,9 @@ export function App() {
         <div className="group">Admin</div>
         <a href="/types">Account types</a>
         <div className="spacer" />
+        <form method="post" action="/logout">
+          <button className="signout">Sign out</button>
+        </form>
         <div className="theme" role="group" aria-label="Theme">
           {(["light", "dark"] as const).map((t) => (
             <button key={t} className={theme === t ? "on" : ""} aria-pressed={theme === t} onClick={() => setTheme(t)}>

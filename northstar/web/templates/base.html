@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  {% if request.state.user %}
   <header>
     <nav>
       <strong>Northstar</strong>
@@ -14,8 +15,13 @@
       <a href="/balances/update">Update balances</a>
       <a href="/accounts">Accounts</a>
       <a href="/types">Account types</a>
+      <form method="post" action="/logout" class="signout">
+        <span>{{ request.state.user.display_name }}</span>
+        <button>Sign out</button>
+      </form>
     </nav>
   </header>
+  {% endif %}
   <main>
     {% block content %}{% endblock %}
   </main>

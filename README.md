@@ -2,6 +2,17 @@
 
 Self-hosted tracker of household net worth over time. `docs/spec.md` is the source of truth for scope.
 
+## Sign in
+
+Every page needs a login, and there is no default user. Create the first admin once, and the command asks for the password:
+
+```
+python -m northstar.users create you@example.com "Your Name" --admin
+docker compose exec northstar python -m northstar.users create you@example.com "Your Name" --admin   # in Docker
+```
+
+`set-password EMAIL` changes a password and signs that user out everywhere, and `list` shows users. When the app is served over HTTPS, set `NORTHSTAR_COOKIE_SECURE=1`.
+
 ## Run it
 
 Docker (how it normally runs): `docker compose up -d --build`, then open http://127.0.0.1:8000. The image builds the React frontend itself, so nothing else is needed.

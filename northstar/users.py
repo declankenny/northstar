@@ -1,0 +1,151 @@
+"""Local user accounts. Plain functions plus a small command line.
+
+    python -m northstar.users create EMAIL NAME [--admin]
+    python -m northstar.users set-password EMAIL
+    python -m northstar.users list
+
+Passwords are asked for at a prompt, never taken from the command line, so they stay out of shell
+history. Nothing here prints a password or a hash.
+"""
+
+import argparse
+import base64
+import getpass
+import hashlib
+import hmac
+import secrets
+import sqlite3
+import sys
+from contextlib import closing
+
+from northstar import config, db
+from northstar.errors import ValidationError
+
+MIN_PASSWORD_LENGTH = 12
+_SCRYPT = {"n": 2**15, "r": 8, "p": 1}
+_SCRYPT_MAXMEM = 2**27
+
+
+def _scrypt(password: str, salt: bytes, n: int, r: int, p: int) -> bytes:
+    return hashlib.scrypt(password.encode(), salt=salt, n=n, r=r, p=p, maxmem=_SCRYPT_MAXMEM)
+
+
+def hash_password(password: str) -> str:
+    """scrypt (in Python's standard library) with a random salt, in a self-describing string."""
+    salt = secrets.token_bytes(16)
+    digest = _scrypt(password, salt, **_SCRYPT)
+    b64 = lambda raw: base64.b64encode(raw).decode()
+    return f"scrypt${_SCRYPT['n']}${_SCRYPT['r']}${_SCRYPT['p']}${b64(salt)}${b64(digest)}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        scheme, n, r, p, salt, digest = stored.split("$")
+        if scheme != "scrypt":
+            return False
+        actual = _scrypt(password, base64.b64decode(salt), int(n), int(r), int(p))
+        return hmac.compare_digest(actual, base64.b64decode(digest))
+    except ValueError:
+        return False
+
+
+# Checked when the email is unknown, so a miss takes as long as a wrong password.
+_DUMMY_HASH = hash_password("not-a-real-password")
+
+
+def _clean_email(email: str) -> str:
+    email = email.strip().lower()
+    if not email or " " in email or email.count("@") != 1 or email.startswith("@") or email.endswith("@"):
+        raise ValidationError("Enter a valid email address.")
+    return email
+
+
+def _check_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValidationError(f"The password must be at least {MIN_PASSWORD_LENGTH} characters.")
+
+
+def create_user(conn: sqlite3.Connection, email: str, display_name: str, password: str,
+                is_admin: bool = False) -> int:
+    email = _clean_email(email)
+    display_name = display_name.strip()
+    if not display_name:
+        raise ValidationError("Enter a name.")
+    _check_password(password)
+    try:
+        cur = conn.execute(
+            "INSERT INTO users (email, display_name, password_hash, is_admin) VALUES (?, ?, ?, ?)",
+            (email, display_name, hash_password(password), 1 if is_admin else 0),
+        )
+    except sqlite3.IntegrityError:
+        raise ValidationError("A user with that email already exists.")
+    return cur.lastrowid
+
+
+def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3.Row | None:
+    """The user if the email and password match, otherwise None. Never says which part was wrong."""
+    row = conn.execute("SELECT * FROM users WHERE email = ?", (email.strip(),)).fetchone()
+    if row is None:
+        verify_password(password, _DUMMY_HASH)
+        return None
+    return row if verify_password(password, row["password_hash"]) else None
+
+
+def set_password(conn: sqlite3.Connection, email: str, password: str) -> None:
+    """Change a password and sign that user out everywhere."""
+    _check_password(password)
+    row = conn.execute("SELECT id FROM users WHERE email = ?", (email.strip(),)).fetchone()
+    if row is None:
+        raise ValidationError("There is no user with that email.")
+    conn.execute("BEGIN")
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(password), row["id"]))
+    conn.execute("DELETE FROM sessions WHERE user_id = ?", (row["id"],))
+    conn.execute("COMMIT")
+
+
+def list_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, email, display_name, is_admin FROM users ORDER BY email COLLATE NOCASE"
+    ).fetchall()
+
+
+def _ask_password() -> str:
+    first = getpass.getpass("Password: ")
+    if first != getpass.getpass("Repeat the password: "):
+        raise ValidationError("The two passwords did not match.")
+    return first
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m northstar.users",
+        description="Manage Northstar users (NORTHSTAR_DB, default data/northstar.db).")
+    commands = parser.add_subparsers(dest="command", required=True)
+    create = commands.add_parser("create", help="add a user (asks for a password)")
+    create.add_argument("email")
+    create.add_argument("name")
+    create.add_argument("--admin", action="store_true", help="make the user an admin")
+    reset = commands.add_parser("set-password", help="change a user's password and sign them out")
+    reset.add_argument("email")
+    commands.add_parser("list", help="list users")
+    args = parser.parse_args(argv)
+    try:
+        with closing(db.connect(config.database_path())) as conn:
+            db.migrate(conn)
+            if args.command == "create":
+                create_user(conn, args.email, args.name, _ask_password(), args.admin)
+                print(f"Created {args.email.strip().lower()}{' (admin)' if args.admin else ''}.")
+            elif args.command == "set-password":
+                set_password(conn, args.email, _ask_password())
+                print(f"Password changed for {args.email.strip().lower()}. They are signed out everywhere.")
+            else:
+                for row in list_users(conn):
+                    print(f"{row['email']}\t{row['display_name']}\t{'admin' if row['is_admin'] else 'user'}")
+    except ValidationError as err:
+        print(f"Error: {err}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

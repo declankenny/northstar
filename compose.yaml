@@ -6,7 +6,7 @@ services:
       # "Today" is the container's date, so this must match the household's timezone.
       TZ: America/Chicago
     ports:
-      # No login in v1: publish on this machine only. Change the host port with NORTHSTAR_PORT.
+      # Login is in the app, but plain HTTP: publish on this machine only. Change the host port with NORTHSTAR_PORT.
       - "127.0.0.1:${NORTHSTAR_PORT:-8000}:8000"
     volumes:
       - northstar-data:/data

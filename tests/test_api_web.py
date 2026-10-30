@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from northstar.web.app import create_app
 
-from conftest import add_account, add_balance, with_db
+from conftest import add_account, add_balance, sign_in, with_db
 
 TODAY = date(2026, 10, 30)
 
@@ -115,7 +115,7 @@ def test_the_built_frontend_is_served_at_app_when_it_exists(tmp_path, monkeypatc
     spa.mkdir()
     (spa / "index.html").write_text("<!doctype html><title>Northstar</title>")
     monkeypatch.setattr("northstar.web.app.SPA_DIR", spa)
-    client = TestClient(create_app(tmp_path / "web.db"))
+    client = sign_in(TestClient(create_app(tmp_path / "web.db")))
     page = client.get("/app/")
     assert page.status_code == 200 and "<title>Northstar</title>" in page.text
     assert client.get("/", follow_redirects=False).status_code == 200      # the existing pages are untouched
@@ -123,7 +123,7 @@ def test_the_built_frontend_is_served_at_app_when_it_exists(tmp_path, monkeypatc
 
 def test_without_a_build_there_is_no_app_page_and_nothing_else_changes(tmp_path, monkeypatch):
     monkeypatch.setattr("northstar.web.app.SPA_DIR", tmp_path / "missing")
-    client = TestClient(create_app(tmp_path / "web.db"))
+    client = sign_in(TestClient(create_app(tmp_path / "web.db")))
     assert client.get("/app/").status_code == 404
     assert client.get("/api/networth").status_code == 200
 

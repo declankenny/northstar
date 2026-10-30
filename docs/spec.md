@@ -1,6 +1,6 @@
 # Northstar: v1 spec
 
-Status: v1 complete (2026-10-30). Every acceptance item is met, including a restart of the container running in Docker Desktop on the development PC. It is not deployed to the deployment host. The next phase (a React frontend) has started, and its first page, the Dashboard, is built (see "After v1", item 6). Items marked TODO or "Decision" are unresolved. Do not guess them.
+Status: v1 complete (2026-10-30). Every acceptance item is met, including a restart of the container running in Docker Desktop on the development PC. It is not deployed to the deployment host. The next phase (a React frontend) has started, and its first page, the Dashboard, is built (see "After v1", item 6). Local login (accounts and sessions) is built (see "Authentication"). Items marked TODO or "Decision" are unresolved. Do not guess them.
 
 Northstar is the app name. The repo is `github.com/declankenny/northstar` (private).
 
@@ -32,7 +32,7 @@ Track the household's financial position over time. v1 records dated balances fo
 
 ## Data model
 
-Four tables.
+Four tables for the household data. Two more, `users` and `sessions`, hold login (see "Authentication").
 
 **account_classes**: id, name. Exactly two rows, Asset and Liability, loaded when the database is created. Not editable in the app.
 
@@ -100,7 +100,15 @@ Stack, architecture, packaging, authentication and backup are decided. Deploymen
   - The tool reports only counts, never names or amounts. A backup file holds the real financial data, so it stays out of the repository (`backups/` and backup file names are ignored) and in a private place.
   - There is no backup page in the web app, so there is no new way to read the data over the network.
   - TODO scheduling backups and the off-site copy, aligned with the deployment host's snapshot setup. That belongs to deployment.
-- **Authentication (decided)**: no login in the app for v1. The app listens only on the local machine while it runs locally. Every page goes through one "current user" function that returns a placeholder in v1, so OIDC (for example Pocket ID) or other login can be added later in one place. There is no users table and no per-user data. **Deployment gate**: the app is not deployed to the deployment host until access is protected, either by a login at the reverse proxy or by limiting it to a network only the household can reach. TODO choose which when deployment starts, after looking at how other the deployment host stacks do it.
+- **Authentication (decided)**: local accounts. Every page, the `/app` bundle and every `/api` endpoint need a signed-in user. Only `/login` and its stylesheet are public. Pages redirect to `/login`, and `/api` answers 401.
+  - **Users**: a `users` table (email, display name, password hash, `is_admin`). `is_admin` is stored and returned by `current_user()`, but nothing is gated on it yet. Every signed-in user sees all household data, so there is no per-user data. There is no user management page.
+  - **Passwords**: scrypt from Python's standard library (no new dependency), minimum 12 characters, no other composition rules. A wrong password and an unknown email give the same message and take about the same time. There is no lockout or rate limit yet (see `docs/backlog.md`).
+  - **Sessions**: a random token in an `HttpOnly`, `SameSite=Lax` cookie, valid for 30 days from login (not extended on use). The `sessions` table stores only the token's SHA-256, so signing out or changing a password really ends the session on the server. The cookie is marked `Secure` when `NORTHSTAR_COOKIE_SECURE=1`, which must be set when the app is served over HTTPS.
+  - **Where it lives**: one middleware (`require_login`) enforces access and `auth_routes.current_user()` is the one function routes use to ask who is signed in.
+  - **First user and user management (decided)**: there is no default user and no password in the image or compose file. Users are created from the command line, which asks for the password at a prompt: `python -m northstar.users create EMAIL NAME [--admin]`, `set-password EMAIL` and `list`. In Docker: `docker compose exec northstar python -m northstar.users create ...`. Reason: nothing to ship or leak, and no open signup route. A first-run setup page waits (see `docs/backlog.md`).
+  - **Backups** now contain password hashes and sessions. They stay private, as before.
+  - **OIDC (for example Pocket ID) is not in this phase.** It is in `docs/backlog.md`.
+  - **Deployment gate**: unchanged in spirit. Login is now in the app, but deployment to the deployment host still needs HTTPS (so `Secure` cookies) and Declan's approval. TODO choose how it is exposed (reverse proxy and network) when deployment starts.
 - **Deployment**: a stack in `the deployment repo` through its PR workflow. Out of scope until v1 runs locally.
 
 ## Acceptance for v1
@@ -135,7 +143,7 @@ Stack, architecture, packaging, authentication and backup are decided. Deploymen
      - A balance entered mid-period shows at the next sample, so a chart is up to one period late except at its newest point, which is exact.
      - The balance history chart on the account detail page will use the same endpoint with an optional `account_id`. It limits the same `net_worth_on` calculation to that one account, so there is no second calculation. The account's balance lands in `assets` or `liabilities` by its class, as in the totals. `start` then defaults to that account's own first balance, and an unknown account is a 404. Not built yet.
    - **First step, a sliver (built)**: that endpoint and a React Dashboard at `/app/`. Each range button is a request: 1M and 3M use days, 6M, YTD and 1Y weeks, and 5Y and ALL months. The page learns the server's `today` from a first request with no dates, then asks for the chosen range. The endpoint is tested against the hand-calculated dataset, and every daily point is checked against an independent plain-Python calculation. The month-end table on the classic Dashboard is unchanged. The Docker build has a Node stage that produces the bundle.
-   - **Read-only first**: until access is protected (see "Authentication"), endpoints are `GET` only. Endpoints that change data wait for the auth decision.
+   - **Read-only first**: endpoints are `GET` only for now. Login now exists (see "Authentication"), so endpoints that change data are no longer blocked on it, but each one still needs its own design. They need the same cross-site POST check as the pages.
    - **Dates** stay as `YYYY-MM-DD` strings in JSON and in the frontend. The frontend never creates a JavaScript `Date` (it counts whole days instead), so the no-timezone rule holds. The frontend tests run in a US timezone to prove it. Money stays integer cents, shown with whole-number arithmetic. The frontend contains no net worth rules: it chooses a start and a period, and draws what comes back.
    - **Dashboard in the new UI (decided)**:
      - Layout: a labeled left navigation (Dashboard, Update balances, Accounts, and an **Admin** group holding Account types), three tiles (net worth, assets, liabilities) above one large chart. The page fits the window with no scrolling. Account types is under Admin.
@@ -149,7 +157,7 @@ Stack, architecture, packaging, authentication and backup are decided. Deploymen
 
 ## Open decisions
 
-Resolved: app name and repo (Northstar, `github.com/declankenny/northstar`), stack and database (see "Technical shape"), sign convention for liabilities (positive amount plus a class, see "Rules"), account types (user configurable, with a fixed Asset/Liability class table), editable account class, deletable accounts and types, carry-forward, closing accounts, authentication (none in v1, with a deployment gate), currency (USD only in v1), stale threshold (per account type, with starting values), no timezone awareness in v1.
+Resolved: app name and repo (Northstar, `github.com/declankenny/northstar`), stack and database (see "Technical shape"), sign convention for liabilities (positive amount plus a class, see "Rules"), account types (user configurable, with a fixed Asset/Liability class table), editable account class, deletable accounts and types, carry-forward, closing accounts, authentication (local accounts, see "Technical shape"), currency (USD only in v1), stale threshold (per account type, with starting values), no timezone awareness in v1.
 
 All v1 decisions in this list are settled. New questions that come up while building get added here.
 
@@ -158,4 +166,4 @@ Resolved for the next phase: frontend stack (React, TypeScript and Vite), no cha
 Open for the next phase:
 
 - Which screen moves to the new UI next, and which further charts to build (for example per-account history, and the mix of assets by type). TODO.
-- Authentication and the deployment gate, which must be settled before any endpoint that changes data and before deployment to the deployment host. TODO.
+- Deployment gate: HTTPS and how the app is exposed on the deployment host. TODO. (Login itself is decided, see "Authentication".)
