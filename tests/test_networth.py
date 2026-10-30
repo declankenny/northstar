@@ -75,6 +75,7 @@ from datetime import date
 import pytest
 
 from northstar import accounts, balances, networth
+from northstar.errors import ValidationError
 
 from conftest import add_account, add_balance
 
@@ -175,6 +176,106 @@ def test_net_worth_on_agrees_with_the_plain_python_reference_on_every_day(conn, 
         got = networth.net_worth_on(conn, day)
         assert (got["assets"], got["liabilities"], got["net_worth"]) == reference_net_worth(conn, day), day
         day = date.fromordinal(day.toordinal() + 1)
+
+
+# -- the series: net_worth_on asked about regularly spaced dates --
+
+def series(conn, **kwargs):
+    kwargs.setdefault("today", TODAY)
+    result = networth.net_worth_series(conn, **kwargs)
+    return result, [(p["date"], p["net_worth"]) for p in result["series"]]
+
+
+def test_monthly_series_is_the_start_then_each_month_end_then_today(conn, household):
+    # Hand calculation: the 01-01 state, then the MONTH_ENDS net worths above, today last.
+    result, points = series(conn)
+    assert (result["start"], result["end"], result["period"]) == ("2026-01-01", "2026-10-30", "month")
+    assert points == [
+        ("2026-01-01", 15000000), ("2026-01-31", 15650000), ("2026-02-28", 15625050),
+        ("2026-03-31", 15705050), ("2026-04-30", 15614475), ("2026-05-31", 15614475),
+        ("2026-06-30", 16614475), ("2026-07-31", 16614475), ("2026-08-31", 16614475),
+        ("2026-09-30", 16614475), ("2026-10-30", 16614475),
+    ]
+
+
+def test_weekly_series_counts_back_from_the_end_and_includes_the_start(conn, household):
+    # 2026-06-15 is the house revaluation: before it 156,144.75, from it 166,144.75.
+    _, points = series(conn, start=date(2026, 6, 3), end=date(2026, 6, 29), period="week")
+    assert points == [
+        ("2026-06-03", 15614475), ("2026-06-08", 15614475), ("2026-06-15", 16614475),
+        ("2026-06-22", 16614475), ("2026-06-29", 16614475),
+    ]
+
+
+def test_daily_series_changes_on_the_day_of_the_entry(conn, household):
+    _, points = series(conn, start=date(2026, 6, 14), end=date(2026, 6, 16), period="day")
+    assert points == [("2026-06-14", 15614475), ("2026-06-15", 16614475), ("2026-06-16", 16614475)]
+
+
+def test_every_daily_point_agrees_with_the_plain_python_reference(conn, household):
+    result, _ = series(conn, period="day")
+    assert len(result["series"]) == 303                       # 2026-01-01 through 2026-10-30
+    for p in result["series"]:
+        got = (p["assets"], p["liabilities"], p["net_worth"])
+        assert got == reference_net_worth(conn, date.fromisoformat(p["date"])), p["date"]
+
+
+def test_start_is_never_before_the_first_balance(conn, household):
+    result, points = series(conn, start=date(2025, 1, 1), end=date(2026, 2, 28))
+    assert result["start"] == "2026-01-01"                    # not 2025: nothing was entered yet
+    assert points == [("2026-01-01", 15000000), ("2026-01-31", 15650000), ("2026-02-28", 15625050)]
+
+
+def test_balances_after_the_end_are_ignored(conn, household):
+    _, points = series(conn, end=date(2026, 3, 31))
+    assert points[-1] == ("2026-03-31", 15705050)
+
+
+def test_series_is_empty_with_no_balances_or_when_the_first_balance_is_after_the_end(conn, household):
+    result, points = series(conn, end=date(2025, 12, 31))
+    assert points == [] and result["start"] == result["end"] == "2025-12-31"
+
+
+def test_series_of_an_empty_database(conn):
+    result, points = series(conn)
+    assert points == [] and (result["start"], result["end"]) == ("2026-10-30", "2026-10-30")
+    add_account(conn, "A", ASSET, "Checking")
+    assert series(conn)[1] == []
+
+
+def test_series_refuses_a_bad_request(conn, household):
+    with pytest.raises(ValidationError, match="after today"):
+        series(conn, end=date(2026, 10, 31))
+    with pytest.raises(ValidationError, match="after the end"):
+        series(conn, start=date(2026, 5, 1), end=date(2026, 4, 1))
+    with pytest.raises(ValidationError, match="period"):
+        series(conn, period="year")
+
+
+# -- which dates the series asks about --
+
+def test_sample_dates_week_ends_exactly_on_the_end_date():
+    got = networth.sample_dates(date(2026, 6, 3), date(2026, 6, 29), "week")
+    assert got[-1] == date(2026, 6, 29) and got[0] == date(2026, 6, 3)
+    assert [b - a for a, b in zip(got[1:], got[2:])] == [date.resolution * 7] * 3   # sevens apart
+
+
+def test_sample_dates_month_is_each_month_end_with_the_last_cut_off_at_the_end():
+    assert networth.sample_dates(date(2028, 1, 10), date(2028, 3, 5), "month") == [
+        date(2028, 1, 10), date(2028, 1, 31), date(2028, 2, 29), date(2028, 3, 5)]   # leap year
+
+
+def test_sample_dates_do_not_repeat_when_start_is_a_month_end_or_equals_end():
+    assert networth.sample_dates(date(2026, 1, 31), date(2026, 3, 31), "month") == [
+        date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 31)]
+    for period in networth.PERIODS:
+        assert networth.sample_dates(date(2026, 5, 5), date(2026, 5, 5), period) == [date(2026, 5, 5)]
+
+
+def test_sample_dates_refuse_more_than_the_maximum_points():
+    with pytest.raises(ValidationError, match="most allowed"):
+        networth.sample_dates(date(2020, 1, 1), date(2026, 10, 30), "day")
+    assert len(networth.sample_dates(date(2020, 1, 1), date(2026, 10, 30), "week")) < networth.MAX_POINTS
 
 
 # -- carry-forward --

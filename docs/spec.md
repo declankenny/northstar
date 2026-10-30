@@ -1,6 +1,6 @@
 # Northstar: v1 spec
 
-Status: v1 complete (2026-10-30). Every acceptance item is met, including a restart of the container running in Docker Desktop on the development PC. It is not deployed to the deployment host. The next phase is described under "After v1". Items marked TODO or "Decision" are unresolved. Do not guess them.
+Status: v1 complete (2026-10-30). Every acceptance item is met, including a restart of the container running in Docker Desktop on the development PC. It is not deployed to the deployment host. The next phase (a React frontend) has started, and its first page, the Dashboard, is built (see "After v1", item 6). Items marked TODO or "Decision" are unresolved. Do not guess them.
 
 Northstar is the app name. The repo is `github.com/declankenny/northstar` (private).
 
@@ -92,7 +92,7 @@ Deletion rules:
 Stack, architecture, packaging, authentication and backup are decided. Deployment is still a proposal.
 
 - **Stack (decided)**: Python, FastAPI, server-rendered HTML templates, and SQLite. No charting library, no React and no frontend build step in v1.
-- **Architecture (decided)**: business logic lives in plain Python functions, separate from the page routes and templates. This covers the net worth calculation, the close rules and staleness. Routes call these functions and templates only display the results. Reason: a React frontend could be added later by putting JSON endpoints over the same functions. Do not build a JSON API in v1.
+- **Architecture (decided)**: business logic lives in plain Python functions, separate from the page routes and templates. This covers the net worth calculation, the close rules and staleness. Routes call these functions and templates only display the results. Reason: a React frontend could be added later by putting JSON endpoints over the same functions. v1 has no JSON API. The next phase adds read-only endpoints under `/api` (see "After v1", item 6).
 - **Packaging (decided)**: one docker container and one SQLite file on a mounted volume. Reason: household scale, fewest moving parts, simple backup.
 - **Backup (decided)**: never copy a live SQLite file by hand while the app runs. A command line tool does it with SQLite's online backup: `python -m northstar.backup create FILE` and `python -m northstar.backup restore FILE [--replace]`. The database is `NORTHSTAR_DB` (default `data/northstar.db`).
   - A backup is written to a temporary file, checked (SQLite integrity check, foreign keys, the expected tables) and only then renamed into place. It never overwrites an existing file, and a failure leaves no partial file.
@@ -126,11 +126,26 @@ Stack, architecture, packaging, authentication and backup are decided. Deploymen
 4. Transactions, only if a real need appears.
 5. Retirement planning. A future goal, not yet scoped.
 6. **Modern UI and charts (next phase, active).** A React frontend, with charts for net worth and balance history, over JSON endpoints on the existing logic functions.
-   - **Proposed stack**: React, TypeScript and Vite, built to a static bundle that FastAPI serves from the same container and the same origin, so there is no CORS setup. The old server-rendered pages stay in place until the new UI matches them. Reason: it has the most documentation, and it can be served without a second container. Each frontend dependency needs a stated reason. Chart library: TODO choose once the charts are decided.
-   - **First step, a sliver**: one read-only endpoint over the month-end net worth series in `networth.py`, with a test on synthetic data, and one React page that charts it, served at `/app`. Its purpose is to prove the toolchain and the Docker build before more screens move over.
+   - **Stack (decided)**: React, TypeScript and Vite, built to a static bundle that FastAPI serves from the same container and the same origin, so there is no CORS setup. The source is in `frontend/`. The build goes to `northstar/web/spa` (not committed) and is served at `/app`. The old server-rendered pages stay in place until the new UI matches them. Reason: it has the most documentation, and it can be served without a second container. Each frontend dependency needs a stated reason. Today they are React and react-dom (the framework), and Vite, its React plugin, TypeScript and Vitest for building, type checking and testing the date and money code. All versions are pinned exactly.
+   - **Charts (decided for now)**: no chart library. The net worth chart is drawn as SVG, because it is one simple area. Revisit when a second kind of chart is needed.
+   - **Series API (decided)**: a series is `net_worth_on` asked about regularly spaced dates, and the server works out every number, so no rule lives in the frontend. `GET /api/networth?start=&end=&period=` takes a period of `day`, `week` or `month` (default `month`).
+     - `end` defaults to today and cannot be after it. `start` defaults to the date of the first balance and is never earlier than that, because before any balance net worth is zero only because nothing was entered, and a chart would show a false climb from zero. The response reports the dates actually used, and the server's `today`.
+     - The dates asked about are `start`, then steps of the period, ending exactly on `end`. Weeks count back from `end`. Months are calendar month ends, the last cut off at `end`.
+     - One request is limited to 1,000 points, otherwise it is refused with a 422. A bad date, period or range is also a 422.
+     - A balance entered mid-period shows at the next sample, so a chart is up to one period late except at its newest point, which is exact.
+     - The balance history chart on the account detail page will use the same endpoint with an optional `account_id`. It limits the same `net_worth_on` calculation to that one account, so there is no second calculation. The account's balance lands in `assets` or `liabilities` by its class, as in the totals. `start` then defaults to that account's own first balance, and an unknown account is a 404. Not built yet.
+   - **First step, a sliver (built)**: that endpoint and a React Dashboard at `/app/`. Each range button is a request: 1M and 3M use days, 6M, YTD and 1Y weeks, and 5Y and ALL months. The page learns the server's `today` from a first request with no dates, then asks for the chosen range. The endpoint is tested against the hand-calculated dataset, and every daily point is checked against an independent plain-Python calculation. The month-end table on the classic Dashboard is unchanged. The Docker build has a Node stage that produces the bundle.
    - **Read-only first**: until access is protected (see "Authentication"), endpoints are `GET` only. Endpoints that change data wait for the auth decision.
-   - **Dates** stay as `YYYY-MM-DD` strings in JSON and in the frontend, never converted to JavaScript `Date` objects, so the no-timezone rule holds. Money stays integer cents.
-   - The Dockerfile gains a Node build stage that produces the bundle. Deployment is still out of scope until Declan approves.
+   - **Dates** stay as `YYYY-MM-DD` strings in JSON and in the frontend. The frontend never creates a JavaScript `Date` (it counts whole days instead), so the no-timezone rule holds. The frontend tests run in a US timezone to prove it. Money stays integer cents, shown with whole-number arithmetic. The frontend contains no net worth rules: it chooses a start and a period, and draws what comes back.
+   - **Dashboard in the new UI (decided)**:
+     - Layout: a labeled left navigation (Dashboard, Update balances, Accounts, and an **Admin** group holding Account types), three tiles (net worth, assets, liabilities) above one large chart. The page fits the window with no scrolling. Account types is under Admin.
+     - Each tile shows its change over the chosen range. A falling liability is shown as good news.
+     - Chart: an area of the series, no axis (an overview; analysis pages come later), with a tooltip of the nearest sample's date and the three totals. The range buttons (1M, 3M, 6M, YTD, 1Y, 5Y, ALL) sit above the chart. A tile's change is the last point of the series minus the first, so it is exactly the server's numbers. A range never starts before the first balance.
+     - The open-accounts table is not on this Dashboard. It belongs on the Accounts page.
+     - Style: steel blue accent, clean sans-serif with tabular numbers, system fonts (nothing is loaded from outside), a Light and Dark toggle in the navigation (dark by default, remembered in the browser).
+     - Balance entry is designed for a desktop browser only. There is no phone layout yet.
+   - Not yet in the new UI: Update balances, Accounts and Account detail, Account types. The navigation links to the server-rendered pages for these. Which moves next is TODO.
+   - Deployment is still out of scope until Declan approves.
 
 ## Open decisions
 
@@ -138,8 +153,9 @@ Resolved: app name and repo (Northstar, `github.com/declankenny/northstar`), sta
 
 All v1 decisions in this list are settled. New questions that come up while building get added here.
 
+Resolved for the next phase: frontend stack (React, TypeScript and Vite), no chart library for now, and the Dashboard design (see "After v1", item 6).
+
 Open for the next phase:
 
-- Frontend stack: React, TypeScript and Vite proposed (see "After v1", item 6). Needs Declan's approval.
-- Chart library and which charts to build first. TODO.
+- Which screen moves to the new UI next, and which further charts to build (for example per-account history, and the mix of assets by type). TODO.
 - Authentication and the deployment gate, which must be settled before any endpoint that changes data and before deployment to the deployment host. TODO.

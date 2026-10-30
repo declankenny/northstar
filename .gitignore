@@ -7,6 +7,11 @@ venv/
 build/
 dist/
 
+# Frontend: dependencies and the built bundle (rebuilt by npm run build)
+node_modules/
+northstar/web/spa/
+*.tsbuildinfo
+
 # Test and tooling caches
 .pytest_cache/
 .ruff_cache/

@@ -11,9 +11,10 @@ from fastapi.templating import Jinja2Templates
 
 from northstar import config, db
 from northstar.money import cents_to_input, format_cents
-from northstar.web import accounts_routes, balances_routes, dashboard_routes, types_routes
+from northstar.web import accounts_routes, api_routes, balances_routes, dashboard_routes, types_routes
 
 WEB_DIR = Path(__file__).parent
+SPA_DIR = WEB_DIR / "spa"        # the built React app (see frontend/); absent until it is built
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 
@@ -48,5 +49,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.include_router(balances_routes.router)
     app.include_router(accounts_routes.router)
     app.include_router(types_routes.router)
+    app.include_router(api_routes.router)
+    if (SPA_DIR / "index.html").exists():
+        app.mount("/app", StaticFiles(directory=SPA_DIR, html=True), name="spa")
 
     return app
