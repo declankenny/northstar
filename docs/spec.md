@@ -16,7 +16,7 @@ Track the household's financial position over time. v1 records dated balances fo
 - Dated balances per account, entered by hand.
 - One screen to update balances for many accounts at once.
 - Net worth (assets minus liabilities) over time.
-- Per-account balance history as a table and a chart.
+- Per-account balance history as a table.
 - Close an account to declutter the screens, without losing its history.
 
 ### Not in v1
@@ -27,6 +27,7 @@ Track the household's financial position over time. v1 records dated balances fo
 - Bank feeds. SimpleFIN is the first follow-up (see "After v1").
 - Multiple currencies (decided for v1). Every amount is US dollars in integer cents, and no currency is stored in the database. A balance held in another currency, or in bitcoin or another crypto asset, is entered as its US dollar value at the time of the update. Quantities of units held are holdings, which are also not in v1. Supporting more currencies later means a currency on each account, a rate per balance and rounding rules. That is a separate design, and existing balances stay valid because they would default to USD.
 - Loan schedules. A loan is just a liability with a balance history.
+- Charts (decided). Net worth and balance history are shown as tables in v1. Charts wait for a modernized UI (see "After v1").
 - A JSON API or a JavaScript frontend such as React. Pages are server-rendered (see "Technical shape").
 
 ## Data model
@@ -79,9 +80,9 @@ Deletion rules:
 
 ## Screens
 
-1. **Dashboard**: current net worth, total assets, total liabilities, net worth over time, and a table of accounts with latest balance, as-of date, and days since update.
+1. **Dashboard**: current net worth, total assets, total liabilities, net worth over time as a table with one row for each date on which any balance changed, newest first, and a table of accounts with latest balance, as-of date, and days since update.
 2. **Update balances**: all open accounts in one table, one date field defaulting to today, one amount field per account. Blank rows are skipped, and a zero must be typed as 0. Each row also shows the account's last balance, its date, its age in days and the stale flag. Choosing another date reloads the page with that date's existing amounts filled in, and saving a date that already has a balance edits it. A save is all or nothing: if any amount is invalid, nothing is saved and each bad row says why.
-3. **Account detail**: balance history chart and table. Add, edit, delete a balance.
+3. **Account detail**: reached by clicking an account's name. A summary at the top (class, type, latest balance and its date, age and stale flag, number of balances and the earliest date, notes) with Edit, Close or Reopen, and Delete. Below it, the balance history table, newest first, with date, amount, note and source. Add, edit, delete a balance.
 4. **Accounts**: add, edit (including class), close, reopen, delete.
 5. **Account types**: add, rename and delete types, and set each type's stale_after_days. Each type's class is chosen when it is created. Each type shows how many accounts use it, and Delete appears only when that count is zero.
 
@@ -89,7 +90,7 @@ Deletion rules:
 
 Stack, architecture and authentication are decided. Packaging, backup and deployment are still proposals.
 
-- **Stack (decided)**: Python, FastAPI, server-rendered HTML templates, SQLite, and a small charting library. No React and no frontend build step in v1.
+- **Stack (decided)**: Python, FastAPI, server-rendered HTML templates, and SQLite. No charting library, no React and no frontend build step in v1.
 - **Architecture (decided)**: business logic lives in plain Python functions, separate from the page routes and templates. This covers the net worth calculation, the close rules and staleness. Routes call these functions and templates only display the results. Reason: a React frontend could be added later by putting JSON endpoints over the same functions. Do not build a JSON API in v1.
 - **Packaging (proposed)**: one docker container and one SQLite file on a mounted volume. Reason: household scale, fewest moving parts, simple backup.
 - **Backup (proposed)**: do not copy a live SQLite file while the app runs, because recent writes can sit in the write-ahead log files. Use SQLite's online backup or stop the container first. TODO align with the deployment host's snapshot and off-site backup setup.
@@ -118,6 +119,7 @@ Stack, architecture and authentication are decided. Packaging, backup and deploy
 3. CSV import and export.
 4. Transactions, only if a real need appears.
 5. Retirement planning. A future goal, not yet scoped.
+6. Modern UI and charts. A React or similar frontend, with charts for net worth and balance history. It needs JSON endpoints over the existing logic functions, which are deliberately not built in v1.
 
 ## Open decisions
 
