@@ -147,9 +147,32 @@ def set_theme(conn: sqlite3.Connection, user_id: int, theme: str) -> None:
     conn.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, user_id))
 
 
+def _is_last_admin(conn: sqlite3.Connection, user: sqlite3.Row) -> bool:
+    return bool(user["is_admin"]) and conn.execute(
+        "SELECT COUNT(*) FROM users WHERE is_admin = 1").fetchone()[0] == 1
+
+
+def set_admin(conn: sqlite3.Connection, user_id: int, is_admin: bool) -> None:
+    """Make a user an admin or not. The last admin can't be demoted, so someone can always manage users."""
+    user = get_user(conn, user_id)
+    if not is_admin and _is_last_admin(conn, user):
+        raise ValidationError("There must be at least one admin.")
+    conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (1 if is_admin else 0, user_id))
+
+
+def delete_user(conn: sqlite3.Connection, user_id: int, acting_user_id: int) -> None:
+    """Delete a user and their sessions. Not yourself, and never the last admin."""
+    user = get_user(conn, user_id)
+    if user_id == acting_user_id:
+        raise ValidationError("You can't delete your own account.")
+    if _is_last_admin(conn, user):
+        raise ValidationError("There must be at least one admin.")
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
 def list_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, email, display_name, is_admin FROM users ORDER BY email COLLATE NOCASE"
+        "SELECT id, email, display_name, is_admin, created_at FROM users ORDER BY email COLLATE NOCASE"
     ).fetchall()
 
 

@@ -1,6 +1,8 @@
 /** The app's pages. The page is chosen by the part of the address after the #, so no router library is needed. */
-export type Route = "dashboard" | "profile";
+export type Route = "dashboard" | "profile" | "users";
 
 export function routeFromHash(hash: string): Route {
-  return hash === "#/profile" ? "profile" : "dashboard";
+  if (hash === "#/profile") return "profile";
+  if (hash === "#/users") return "users";
+  return "dashboard";
 }
