@@ -33,30 +33,105 @@ def parse_date(text: str | None, today: date) -> date:
     return parsed
 
 
-def record_balance(conn: sqlite3.Connection, account_id: int, as_of: date, cents: int,
-                   note: str | None = None) -> str:
-    """Save one balance. Returns 'added', 'updated' or 'unchanged'. Closed accounts are refused."""
-    account = accounts.get_account(conn, account_id)
+MAX_NOTE_LENGTH = 500
+
+# record_balance leaves an existing note alone unless it is given one, so the Update balances
+# screen, which has no note field, never wipes notes.
+KEEP_NOTE = object()
+
+
+def clean_note(note: str | None) -> str | None:
+    note = (note or "").strip()
+    if len(note) > MAX_NOTE_LENGTH:
+        raise ValidationError(f"The note is too long. Use {MAX_NOTE_LENGTH} characters or fewer.")
+    return note or None
+
+
+def _require_open(account) -> None:
     if not account["is_open"]:
-        raise ValidationError(f"{account['name']} is closed. Reopen it before entering a balance.")
+        raise ValidationError(f"{account['name']} is closed. Reopen it before changing its balances.")
+
+
+def record_balance(conn: sqlite3.Connection, account_id: int, as_of: date, cents: int,
+                   note: str | None | object = KEEP_NOTE) -> str:
+    """Save one balance. Returns 'added', 'updated' or 'unchanged'. Closed accounts are refused.
+
+    A date that already has a balance is edited. The note is replaced only if one is given
+    (a blank note clears it); leave it out to keep what is there.
+    """
+    _require_open(accounts.get_account(conn, account_id))
+    new_note = None if note is KEEP_NOTE else clean_note(note)
     existing = conn.execute(
-        "SELECT id, amount_cents FROM balances WHERE account_id = ? AND as_of_date = ?",
+        "SELECT id, amount_cents, note FROM balances WHERE account_id = ? AND as_of_date = ?",
         (account_id, as_of.isoformat()),
     ).fetchone()
     if existing is None:
         conn.execute(
             "INSERT INTO balances (account_id, as_of_date, amount_cents, note) VALUES (?, ?, ?, ?)",
-            (account_id, as_of.isoformat(), cents, note),
+            (account_id, as_of.isoformat(), cents, new_note),
         )
         return "added"
-    if existing["amount_cents"] == cents:
+    target_note = existing["note"] if note is KEEP_NOTE else new_note
+    if existing["amount_cents"] == cents and existing["note"] == target_note:
         return "unchanged"
     conn.execute(
-        "UPDATE balances SET amount_cents = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') "
-        "WHERE id = ?",
-        (cents, existing["id"]),
+        "UPDATE balances SET amount_cents = ?, note = ?, "
+        "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+        (cents, target_note, existing["id"]),
     )
     return "updated"
+
+
+def add_balance(conn: sqlite3.Connection, account_id: int, date_text: str | None,
+                amount_text: str | None, note: str | None, today: date) -> str:
+    """The detail page's Add a balance form: typed text in, 'added', 'updated' or 'unchanged' out."""
+    as_of = parse_date(date_text, today)
+    cents = parse_cents(amount_text)
+    return record_balance(conn, account_id, as_of, cents, note)
+
+
+def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
+    """One balance with its account's name and open state."""
+    row = conn.execute(
+        "SELECT b.id, b.account_id, b.as_of_date, b.amount_cents, b.note, b.source, "
+        "       a.name AS account_name, a.is_open "
+        "FROM balances b JOIN accounts a ON a.id = b.account_id WHERE b.id = ?",
+        (balance_id,),
+    ).fetchone()
+    if row is None:
+        raise ValidationError("That balance no longer exists.")
+    return dict(row)
+
+
+def update_balance(conn: sqlite3.Connection, balance_id: int, date_text: str | None,
+                   amount_text: str | None, note: str | None, today: date) -> str:
+    """Change a balance's date, amount and note. Returns 'updated' or 'unchanged'."""
+    balance = get_balance(conn, balance_id)
+    _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
+    as_of = parse_date(date_text, today)
+    cents = parse_cents(amount_text)
+    new_note = clean_note(note)
+    if conn.execute(
+        "SELECT 1 FROM balances WHERE account_id = ? AND as_of_date = ? AND id != ?",
+        (balance["account_id"], as_of.isoformat(), balance_id),
+    ).fetchone():
+        raise ValidationError(
+            f"There is already a balance on {as_of.isoformat()}. Edit that one instead.")
+    if (balance["as_of_date"], balance["amount_cents"], balance["note"]) == (
+            as_of.isoformat(), cents, new_note):
+        return "unchanged"
+    conn.execute(
+        "UPDATE balances SET as_of_date = ?, amount_cents = ?, note = ?, "
+        "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+        (as_of.isoformat(), cents, new_note, balance_id),
+    )
+    return "updated"
+
+
+def delete_balance(conn: sqlite3.Connection, balance_id: int) -> None:
+    balance = get_balance(conn, balance_id)
+    _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
+    conn.execute("DELETE FROM balances WHERE id = ?", (balance_id,))
 
 
 def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict]:

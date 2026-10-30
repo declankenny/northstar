@@ -5,7 +5,7 @@ from contextlib import closing
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from northstar import balances, clock, db
+from northstar import accounts, balances, clock, db
 from northstar.errors import ValidationError
 from northstar.money import cents_to_input
 
@@ -73,3 +73,81 @@ async def save_update(request: Request):
         f"&updated={counts['updated']}&unchanged={counts['unchanged']}",
         status_code=303,
     )
+
+
+# -- one balance: edit and delete (reached from the account detail page) --
+
+def _conn(request: Request):
+    return closing(db.connect(request.app.state.db_path))
+
+
+def _missing(request: Request, err: ValidationError):
+    """The balance is gone: show the accounts list with the message."""
+    with _conn(request) as conn:
+        context = {"accounts": accounts.list_accounts(conn), "closed": False, "error": str(err)}
+    return request.app.state.templates.TemplateResponse(
+        request, "accounts.html", context, status_code=404)
+
+
+def _balance_page(request: Request, template: str, balance: dict, form: dict | None = None,
+                  error: str | None = None, status_code: int = 200):
+    context = {
+        "b": balance, "error": error, "today": clock.today().isoformat(),
+        "form": form or {"date": balance["as_of_date"],
+                         "amount": cents_to_input(balance["amount_cents"]),
+                         "note": balance["note"] or ""},
+    }
+    return request.app.state.templates.TemplateResponse(
+        request, template, context, status_code=status_code)
+
+
+@router.get("/balances/{balance_id}/edit")
+def edit_balance_page(request: Request, balance_id: int):
+    with _conn(request) as conn:
+        try:
+            balance = balances.get_balance(conn, balance_id)
+        except ValidationError as err:
+            return _missing(request, err)
+    return _balance_page(request, "balance_edit.html", balance)
+
+
+@router.post("/balances/{balance_id}/edit")
+async def edit_balance(request: Request, balance_id: int):
+    form = await request.form()
+    typed = {"date": str(form.get("date", "")), "amount": str(form.get("amount", "")),
+             "note": str(form.get("note", ""))}
+    with _conn(request) as conn:
+        try:
+            balance = balances.get_balance(conn, balance_id)
+        except ValidationError as err:
+            return _missing(request, err)
+        try:
+            result = balances.update_balance(
+                conn, balance_id, typed["date"], typed["amount"], typed["note"], clock.today())
+        except ValidationError as err:
+            return _balance_page(request, "balance_edit.html", balance, typed, str(err), 400)
+    return RedirectResponse(f"/accounts/{balance['account_id']}?saved={result}", status_code=303)
+
+
+@router.get("/balances/{balance_id}/delete")
+def delete_balance_page(request: Request, balance_id: int):
+    with _conn(request) as conn:
+        try:
+            balance = balances.get_balance(conn, balance_id)
+        except ValidationError as err:
+            return _missing(request, err)
+    return _balance_page(request, "balance_delete.html", balance)
+
+
+@router.post("/balances/{balance_id}/delete")
+def delete_balance(request: Request, balance_id: int):
+    with _conn(request) as conn:
+        try:
+            balance = balances.get_balance(conn, balance_id)
+        except ValidationError as err:
+            return _missing(request, err)
+        try:
+            balances.delete_balance(conn, balance_id)
+        except ValidationError as err:
+            return _balance_page(request, "balance_delete.html", balance, error=str(err), status_code=400)
+    return RedirectResponse(f"/accounts/{balance['account_id']}?saved=deleted", status_code=303)

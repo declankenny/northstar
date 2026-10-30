@@ -34,4 +34,5 @@ tr.group th { background: #f4f4f4; font-size: 0.9rem; }
 .badge { font-size: 0.9rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 3px; background: #eee; vertical-align: middle; }
 .actions form { display: inline; }
 p.actions { display: flex; gap: 0.8rem; align-items: baseline; flex-wrap: wrap; }
+.hint { color: #555; font-size: 0.85rem; margin: 0.4rem 0 1rem; }
 .warning { background: #fff7e0; border: 1px solid #e0cd8a; padding: 0.6rem 0.8rem; border-radius: 4px; }

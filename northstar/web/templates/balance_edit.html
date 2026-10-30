@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Edit balance - Northstar{% endblock %}
+{% block content %}
+<p><a href="/accounts/{{ b.account_id }}">&larr; {{ b.account_name }}</a></p>
+<h1>Edit balance</h1>
+
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+{% if not b.is_open %}
+<p>Reopen the account to change its balances.</p>
+{% else %}
+<form method="post" action="/balances/{{ b.id }}/edit" class="stack">
+  <label>Date <input type="date" name="date" value="{{ form.date }}" max="{{ today }}" required></label>
+  <label>Amount <input name="amount" value="{{ form.amount }}" inputmode="decimal" autocomplete="off" required></label>
+  <label>Note (optional) <input name="note" value="{{ form.note }}" maxlength="500"></label>
+  <p><button>Save</button> <a href="/accounts/{{ b.account_id }}">Cancel</a></p>
+</form>
+{% endif %}
+{% endblock %}
