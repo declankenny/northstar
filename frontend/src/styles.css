@@ -63,3 +63,7 @@ svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .tip span { color: var(--muted); }
 
 .empty { color: var(--muted); margin-top: 28px; }
+
+.signout { width: 100%; border: 0; background: none; color: var(--muted); padding: 9px 10px; margin-bottom: 10px;
+  border-radius: 8px; font: inherit; text-align: left; cursor: pointer; }
+.signout:hover { color: var(--text); }
