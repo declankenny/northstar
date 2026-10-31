@@ -51,6 +51,9 @@ A save with any invalid amount saves nothing and says which rows are wrong, so a
 ### Business logic lives in plain functions, and the JSON API is internal
 Routes call plain Python functions and add no rules, so a rule is written once and tested without a web server. The JSON API sits over the same functions. It is not a stable contract, so it can change with the frontend.
 
+### A check and the write that depends on it run in one write transaction
+Two requests at the same moment can both pass the same check if the check and the write are separate statements: a balance could be entered between "the latest balance is zero" and "close the account", leaving a closed account with a nonzero balance, and two admins could each demote the other and leave no admin. Every operation that reads in order to decide and then writes now runs inside `db.write_transaction`, which takes SQLite's write lock up front (`BEGIN IMMEDIATE`), so the second request waits and then checks against what the first left. Inside an open transaction it joins it. Rejected: database triggers for the invariants, because they hide rules inside the database away from the plain functions and their tests, and retrying on conflict, because a lock that makes the second request wait is simpler and household traffic is tiny. Revisit if writes ever become slow enough that waiting for the lock is noticeable.
+
 ### One container and one SQLite file
 Household scale, fewest moving parts, simple backup. A live SQLite file is never copied by hand: backups use SQLite's online backup, are checked before they are put in place, and restores move the old database aside.
 

@@ -4,7 +4,7 @@ import re
 import sqlite3
 from datetime import date
 
-from northstar import accounts, staleness
+from northstar import accounts, db, staleness
 from northstar.errors import NotFoundError, ValidationError
 from northstar.money import parse_cents
 
@@ -59,27 +59,28 @@ def record_balance(conn: sqlite3.Connection, account_id: int, as_of: date, cents
     A date that already has a balance is edited. The note is replaced only if one is given
     (a blank note clears it); leave it out to keep what is there.
     """
-    _require_open(accounts.get_account(conn, account_id))
     new_note = None if note is KEEP_NOTE else clean_note(note)
-    existing = conn.execute(
-        "SELECT id, amount_cents, note FROM balances WHERE account_id = ? AND as_of_date = ?",
-        (account_id, as_of.isoformat()),
-    ).fetchone()
-    if existing is None:
+    with db.write_transaction(conn):       # the open check and the write are one step (see db.write_transaction)
+        _require_open(accounts.get_account(conn, account_id))
+        existing = conn.execute(
+            "SELECT id, amount_cents, note FROM balances WHERE account_id = ? AND as_of_date = ?",
+            (account_id, as_of.isoformat()),
+        ).fetchone()
+        if existing is None:
+            conn.execute(
+                "INSERT INTO balances (account_id, as_of_date, amount_cents, note) VALUES (?, ?, ?, ?)",
+                (account_id, as_of.isoformat(), cents, new_note),
+            )
+            return "added"
+        target_note = existing["note"] if note is KEEP_NOTE else new_note
+        if existing["amount_cents"] == cents and existing["note"] == target_note:
+            return "unchanged"
         conn.execute(
-            "INSERT INTO balances (account_id, as_of_date, amount_cents, note) VALUES (?, ?, ?, ?)",
-            (account_id, as_of.isoformat(), cents, new_note),
+            "UPDATE balances SET amount_cents = ?, note = ?, "
+            "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+            (cents, target_note, existing["id"]),
         )
-        return "added"
-    target_note = existing["note"] if note is KEEP_NOTE else new_note
-    if existing["amount_cents"] == cents and existing["note"] == target_note:
-        return "unchanged"
-    conn.execute(
-        "UPDATE balances SET amount_cents = ?, note = ?, "
-        "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
-        (cents, target_note, existing["id"]),
-    )
-    return "updated"
+        return "updated"
 
 
 def add_balance(conn: sqlite3.Connection, account_id: int, date_text: str | None,
@@ -102,15 +103,10 @@ def add_account_with_balance(conn: sqlite3.Connection, class_slug: str | None, n
     entry = None
     if (amount_text or "").strip():
         entry = (parse_date((date_text or "").strip() or today.isoformat(), today), parse_cents(amount_text))
-    conn.execute("BEGIN")
-    try:
+    with db.write_transaction(conn):
         account_id = accounts.add_account(conn, name, cls["id"], type_id, notes)
         if entry:
             record_balance(conn, account_id, entry[0], entry[1])
-    except Exception:
-        conn.execute("ROLLBACK")
-        raise
-    conn.execute("COMMIT")
     return account_id
 
 
@@ -130,32 +126,34 @@ def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
 def update_balance(conn: sqlite3.Connection, balance_id: int, date_text: str | None,
                    amount_text: str | None, note: str | None, today: date) -> str:
     """Change a balance's date, amount and note. Returns 'updated' or 'unchanged'."""
-    balance = get_balance(conn, balance_id)
-    _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
     as_of = parse_date(date_text, today)
     cents = parse_cents(amount_text)
     new_note = clean_note(note)
-    if conn.execute(
-        "SELECT 1 FROM balances WHERE account_id = ? AND as_of_date = ? AND id != ?",
-        (balance["account_id"], as_of.isoformat(), balance_id),
-    ).fetchone():
-        raise ValidationError(
-            f"There is already a balance on {as_of.isoformat()}. Edit that one instead.")
-    if (balance["as_of_date"], balance["amount_cents"], balance["note"]) == (
-            as_of.isoformat(), cents, new_note):
-        return "unchanged"
-    conn.execute(
-        "UPDATE balances SET as_of_date = ?, amount_cents = ?, note = ?, "
-        "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
-        (as_of.isoformat(), cents, new_note, balance_id),
-    )
-    return "updated"
+    with db.write_transaction(conn):
+        balance = get_balance(conn, balance_id)
+        _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
+        if conn.execute(
+            "SELECT 1 FROM balances WHERE account_id = ? AND as_of_date = ? AND id != ?",
+            (balance["account_id"], as_of.isoformat(), balance_id),
+        ).fetchone():
+            raise ValidationError(
+                f"There is already a balance on {as_of.isoformat()}. Edit that one instead.")
+        if (balance["as_of_date"], balance["amount_cents"], balance["note"]) == (
+                as_of.isoformat(), cents, new_note):
+            return "unchanged"
+        conn.execute(
+            "UPDATE balances SET as_of_date = ?, amount_cents = ?, note = ?, "
+            "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+            (as_of.isoformat(), cents, new_note, balance_id),
+        )
+        return "updated"
 
 
 def delete_balance(conn: sqlite3.Connection, balance_id: int) -> None:
-    balance = get_balance(conn, balance_id)
-    _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
-    conn.execute("DELETE FROM balances WHERE id = ?", (balance_id,))
+    with db.write_transaction(conn):
+        balance = get_balance(conn, balance_id)
+        _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
+        conn.execute("DELETE FROM balances WHERE id = ?", (balance_id,))
 
 
 def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict]:
@@ -208,12 +206,7 @@ def save_update(conn: sqlite3.Connection, date_text: str | None,
         raise EntryErrors("Some amounts need fixing. Nothing was saved.", errors)
 
     counts = {"added": 0, "updated": 0, "unchanged": 0}
-    conn.execute("BEGIN")
-    try:
+    with db.write_transaction(conn):
         for account_id, cents in entered.items():
             counts[record_balance(conn, account_id, as_of, cents)] += 1
-    except Exception:
-        conn.execute("ROLLBACK")
-        raise
-    conn.execute("COMMIT")
     return counts

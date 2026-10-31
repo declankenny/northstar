@@ -61,16 +61,11 @@ def change_me(body: ProfileChange, request: Request):
     user = current_user(request)
 
     def action(conn):
-        conn.execute("BEGIN")
-        try:
+        with db.write_transaction(conn):
             if body.display_name is not None:
                 users.set_display_name(conn, user["id"], body.display_name)
             if body.theme is not None:
                 users.set_theme(conn, user["id"], body.theme)
-        except ValidationError:
-            conn.execute("ROLLBACK")
-            raise
-        conn.execute("COMMIT")
         return _me(conn, user["id"])
 
     return _run(request, action)
