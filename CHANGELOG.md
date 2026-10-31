@@ -24,6 +24,7 @@ Nothing: this is the first version, so there is nothing to upgrade from.
 - A command to back up and restore the database (`python -m northstar.backup`).
 - A checked backup before any database migration, in a `backups` folder beside the database (the newest five are kept), and a refusal to start on a database that a newer version has migrated.
 - A published Docker image, a compose file that uses it, and a health check.
+- An operator guide (`docs/operating.md`): installing, HTTPS with Traefik, every setting, upgrading and rolling back, and backup and restore.
 
 ### Configuration
 
