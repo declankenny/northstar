@@ -92,10 +92,64 @@ def test_the_last_admin_cannot_be_demoted(client):
     assert client.get("/api/me").json()["is_admin"] is True
 
 
-def test_an_admin_can_step_down_when_another_admin_exists(client):
+def test_an_admin_cannot_remove_their_own_admin_even_when_another_exists(client):
     add(client, is_admin=True)
     me = user_id(client, "test@example.com")
-    assert client.patch(f"/api/users/{me}", json={"is_admin": False}).status_code == 200
+    response = client.patch(f"/api/users/{me}", json={"is_admin": False})
+    assert response.status_code == 422 and "your own admin" in response.json()["detail"]
+    assert client.get("/api/me").json()["is_admin"] is True
+
+
+# -- edit a user --
+
+def test_edit_changes_email_name_and_admin_together(client):
+    uid = add(client).json()["id"]
+    body = client.patch(f"/api/users/{uid}", json={"email": " Renamed@Example.com ", "display_name": " Renamed ", "is_admin": True}).json()
+    assert (body["email"], body["display_name"], body["is_admin"]) == ("renamed@example.com", "Renamed", True)
+    assert user_id(client, "renamed@example.com") == uid
+
+
+def test_a_field_left_out_stays_as_it_is(client):
+    uid = add(client, is_admin=True).json()["id"]
+    body = client.patch(f"/api/users/{uid}", json={"display_name": "Only the name"}).json()
+    assert (body["email"], body["display_name"], body["is_admin"]) == ("new@example.com", "Only the name", True)
+
+
+def test_the_user_can_sign_in_with_the_new_email_and_stays_signed_in(client):
+    uid = add(client).json()["id"]
+    with with_db(client) as conn:
+        their_session = sessions.create_session(conn, uid)
+    client.patch(f"/api/users/{uid}", json={"email": "moved@example.com"})
+    with with_db(client) as conn:
+        assert sessions.user_for_token(conn, their_session) is not None
+        assert users.authenticate(conn, "new@example.com", NEW["password"]) is None
+        assert users.authenticate(conn, "moved@example.com", NEW["password"])
+
+
+@pytest.mark.parametrize("fields, message", [
+    ({"email": "TEST@example.com"}, "already exists"),     # the admin's own address, ignoring case
+    ({"email": "not-an-email"}, "valid email"),
+    ({"display_name": "  "}, "Enter a name"),
+    ({"display_name": "x" * 101}, "at most"),
+])
+def test_a_bad_edit_is_refused_and_changes_nothing(client, fields, message):
+    uid = add(client).json()["id"]
+    response = client.patch(f"/api/users/{uid}", json={"is_admin": True, **fields})
+    assert response.status_code == 422 and message in response.json()["detail"]
+    row = next(u for u in client.get("/api/users").json() if u["id"] == uid)
+    assert (row["email"], row["display_name"], row["is_admin"]) == ("new@example.com", "New Person", False)
+
+
+def test_an_admin_can_change_their_own_email_and_name(client):
+    me = user_id(client, "test@example.com")
+    body = client.patch(f"/api/users/{me}", json={"email": "me2@example.com", "display_name": "Me Two"}).json()
+    assert (body["email"], body["display_name"], body["is_admin"]) == ("me2@example.com", "Me Two", True)
+    assert client.get("/api/me").json()["email"] == "me2@example.com"       # still signed in
+
+
+def test_keeping_the_same_email_is_not_a_duplicate(client):
+    uid = add(client).json()["id"]
+    assert client.patch(f"/api/users/{uid}", json={"email": "new@example.com", "display_name": "Same email"}).status_code == 200
 
 
 def test_unknown_user_is_404(client):

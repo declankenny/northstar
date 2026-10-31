@@ -80,6 +80,10 @@ svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .panel input[readonly] { color: var(--muted); }
 .panel input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 .panel .ranges { align-self: flex-start; }
+/* Profile: two columns, one when the window is narrow */
+.panels.two { display: grid; grid-template-columns: repeat(2, minmax(0, 440px)); max-width: none; gap: 20px; align-items: start; }
+.panels.two .col { display: flex; flex-direction: column; gap: 16px; }
+@media (max-width: 1000px) { .panels.two { grid-template-columns: minmax(0, 440px); } }
 .hint { color: var(--muted); font-size: 13px; }
 .notice { margin: 0; font-size: 14px; }
 .notice.ok { color: var(--pos); } .notice.bad { color: var(--neg); }

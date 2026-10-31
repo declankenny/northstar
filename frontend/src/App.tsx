@@ -90,7 +90,7 @@ export function App() {
         ) : route === "profile" ? (
           <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
         ) : me.is_admin ? (
-          <Users me={me} />
+          <Users me={me} onMe={setMe} />
         ) : (
           <p className="empty">Only admins can manage users.</p>
         )}
