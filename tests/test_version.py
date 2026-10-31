@@ -27,9 +27,10 @@ def test_the_version_endpoint_needs_a_signed_in_user(anon_client):
 
 
 def test_the_frontend_package_declares_the_same_version():
-    """The one other place a version is written, so it cannot drift from the real one."""
+    """The one other place a version is written, so it cannot drift from the real one. A release candidate is
+    0.1.0rc1 in Python and 0.1.0-rc.1 in npm."""
     package = json.loads((ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))
-    assert package["version"] == declared_version()
+    assert package["version"] == re.sub(r"rc(\d+)$", r"-rc.\1", declared_version())
 
 
 def test_the_image_carries_the_version_as_a_label():
