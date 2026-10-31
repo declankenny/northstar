@@ -67,7 +67,7 @@ def sample_dates(start: date, end: date, period: str) -> list[date]:
     elif period == "week":
         dates = [end - timedelta(days=7 * k) for k in range(days // 7 + 1)] + [start]
     else:
-        dates = [start] + [month_end for month_end, _ in month_end_dates(start, end)]
+        dates = [start] + month_end_dates(start, end)
     return sorted(set(dates))
 
 
@@ -103,35 +103,14 @@ def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None =
             "series": [net_worth_on(conn, day, account_id) for day in sample_dates(start, end, period)]}
 
 
-def month_end_dates(first: date, today: date) -> list[tuple[date, bool]]:
-    """The last day of every month from first's month through today's month, oldest first.
+def month_end_dates(first: date, end: date) -> list[date]:
+    """The last day of every month from first's month through end's month, oldest first.
 
-    The current month is not over yet, so it ends today and is marked partial.
+    The last one is cut off at end when end is not itself a month end.
     """
     dates = []
     year, month = first.year, first.month
-    while (year, month) <= (today.year, today.month):
-        month_end = date(year, month, calendar.monthrange(year, month)[1])
-        dates.append((min(month_end, today), month_end > today))
+    while (year, month) <= (end.year, end.month):
+        dates.append(min(date(year, month, calendar.monthrange(year, month)[1]), end))
         year, month = (year + 1, 1) if month == 12 else (year, month + 1)
     return dates
-
-
-def net_worth_by_month(conn: sqlite3.Connection, today: date) -> list[dict]:
-    """Net worth at the end of every month from the first balance through today, oldest first.
-
-    Months with no entries carry the previous values forward. The last row is the current month,
-    as of today, with partial set to True unless today is itself the last day of the month.
-    Empty when there are no balances.
-    """
-    first = conn.execute(
-        "SELECT MIN(as_of_date) FROM balances WHERE as_of_date <= ?", (today.isoformat(),)
-    ).fetchone()[0]
-    if first is None:
-        return []
-    rows = []
-    for day, partial in month_end_dates(date.fromisoformat(first), today):
-        row = net_worth_on(conn, day)
-        row["partial"] = partial
-        rows.append(row)
-    return rows

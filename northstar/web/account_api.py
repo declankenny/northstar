@@ -107,7 +107,7 @@ class ClassChange(BaseModel):
 
 
 class BalanceEntry(BaseModel):
-    date: str                # typed text, checked by the same rules as the classic pages
+    date: str                # typed text, checked by the server
     amount: str
     note: str | None = None
 
@@ -195,7 +195,7 @@ def delete_account(account_id: int, request: Request):
 
 @router.post("/accounts/{account_id}/balances", response_model=AccountOut)
 def add_balance(account_id: int, body: BalanceEntry, request: Request):
-    """A date that already has a balance is edited, as on the classic pages."""
+    """A date that already has a balance is edited."""
     def action(conn):
         balances.add_balance(conn, account_id, body.date, body.amount, body.note, clock.today())
         return _page(conn, account_id)

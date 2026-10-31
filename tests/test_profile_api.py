@@ -27,7 +27,7 @@ def test_change_theme_and_it_sticks(client):
 def test_change_display_name(client):
     body = client.patch("/api/me", json={"display_name": "  New Name  "}).json()
     assert body["display_name"] == "New Name"
-    assert "New Name" in client.get("/").text         # the classic header shows it too
+    assert client.get("/api/me").json()["display_name"] == "New Name"      # and it is saved
 
 
 @pytest.mark.parametrize("body", [{"display_name": "   "}, {"display_name": "x" * 101}])

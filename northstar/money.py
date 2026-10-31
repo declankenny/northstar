@@ -1,4 +1,4 @@
-"""Money is integer cents. Text in, text out, no floating point anywhere."""
+"""Money is integer cents. Typed text in, integer cents out, no floating point anywhere."""
 
 import re
 
@@ -26,15 +26,3 @@ def parse_cents(text: str | None) -> int:
     if cents > MAX_CENTS:
         raise ValidationError("That amount is too large.")
     return -cents if negative else cents
-
-
-def format_cents(cents: int) -> str:
-    """For display: $1,234.56 or -$25.00."""
-    sign = "-" if cents < 0 else ""
-    return f"{sign}${abs(cents) // 100:,}.{abs(cents) % 100:02d}"
-
-
-def cents_to_input(cents: int) -> str:
-    """For an input box: 1234.56 or -25.00, with nothing the parser would have to strip."""
-    sign = "-" if cents < 0 else ""
-    return f"{sign}{abs(cents) // 100}.{abs(cents) % 100:02d}"

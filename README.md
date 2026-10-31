@@ -27,10 +27,10 @@ npm test                              # frontend tests
 npm run build                         # builds into northstar/web/spa, served at /app/
 ```
 
-The server-rendered pages are at `/`. The new React Dashboard is at `/app/`, and it needs the build above.
+The app is at `/app/` (the site root `/` redirects there), and it needs the build above. The sign-in page at `/login` is the one server-rendered page.
 
 To work on the frontend with live reload, run the Python app on port 8000
 (`uvicorn --factory northstar.web.app:create_app`), then `npm run dev` in `frontend/` and open
-http://127.0.0.1:5173/app/. The dev server sends `/api` and the existing pages to the Python app.
+http://127.0.0.1:5173/app/. The dev server sends `/api` and the sign-in page to the Python app.
 
 Use synthetic data only when developing. Never point a development copy at a real database file.

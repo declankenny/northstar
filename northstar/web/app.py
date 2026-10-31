@@ -1,4 +1,4 @@
-"""App setup. Page routes live in their own modules and call plain functions."""
+"""App setup. Routes live in their own modules and call plain functions."""
 
 from contextlib import closing
 from pathlib import Path
@@ -10,9 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from northstar import config, db, sessions
-from northstar.money import cents_to_input, format_cents
-from northstar.web import (account_api, accounts_routes, api_routes, auth_routes, balances_routes, dashboard_routes,
-                           profile_api, types_api, types_routes, update_api, users_api)
+from northstar.web import account_api, api_routes, auth_routes, profile_api, types_api, update_api, users_api
 
 WEB_DIR = Path(__file__).parent
 SPA_DIR = WEB_DIR / "spa"        # the built React app (see frontend/); absent until it is built
@@ -58,25 +56,22 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
 
     app = FastAPI(title="Northstar")
     app.state.db_path = db_path
-    # Where people land after signing in: the React app once it is built, else the classic Dashboard.
-    app.state.landing = "/app/" if (SPA_DIR / "index.html").exists() else "/"
     app.state.templates = Jinja2Templates(directory=WEB_DIR / "templates")
-    app.state.templates.env.filters["money"] = format_cents
-    app.state.templates.env.filters["money_input"] = cents_to_input
     app.middleware("http")(refuse_cross_site_posts)
     app.middleware("http")(require_login)
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
     app.include_router(auth_routes.router)
-    app.include_router(dashboard_routes.router)
-    app.include_router(balances_routes.router)
-    app.include_router(accounts_routes.router)
-    app.include_router(types_routes.router)
     app.include_router(types_api.router)
     app.include_router(api_routes.router)
     app.include_router(account_api.router)
     app.include_router(update_api.router)
     app.include_router(profile_api.router)
     app.include_router(users_api.router)
+
+    @app.get("/", include_in_schema=False)
+    def site_root():
+        return RedirectResponse(auth_routes.LANDING, status_code=303)
+
     if (SPA_DIR / "index.html").exists():
         app.mount("/app", StaticFiles(directory=SPA_DIR, html=True), name="spa")
 

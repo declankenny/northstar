@@ -152,7 +152,7 @@ export async function deleteAccount(id: number): Promise<void> {
   await send("DELETE", `/api/accounts/${id}`, undefined);
 }
 
-/** A date that already has a balance is edited, as on the classic pages. */
+/** A date that already has a balance is edited. */
 export async function addBalance(accountId: number, entry: BalanceEntry): Promise<AccountPage> {
   return (await send<AccountPage>("POST", `/api/accounts/${accountId}/balances`, entry))!;
 }

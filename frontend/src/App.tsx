@@ -29,7 +29,6 @@ function useRoute() {
   return { route: routeFromHash(hash), accountId: accountIdFromHash(hash) };
 }
 
-// The other screens are still the server-rendered pages, so these are ordinary links to them.
 export function App() {
   const { route, accountId } = useRoute();
   const [me, setMe] = useState<Me | null>(null);
