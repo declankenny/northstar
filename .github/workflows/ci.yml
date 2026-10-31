@@ -1,11 +1,15 @@
 name: CI
 
-# Runs on every pull request and on pushes to main and the release branches. The three job names below
-# are the required status checks of the "Protect main" ruleset, so renaming one means updating the ruleset.
+# Runs on every pull request, on pushes to main and the release branches, and once a week on main. The job
+# names below are the required status checks of the "Protect main" ruleset, so renaming one means updating
+# the ruleset. The weekly run exists because a new advisory can make the audits fail with no change to the
+# code, and that should show up on main, not first on someone's unrelated pull request.
 on:
   pull_request:
   push:
     branches: [main, "release/**"]
+  schedule:
+    - cron: "23 6 * * 1"
 
 # Read-only by default. No job needs to write to the repository or any package registry.
 permissions:
@@ -60,6 +64,37 @@ jobs:
       - name: Build
         run: npm run build
 
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Python dependencies (pip-audit)
+        # Resolves the dependencies of pyproject.toml, transitive ones included, and checks each against
+        # known advisories. Fails on any finding, because every runtime dependency ships in the image.
+        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
+        with:
+          inputs: .
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Frontend runtime dependencies (npm audit)
+        # Only what ends up in the shipped bundle can fail the build: React and react-dom. The build
+        # tools never reach the image.
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Frontend build tools (npm audit, for information)
+        # Reported, never failing: a flaw in a build tool cannot affect a running installation.
+        working-directory: frontend
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
   image:
     name: Docker image builds
     runs-on: ubuntu-latest
@@ -79,3 +114,14 @@ jobs:
           assert (pathlib.Path(a.SPA_DIR) / 'index.html').is_file(), 'the React app is not in the image';
           assert (d.MIGRATIONS_DIR / '0001_initial.sql').is_file(), 'the migration is not in the image';
           print('image ok')"
+      - name: Scan the image for vulnerabilities (Trivy)
+        # Fails on a HIGH or CRITICAL finding that has a fix available, in the operating system packages
+        # or the Python packages. A finding with no fix yet cannot be acted on, so it is not a failure.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: northstar:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
