@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { NetWorthSeries } from "./api";
+import { type ReactNode, useState } from "react";
+import type { NetWorthSeries, Point } from "./api";
 import { dayNumber, formatDate } from "./dates";
 import { formatCents } from "./money";
 
@@ -10,13 +10,35 @@ const BOTTOM = 10;
 
 // An area chart of the samples the server sent. There is no axis on purpose: this is the big
 // picture, and the tooltip has the numbers. It draws what it is given and works nothing out.
-export function NetWorthChart({ data }: { data: NetWorthSeries }) {
+//
+// The Dashboard draws net worth. The account page draws one account's balance by passing its own
+// value, label and tooltip: the shape and the hover are the same.
+type Props = {
+  data: NetWorthSeries;
+  value?: (point: Point) => number;
+  label?: string;
+  tip?: (point: Point) => ReactNode;
+};
+
+const netWorth = (point: Point) => point.net_worth;
+
+function netWorthTip(point: Point) {
+  return (
+    <>
+      <span>{formatDate(point.date)}</span>
+      <b>{formatCents(point.net_worth)}</b>
+      <span>Assets {formatCents(point.assets)}<br />Liabilities {formatCents(point.liabilities)}</span>
+    </>
+  );
+}
+
+export function NetWorthChart({ data, value = netWorth, label = "Net worth over time", tip = netWorthTip }: Props) {
   const [hover, setHover] = useState<number | null>(null); // index of the nearest sample
   const { series } = data;
   const startDay = dayNumber(data.start);
   const span = Math.max(dayNumber(data.end) - startDay, 1);
 
-  const values = series.map((p) => p.net_worth);
+  const values = series.map(value);
   const lo = Math.min(...values);
   const hi = Math.max(...values);
   const room = Math.max(hi - lo, 1);
@@ -25,7 +47,7 @@ export function NetWorthChart({ data }: { data: NetWorthSeries }) {
 
   const xs = series.map((p) => ((dayNumber(p.date) - startDay) / span) * W);
   const y = (v: number) => TOP + (1 - (v - min) / (max - min)) * (H - TOP - BOTTOM);
-  const coords = series.map((p, i) => [xs[i], y(p.net_worth)]);
+  const coords = series.map((p, i) => [xs[i], y(value(p))]);
   if (coords.length === 1) coords.push([W, coords[0][1]]); // one sample: a flat line across
 
   const line = coords.map(([cx, cy], i) => `${i === 0 ? "M" : "L"}${cx},${cy}`).join(" ");
@@ -47,7 +69,7 @@ export function NetWorthChart({ data }: { data: NetWorthSeries }) {
       }}
       onMouseLeave={() => setHover(null)}
     >
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Net worth over time">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}>
         <defs>
           <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="var(--accent)" stopOpacity=".34" />
@@ -68,9 +90,7 @@ export function NetWorthChart({ data }: { data: NetWorthSeries }) {
             transform: xs[hover] / W > 0.7 ? "translateX(calc(-100% - 14px))" : "translateX(14px)",
           }}
         >
-          <span>{formatDate(point.date)}</span>
-          <b>{formatCents(point.net_worth)}</b>
-          <span>Assets {formatCents(point.assets)}<br />Liabilities {formatCents(point.liabilities)}</span>
+          {tip(point)}
         </div>
       )}
     </div>

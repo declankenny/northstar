@@ -5,7 +5,7 @@ import sqlite3
 from datetime import date
 
 from northstar import accounts, staleness
-from northstar.errors import ValidationError
+from northstar.errors import NotFoundError, ValidationError
 from northstar.money import parse_cents
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
@@ -99,7 +99,7 @@ def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
         (balance_id,),
     ).fetchone()
     if row is None:
-        raise ValidationError("That balance no longer exists.")
+        raise NotFoundError("That balance no longer exists.")
     return dict(row)
 
 

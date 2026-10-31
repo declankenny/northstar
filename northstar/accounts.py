@@ -4,7 +4,7 @@ import sqlite3
 from datetime import date
 
 from northstar import staleness
-from northstar.errors import ValidationError
+from northstar.errors import NotFoundError, ValidationError
 
 _SELECT = (
     "SELECT a.id, a.name, a.class_id, c.name AS class_name, a.type_id, t.name AS type_name, "
@@ -27,7 +27,7 @@ def list_accounts(conn: sqlite3.Connection, closed: bool = False) -> list[sqlite
 def get_account(conn: sqlite3.Connection, account_id: int) -> sqlite3.Row:
     row = conn.execute(_SELECT + "WHERE a.id = ?", (account_id,)).fetchone()
     if row is None:
-        raise ValidationError("That account no longer exists.")
+        raise NotFoundError("That account no longer exists.")
     return row
 
 
@@ -62,6 +62,18 @@ def balance_history(conn: sqlite3.Connection, account_id: int) -> list[sqlite3.R
         "WHERE account_id = ? ORDER BY as_of_date DESC",
         (account_id,),
     ).fetchall()
+
+
+def account_page(conn: sqlite3.Connection, account_id: int, today: date) -> dict:
+    """Everything the account page shows: the summary, every balance (newest first), and the types
+    to offer in its Edit and Change class dialogs (its own class's, and the other class's)."""
+    page = account_summary(conn, account_id, today)
+    page["balances"] = [dict(row) for row in balance_history(conn, account_id)]
+    page["types"] = [dict(row) for row in types_for_class(conn, page["class_id"])]
+    other = other_class(conn, page["class_id"])
+    page["other_class"] = {"id": other["id"], "name": other["name"],
+                           "types": [dict(row) for row in types_for_class(conn, other["id"])]}
+    return page
 
 
 def get_class_by_slug(conn: sqlite3.Connection, slug: str | None) -> sqlite3.Row:

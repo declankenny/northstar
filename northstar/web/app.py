@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 
 from northstar import config, db, sessions
 from northstar.money import cents_to_input, format_cents
-from northstar.web import (accounts_routes, api_routes, auth_routes, balances_routes, dashboard_routes,
+from northstar.web import (account_api, accounts_routes, api_routes, auth_routes, balances_routes, dashboard_routes,
                            profile_api, types_routes, users_api)
 
 WEB_DIR = Path(__file__).parent
@@ -70,6 +70,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.include_router(accounts_routes.router)
     app.include_router(types_routes.router)
     app.include_router(api_routes.router)
+    app.include_router(account_api.router)
     app.include_router(profile_api.router)
     app.include_router(users_api.router)
     if (SPA_DIR / "index.html").exists():

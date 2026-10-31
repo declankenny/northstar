@@ -2,6 +2,7 @@
 {% block title %}{{ a.name }} - Northstar{% endblock %}
 {% block content %}
 <p><a href="/accounts">&larr; Accounts</a></p>
+<p><a href="/app/#/accounts/{{ a.id }}">Open in the new view</a></p>
 
 <h1>{{ a.name }}{% if not a.is_open %} <span class="badge">Closed</span>{% endif %}</h1>
 
