@@ -10,7 +10,7 @@ Licensed under the [MIT License](LICENSE). To report a vulnerability, see [SECUR
 
 ## Sign in
 
-Every page needs a login, and there is no default user. Create the first admin once, and the command asks for the password:
+Every page needs a login, and there is no default user. Create the first admin once, after the app has started for the first time (it sets up the database, and the command refuses to run before that). The command asks for the password:
 
 ```
 python -m northstar.users create you@example.com "Your Name" --admin

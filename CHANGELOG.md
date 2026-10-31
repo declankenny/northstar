@@ -22,6 +22,7 @@ Nothing: this is the first version, so there is nothing to upgrade from.
 - Local sign-in for a household, with admins and ordinary users and a light or dark theme.
 - Limits on failed sign-ins, a strict content security policy, and password hashing that is upgraded automatically when its cost is raised.
 - A command to back up and restore the database (`python -m northstar.backup`).
+- A checked backup before any database migration, in a `backups` folder beside the database (the newest five are kept), and a refusal to start on a database that a newer version has migrated.
 - A published Docker image, a compose file that uses it, and a health check.
 
 ### Configuration
