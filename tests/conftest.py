@@ -64,6 +64,13 @@ def add_balance(conn, account_id, as_of_date, amount_cents):
 
 
 @pytest.fixture(autouse=True)
+def cheap_password_hashing(monkeypatch):
+    """Production hashing takes half a second and 128 MiB, and the tests hash hundreds of passwords, so they
+    use the cheapest valid cost. The tests that are about the cost set what they need (test_password_hashing)."""
+    monkeypatch.setattr("northstar.users.SCRYPT", {"n": 2**4, "r": 8, "p": 1})
+
+
+@pytest.fixture(autouse=True)
 def no_built_frontend(monkeypatch, tmp_path_factory):
     """Tests must not depend on whether the React bundle happens to be built on this machine.
     A test that wants a bundle sets SPA_DIR itself."""
