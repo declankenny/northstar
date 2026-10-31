@@ -7,6 +7,7 @@ A self-hosted tracker of household financial position over time, run as a docker
 ## Working rules
 
 - Read `docs/spec.md` before starting any task. If a request conflicts with it, say so and ask.
+- Design before code. When Declan raises a problem, an idea or a change request, or quotes or highlights something, that is a prompt to discuss: give a view and a recommendation, and do not write or change code. If the change affects how something looks or behaves, make a mockup next (outside the repo) and wait for feedback. Only change code once Declan approves the design or says to build it. An approval covers that design only.
 - On anything touching servers, containers or deployment, work one step at a time: give a single action, wait for the result, then continue.
 - Push back directly when something adds more complexity than v1 needs. Explain what future need would justify it and recommend the simpler option.
 - Mark unknown or unverified information as TODO. Do not infer it. Look facts up instead of guessing.
