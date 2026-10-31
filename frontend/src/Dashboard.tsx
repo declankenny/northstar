@@ -3,6 +3,8 @@ import { fetchNetWorth, type NetWorthSeries } from "./api";
 import { formatDate } from "./dates";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
+import { Link } from "./router";
+import { PATHS } from "./routes";
 import { Tile, WHEN } from "./Tile";
 
 export function Dashboard() {
@@ -41,13 +43,13 @@ export function Dashboard() {
           <div className="eyebrow">{formatDate(data.today).toUpperCase()}</div>
           <h1>Dashboard</h1>
         </div>
-        <a className="btn" href="#/update">Update balances</a>
+        <Link className="btn" to={PATHS.update}>Update balances</Link>
       </div>
 
       {data.series.length === 0 ? (
         <div className="empty">
           <p>Nothing to show yet.</p>
-          <p>Add an account on <a href="#/accounts">Accounts</a>, then enter its first balance on <a href="#/update">Update balances</a>.</p>
+          <p>Add an account on <Link to={PATHS.accounts}>Accounts</Link>, then enter its first balance on <Link to={PATHS.update}>Update balances</Link>.</p>
         </div>
       ) : (
         <>

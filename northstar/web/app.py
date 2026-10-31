@@ -4,8 +4,8 @@ from contextlib import closing
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -14,6 +14,8 @@ from northstar.web import account_api, api_routes, auth_routes, profile_api, typ
 
 WEB_DIR = Path(__file__).parent
 SPA_DIR = WEB_DIR / "spa"        # the built React app (see frontend/); absent until it is built
+# First parts of an address that belong to the server. The React app owns every other address.
+SERVER_PATHS = ("api", "login", "logout", "static")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 
@@ -73,6 +75,21 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         return RedirectResponse(auth_routes.LANDING, status_code=303)
 
     if (SPA_DIR / "index.html").exists():
-        app.mount("/app", StaticFiles(directory=SPA_DIR, html=True), name="spa")
+        @app.get("/{path:path}", include_in_schema=False)
+        def react_app(path: str):
+            """The React app for any page address (/accounts/12, /balance-update), which then shows the
+            right page itself. A real file of the build (under /assets) is served as that file. Anything
+            that is not a page is a 404, never the app's HTML: a mistyped /api address or a missing
+            script would otherwise come back as a web page."""
+            first = path.split("/", 1)[0]
+            if first in SERVER_PATHS:
+                raise HTTPException(status_code=404)
+            root = SPA_DIR.resolve()
+            target = (root / path).resolve()
+            if path and target.is_file() and target.is_relative_to(root):
+                return FileResponse(target)
+            if first == "assets":
+                raise HTTPException(status_code=404)
+            return FileResponse(root / "index.html")
 
     return app

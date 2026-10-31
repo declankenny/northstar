@@ -28,6 +28,11 @@ export type Theme = "light" | "dark";
 /** The signed-in user. The email and is_admin are read-only here. */
 export type Me = { id: number; email: string; display_name: string; is_admin: boolean; theme: Theme };
 
+/** Go to the sign-in page, which brings the person back to this page afterwards. */
+function signIn() {
+  window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+}
+
 /** A refusal from the server. The message is fit to show the user. `errors` maps a row's id to its own
  *  message, for a save that is refused because of particular rows. */
 export class RequestError extends Error {
@@ -46,7 +51,7 @@ async function send<T>(method: string, url: string, body: unknown): Promise<T | 
     body: JSON.stringify(body),
   });
   if (response.status === 401) {
-    window.location.href = "/login"; // the session ended: sign in again
+    signIn(); // the session ended: sign in again
     throw new Error("You are signed out.");
   }
   if (!response.ok) {
@@ -60,7 +65,7 @@ async function send<T>(method: string, url: string, body: unknown): Promise<T | 
 export async function fetchMe(): Promise<Me> {
   const response = await fetch("/api/me");
   if (response.status === 401) {
-    window.location.href = "/login";
+    signIn();
     throw new Error("You are signed out.");
   }
   if (!response.ok) throw new Error(`The server answered ${response.status}`);

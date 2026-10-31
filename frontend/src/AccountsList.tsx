@@ -6,6 +6,8 @@ import { AddAccountDialog, BalanceDialog, EditAccountDialog } from "./AccountDia
 import { formatDate } from "./dates";
 import { formatCents } from "./money";
 import { RowMenu } from "./RowMenu";
+import { Link, navigate } from "./router";
+import { accountPath } from "./routes";
 
 function ago(days: number | null): string {
   if (days === null) return "";
@@ -17,7 +19,7 @@ type RowActions = { onEdit: (a: ListedAccount) => void; onAddBalance: (a: Listed
 function Row({ account, showStale, actions }: { account: ListedAccount; showStale: boolean; actions: RowActions }) {
   const stale = showStale && account.stale;
   const items = [
-    { label: "Open", onClick: () => { window.location.hash = `#/accounts/${account.id}`; } },
+    { label: "Open", onClick: () => { navigate(accountPath(account.id)); } },
     { label: "Edit", onClick: () => actions.onEdit(account) },
     // A closed account takes no new balances, so its menu has no Add balance.
     ...(showStale ? [{ label: "Add balance", onClick: () => actions.onAddBalance(account) }] : []),
@@ -25,7 +27,7 @@ function Row({ account, showStale, actions }: { account: ListedAccount; showStal
   return (
     <tr className="row">
       <td>
-        <a className="name" href={`#/accounts/${account.id}`}>{account.name}</a>
+        <Link className="name" to={accountPath(account.id)}>{account.name}</Link>
         {stale && <span className="badge stale">Stale</span>}
       </td>
       <td className="m">{account.type_name}</td>
