@@ -132,16 +132,21 @@ def client_address(client_host: str | None, headers) -> Address:
     comes from a proxy listed in FORWARDED_ALLOW_IPS. So when that header is present, the address is
     real exactly when it appears in the header's chain. Otherwise it is the proxy's own address, which
     every visitor would share, and the address limit must not use it: an attacker could then block
-    everyone. Headers uvicorn does not interpret (Forwarded, X-Real-IP) mean the same thing.
+    everyone.
+
+    X-Forwarded-For is the only forwarding header uvicorn acts on, so when it is present it alone decides,
+    whatever else comes with it. Traefik and nginx send X-Real-IP beside it on every request, and that must
+    not make a trusted proxy look untrusted. Forwarded and X-Real-IP matter only when X-Forwarded-For is
+    missing: the proxy then speaks in a way uvicorn cannot read, and the address is the proxy's.
     """
     host = _ip(client_host)
-    if headers.get("forwarded") is not None or headers.get("x-real-ip") is not None:
-        return Address(None, True)
     forwarded = ",".join(headers.getlist("x-forwarded-for"))
     if forwarded.strip():
         chain = {_ip(_forwarded_host(entry)) for entry in forwarded.split(",")}
         if host is not None and host in chain:
             return Address(host, False)
+        return Address(None, True)
+    if headers.get("forwarded") is not None or headers.get("x-real-ip") is not None:
         return Address(None, True)
     return Address(host, False)
 

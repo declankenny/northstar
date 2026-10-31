@@ -99,6 +99,15 @@ Start it with `docker compose up -d`, sign in over `https://`, and check that th
 docker compose logs northstar
 ```
 
+## Where the data lives
+
+The compose file keeps the database in a Docker volume called `northstar-data`, which needs no setup. If you would rather keep it in a folder you can see and back up, replace the volume with a bind mount (`./data:/data`). The container runs as UID 1000, not as root, so that folder must belong to that user or the app cannot write to it:
+
+```
+mkdir data
+sudo chown 1000:1000 data
+```
+
 ## Settings
 
 Everything is set in `.env` beside the compose file, and every setting has a default, so the file may be empty.
@@ -123,7 +132,7 @@ Everything is set in `.env` beside the compose file, and every setting has a def
    docker compose ps
    ```
 
-The image is `latest` in the example, which moves to each new release. Before 1.0 a new minor version (0.1 to 0.2) can contain breaking changes, so if you want only fixes, use `ghcr.io/declankenny/northstar:0.1` instead. Only the latest minor version gets fixes.
+The image is `latest` in the example, which moves to each new release. For an install you can reproduce exactly, pin the image by its digest as well as its tag (`ghcr.io/declankenny/northstar:0.1.0@sha256:...`): `docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/declankenny/northstar:0.1.0` prints it. You then update by changing the line yourself. Before 1.0 a new minor version (0.1 to 0.2) can contain breaking changes, so if you want only fixes, use `ghcr.io/declankenny/northstar:0.1` instead. Only the latest minor version gets fixes.
 
 **The app protects your data on its own.** If an upgrade has a database change to apply, Northstar first writes a checked backup of the database as it is, to `/data/backups/pre-migration-<version>-<UTC time>.db`, and only then changes it. The version in the name is the new one, the one that made the backup. The newest five are kept. If the backup fails, the app refuses to start and leaves the database alone. If the database was last used by a newer version than the one you are running, the app also refuses to start, and says so in the log (`docker compose logs northstar`).
 
