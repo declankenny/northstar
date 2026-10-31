@@ -1,0 +1,144 @@
+name: Release
+
+# Runs when a version tag is pushed: v0.1.0 for a release, v0.1.0-rc.1 for a release candidate. The checks are
+# in scripts/check_release.py, which has its own tests. Nothing is published unless the tag matches the version in
+# pyproject.toml and package.json, the changelog has the section to use as the notes, the tagged commit is on main
+# or a release branch, the tests and the image scan pass again, and that version has not been published before.
+# A release candidate gets only its own image tag and is marked as a pre-release on GitHub.
+on:
+  push:
+    tags: ["v*"]
+
+# Read-only by default: each job asks for the one extra permission it needs.
+permissions:
+  contents: read
+
+# Two runs for the same tag would publish the same version twice.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/declankenny/northstar
+
+jobs:
+  check:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+      tags: ${{ steps.check.outputs.tags }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0      # every branch and tag, to see where the tagged commit is and which versions exist
+          persist-credentials: false
+      - name: Check that the tagged commit is on main or a release branch
+        run: |
+          if ! git branch --remotes --contains "$GITHUB_SHA" | grep -Eq '^\s*origin/(main|release/.+)$'; then
+            echo "Error: $GITHUB_REF_NAME is not on main or a release branch, so it will not be published."
+            exit 1
+          fi
+      - name: Check the version, the changelog and the image tags
+        id: check
+        run: python3 scripts/check_release.py "$GITHUB_REF_NAME"
+      - name: Check that this version has not been released before
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "Error: there is already a GitHub Release for $GITHUB_REF_NAME. A published version is never replaced."
+            exit 1
+          fi
+
+  tests:
+    name: Run the tests and scans
+    needs: check
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    name: Publish the image
+    needs: [check, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      TAGS: ${{ needs.check.outputs.tags }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check that this image tag has not been published before
+        run: |
+          first="${TAGS%%,*}"
+          if docker buildx imagetools inspect "$IMAGE:$first" > /dev/null 2>&1; then
+            echo "Error: $IMAGE:$first already exists. A published version is never replaced."
+            exit 1
+          fi
+      - name: Work out the image names
+        id: names
+        run: |
+          refs=""
+          IFS=,
+          for tag in $TAGS; do refs="$refs,$IMAGE:$tag"; done
+          echo "refs=${refs#,}" >> "$GITHUB_OUTPUT"
+      - name: Build for amd64 and arm64 and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.names.outputs.refs }}
+          build-args: VERSION=${{ env.VERSION }}
+          provenance: mode=max
+      - name: Check that both architectures were pushed and that the image says which version it is
+        run: |
+          first="${TAGS%%,*}"
+          docker buildx imagetools inspect "$IMAGE:$first" | tee "$RUNNER_TEMP/inspect.txt"
+          grep -q 'linux/amd64' "$RUNNER_TEMP/inspect.txt"
+          grep -q 'linux/arm64' "$RUNNER_TEMP/inspect.txt"
+          docker pull --platform linux/amd64 "$IMAGE:$first"
+          label=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$IMAGE:$first")
+          [ "$label" = "$VERSION" ] || { echo "Error: the image is labelled '$label', pyproject.toml says '$VERSION'."; exit 1; }
+
+  release:
+    name: Publish the GitHub Release
+    needs: [check, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      PRERELEASE: ${{ needs.check.outputs.prerelease }}
+      TAGS: ${{ needs.check.outputs.tags }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Write the release notes from the changelog
+        run: |
+          python3 scripts/check_release.py "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          first="${TAGS%%,*}"
+          printf '\n---\n\nDocker image: `docker pull %s:%s`\n' "$IMAGE" "$first" >> "$RUNNER_TEMP/notes.md"
+      - name: Create the release
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"

@@ -1,8 +1,10 @@
 # Both base images are pinned by digest, so a build is reproducible and a base image update is a reviewed
 # pull request (Dependabot opens it). The digest is of the multi-architecture index: amd64 and arm64.
-# Build the React frontend. Only its output reaches the final image, so Node and node_modules
-# are not in it. The build writes to ../northstar/web/spa, which is /northstar/web/spa here.
-FROM node:24-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS frontend
+# Build the React frontend, always on the machine doing the build: its output is plain files that are the same for
+# every architecture, so a multi-architecture build does not run Node under emulation. Only its output reaches the
+# final image, so Node and node_modules are not in it. The build writes to ../northstar/web/spa, which is
+# /northstar/web/spa here.
+FROM --platform=$BUILDPLATFORM node:24-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
