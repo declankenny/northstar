@@ -15,7 +15,7 @@ A self-hosted tracker of household financial position over time, run as a docker
 ## Git
 
 - One feature branch per task, pull request into `main`. TODO confirm branch naming and review process.
-- Show the diff and get Declan's approval before committing.
+- When a task is done and verified, commit it to the feature branch, push it and open the pull request. Declan reviews the diff in the pull request, so do not ask for approval before committing. The pull request description says what changed, what was verified and what was not.
 - Never merge pull requests, force-push, rewrite shared history, delete branches or tags, or commit to `main`.
 
 ## Data and secrets
