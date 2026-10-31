@@ -170,13 +170,9 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 
 /* Accounts list */
 .listbar { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
-.listpanel { margin-top: 14px; flex: 1; }
-.list { min-width: 760px; table-layout: fixed; }
+.list { min-width: 820px; table-layout: fixed; }
 .list th.note, .list td.note { padding-left: 32px; }
 .list td.note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-.list tr.row { cursor: pointer; }
-.list tr.row:hover td { background: var(--pill); }
-.list tr.sect td { background: var(--bg); font-weight: 650; padding: 9px 16px; }
 .list a.name { color: var(--text); font-weight: 560; text-decoration: none; }
 .list .badge { margin-left: 8px; }
 .card .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
@@ -184,12 +180,13 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 
 /* Account types: a card per class, a row menu instead of inline edits */
 .stack { margin-top: 20px; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; padding-bottom: 4px; }
-.gcard { flex: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.gcard { flex: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; }
 .gcard.asset { border-top: 3px solid var(--pos); }
 .gcard.liability { border-top: 3px solid var(--neg); }
 .gh { display: flex; align-items: baseline; gap: 10px; padding: 14px 16px 6px; }
 .gt { font-size: 16px; font-weight: 650; }
 .gh .m { font-size: 13px; }
+.gh .tot { margin-left: auto; font-weight: 650; }
 .gcard table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 14px; }
 .gcard th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; letter-spacing: .05em; text-transform: uppercase;
   padding: 10px 16px; border-bottom: 1px solid var(--border); }
