@@ -81,8 +81,7 @@ Northstar is open source (MIT, copyright Declan Kenny) for other people to run t
 
 - **Versions**: semantic versions. Before 1.0 anything may change, with notes. Database migrations, environment variables and the backup format always count as breaking and are always in the release notes.
 - **Branches**: `main` is development. `release/X.Y` is cut when `vX.Y.0` is tagged, starting with `release/0.1`. A fix lands on `main` first and is backported, and each release is a tag `vX.Y.Z`. Only the latest minor version gets fixes until 1.0. Once the repo is public, rulesets protect `main`, `release/*` and `v*` tags: a pull request and passing checks are required, with no force-push or deletion.
-- **Required before v0.1.0, not yet built**:
-  - A `SECURITY.md` with supported versions, private reporting through GitHub, what to expect, and the threat model.
+- **Security policy**: `SECURITY.md` gives the supported versions, private reporting through GitHub, what to expect, the threat model and hardening notes for operators. Its threat model is the one in "Security" above: a household that trusts its own members.
 - **Images and updating (proposed, not yet confirmed)**: a public image `ghcr.io/declankenny/northstar` for amd64 and arm64, built by GitHub Actions when a `v*` tag is pushed, and tagged `X.Y.Z` (never reused), `X.Y` and `latest`. A user-facing `compose.yaml` that uses `image:` and has no `build:`, with the developer build in a separate file. Updating is `docker compose pull && docker compose up -d`. The app backs up the database before applying a pending migration and refuses to start on a database newer than itself, so a rollback is a restore of that backup. The image has a health check, and the project keeps a `CHANGELOG` and a README quick start.
 
 ## Acceptance for v0.1.0
@@ -92,7 +91,7 @@ Northstar is open source (MIT, copyright Declan Kenny) for other people to run t
 - Updating ten accounts takes one screen and one submit.
 - Data survives a container restart, and a backup and restore has been tested.
 - Tests use synthetic data only.
-- Everything under "Required before v0.1.0" is built, the image is published, and an install and an upgrade have been rehearsed from the published image on a clean machine.
+- Everything under "Release and distribution" is built, the image is published, and an install and an upgrade have been rehearsed from the published image on a clean machine.
 
 ## Roadmap (not built)
 
