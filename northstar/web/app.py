@@ -1,6 +1,7 @@
 """App setup. Routes live in their own modules and call plain functions."""
 
 import logging
+import os
 from contextlib import closing
 from pathlib import Path
 from urllib.parse import quote, urlsplit
@@ -98,12 +99,14 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             first = path.split("/", 1)[0]
             if first in SERVER_PATHS:
                 raise HTTPException(status_code=404)
-            root = SPA_DIR.resolve()
-            target = (root / path).resolve()
-            if path and target.is_file() and target.is_relative_to(root):
+            # The requested path is only turned into a file after it is known to be inside the build, and the
+            # file system is not asked about anything outside it.
+            root = os.path.realpath(SPA_DIR)
+            target = os.path.realpath(os.path.join(root, path))
+            if path and target.startswith(root + os.sep) and os.path.isfile(target):
                 return FileResponse(target)
             if first == "assets":
                 raise HTTPException(status_code=404)
-            return FileResponse(root / "index.html")
+            return FileResponse(os.path.join(root, "index.html"))
 
     return app

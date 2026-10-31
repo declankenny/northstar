@@ -1,6 +1,7 @@
 """Login and logout. Every other route is protected by the middleware in app.py."""
 
 from contextlib import closing
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -32,10 +33,15 @@ def require_admin(request: Request):
 def safe_next(target: str) -> str:
     """Only send people back to a path on this site, never to another address.
 
-    The site root and anything unsafe go to the landing page: the Dashboard.
+    The site root and anything unsafe go to the landing page: the Dashboard. Unsafe includes any control
+    character or space: browsers drop tabs and newlines from an address, so "/<tab>/evil.com" would mean
+    "//evil.com". The response library happens to percent-encode those, but this check does not rely on that.
     """
-    if target != "/" and target.startswith("/") and not target.startswith("//") and "\\" not in target:
-        return target
+    if (target != "/" and target.startswith("/") and not target.startswith("//") and "\\" not in target
+            and target.isprintable() and not any(char.isspace() for char in target)):
+        parts = urlsplit(target)
+        if not parts.scheme and not parts.netloc:
+            return target
     return LANDING
 
 
