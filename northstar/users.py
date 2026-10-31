@@ -120,12 +120,16 @@ def set_user_password(conn: sqlite3.Connection, user_id: int, password: str,
         sessions.end_sessions(conn, user_id, except_token=keep_token)
 
 
+class WrongPasswordError(ValidationError):
+    """The current password typed was not the account's password. Sign-in throttling counts these."""
+
+
 def change_own_password(conn: sqlite3.Connection, user_id: int, current: str, new: str,
                         keep_token: str | None) -> None:
     """A user changes their own password. Needs the current one. Their other browsers are signed out."""
     row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
     if row is None or not verify_password(current, row["password_hash"]):
-        raise ValidationError("The current password is wrong.")
+        raise WrongPasswordError("The current password is wrong.")
     set_user_password(conn, user_id, new, keep_token=keep_token)
 
 

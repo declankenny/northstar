@@ -5,7 +5,7 @@ from contextlib import closing
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from northstar import config, db, sessions, users
+from northstar import clock, config, db, sessions, throttle, users
 
 router = APIRouter()
 COOKIE = "northstar_session"
@@ -54,10 +54,22 @@ def login_form(request: Request, next: str = "/"):
 @router.post("/login")
 def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("/")):
     next_path = safe_next(next)
+    address = throttle.address_of(request)
     with closing(db.connect(request.app.state.db_path)) as conn:
+        # The attempt takes its slot first and is only cleared by a success, so many requests at once
+        # cannot all be checked before the first failure is recorded. A blocked attempt does not check
+        # the password at all, so a correct guess cannot get through during a block.
+        _, wait = throttle.begin(conn, email, address, clock.now())
+        if wait is not None:
+            throttle.log.warning("Sign-in throttled for %s: try again in %s.", address or "an unknown address", throttle.describe(wait))
+            response = _page(request, 429, next_path,
+                             f"Too many sign-in attempts. Try again in about {throttle.describe(wait)}.", email)
+            response.headers["Retry-After"] = str(wait)
+            return response
         user = users.authenticate(conn, email, password)
         if user is None:
             return _page(request, 400, next_path, "That email and password don't match.", email)
+        throttle.clear(conn, email, address)
         token = sessions.create_session(conn, user["id"])
     response = RedirectResponse(next_path, status_code=303)
     response.set_cookie(COOKIE, token, max_age=sessions.SESSION_DAYS * 86400, httponly=True,

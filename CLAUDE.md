@@ -17,7 +17,8 @@ A self-hosted tracker of household financial position over time, run as a docker
 
 - One feature branch per task, pull request into `main`. TODO confirm branch naming and review process.
 - When a task is done and verified, commit it to the feature branch, push it and open the pull request. Declan reviews the diff in the pull request, so do not ask for approval before committing. The pull request description says what changed, what was verified and what was not.
-- Never merge pull requests, force-push, rewrite shared history, delete branches or tags, or commit to `main`.
+- Never merge pull requests, force-push, rewrite shared history, delete remote branches or tags, or commit to `main`.
+- After a pull request is merged, and only once the merge is confirmed, delete your own local feature branch with `git branch -d` (never `-D`, so an unmerged branch is refused). GitHub deletes the remote branch itself.
 
 ## Data and secrets
 
