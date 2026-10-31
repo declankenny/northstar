@@ -64,8 +64,8 @@ export function App() {
           <i>★</i> Northstar
         </div>
         <a className={route === "dashboard" ? "active" : ""} href="#/">Dashboard</a>
-        <a className={route === "update" ? "active" : ""} href="#/update">Update balances</a>
         <a className={route === "accounts" || route === "account" ? "active" : ""} href="#/accounts">Accounts</a>
+        <a className={route === "update" ? "active" : ""} href="#/update">Update balances</a>
         {me?.is_admin && (
           <>
             <div className="group">Admin</div>
