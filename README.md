@@ -6,7 +6,7 @@ Self-hosted tracker of household net worth over time. `docs/spec.md` is the sour
 
 > **Pre-release.** Northstar has no published release or Docker image yet. Run it from a checkout and with synthetic data only, and do not expose it to the internet: the remaining release hardening in `docs/spec.md` ("Release and distribution") is not built yet. All data in the tests and examples is synthetic.
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Sign in
 
