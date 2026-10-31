@@ -53,10 +53,15 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const [menu, setMenu] = useState(false);
 
   useEffect(() => {
+    let current = true; // an answer for an account that is no longer the one in the address is ignored
     setAccount(null);
     setView(null);
     setError(null);
-    fetchAccount(id).then(setAccount, (e: Error) => setError(e.message));
+    fetchAccount(id).then(
+      (loaded) => { if (current) setAccount(loaded); },
+      (e: Error) => { if (current) setError(e.message); },
+    );
+    return () => { current = false; };
   }, [id]);
 
   // The chart is the same series endpoint as the Dashboard, limited to this account.

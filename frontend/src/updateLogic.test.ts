@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UpdateRow } from "./api";
-import { baselineText, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
+import { baselineText, changedAmounts, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
 
 const row = (id: number, over: Partial<UpdateRow> = {}): UpdateRow => ({
   id, name: `Account ${id}`, class_name: "Asset", type_name: "Checking", stale_after_days: 35,
@@ -64,5 +64,34 @@ describe("moving to another date", () => {
   it("with nothing typed, keep and clear give the same form", () => {
     const untouched = { 1: "4823.10", 2: "12500.00", 3: "" };
     expect(valuesForDate(before, untouched, after, true)).toEqual(valuesForDate(before, untouched, after, false));
+  });
+});
+
+describe("what a save sends", () => {
+  const rows = [row(1, { existing_cents: 500000 }), row(2, { existing_cents: 1250000 }), row(3), row(4, { existing_cents: 184277 })];
+
+  it("sends only the rows the person changed, never the prefilled ones", () => {
+    // Rows 1, 2 and 4 are prefilled from what is saved on the date. Only row 3 was typed in.
+    const values = { 1: "5000.00", 2: "12500.00", 3: "1000", 4: "1842.77" };
+    expect(changedAmounts(rows, values)).toEqual({ 3: "1000" });
+  });
+
+  it("sends a prefilled row once its text is changed", () => {
+    const values = { 1: "5000.00", 2: "13000", 3: "", 4: "1842.77" };
+    expect(changedAmounts(rows, values)).toEqual({ 2: "13000" });
+  });
+
+  it("sends nothing for a row that was cleared, because a blank row is skipped", () => {
+    expect(changedAmounts(rows, { 1: "", 2: "12500.00", 3: "", 4: "1842.77" })).toEqual({});
+    expect(changedAmounts(rows, { 1: "   ", 2: "12500.00", 3: "", 4: "1842.77" })).toEqual({});
+  });
+
+  it("sends a typed zero, and the text exactly as typed so the server checks it", () => {
+    expect(changedAmounts(rows, { 1: "5000.00", 2: "12500.00", 3: "0", 4: "1842.77" })).toEqual({ 3: "0" });
+    expect(changedAmounts(rows, { 1: "12,3x", 2: "12500.00", 3: "", 4: "1842.77" })).toEqual({ 1: "12,3x" });
+  });
+
+  it("sends nothing when the form is as saved", () => {
+    expect(changedAmounts(rows, { 1: "5000.00", 2: "12500.00", 3: "", 4: "1842.77" })).toEqual({});
   });
 });

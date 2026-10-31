@@ -14,6 +14,18 @@ export function isTyped(row: UpdateRow, text: string): boolean {
   return text !== baselineText(row);
 }
 
+/** What a save sends: only the rows the person changed, and not blank (a blank row is skipped). Rows that
+ *  were just prefilled from what is already saved are left out, so saving one row can never write back
+ *  another row's stale value over someone else's change. The text is sent as typed: the server checks it. */
+export function changedAmounts(rows: UpdateRow[], values: Record<number, string>): Record<number, string> {
+  const amounts: Record<number, string> = {};
+  for (const row of rows) {
+    const text = values[row.id] ?? "";
+    if (isTyped(row, text) && text.trim() !== "") amounts[row.id] = text;
+  }
+  return amounts;
+}
+
 export type RowState =
   | { kind: "blank" }
   | { kind: "invalid" }

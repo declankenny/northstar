@@ -4,7 +4,7 @@ import { dayNumber, formatDate, isoFromDay } from "./dates";
 import { Modal } from "./Dialogs";
 import { formatCents } from "./money";
 import { useLeaveGuard } from "./router";
-import { baselineText, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
+import { baselineText, changedAmounts, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
 
 type Banner = { kind: "ok" | "bad"; text: string };
 
@@ -42,6 +42,9 @@ export function UpdateBalances() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null); // a date waiting for "keep or clear"
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false); // another date is being read
+  const latestLoad = useRef(0);                  // the newest read, so an older answer is ignored
+  const focusAfter = useRef<number | null>(null); // a row to focus once the boxes can be focused again
   const body = useRef<HTMLDivElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
   // What is typed in the date box. A native date box reports a valid date after every keystroke
@@ -52,20 +55,38 @@ export function UpdateBalances() {
 
   const rows = page?.rows ?? [];
   const dirty = rows.some((row) => isTyped(row, values[row.id] ?? ""));
+  const toSend = changedAmounts(rows, values);
+  // While a request runs the form cannot be edited, so an answer can never replace what was just typed.
+  const busy = saving || loading;
 
   /** Read a date and show it. Nothing is written. With `keep`, rows the user typed in keep their text. */
   const show = async (date: string | undefined, keep: boolean) => {
+    const mine = ++latestLoad.current;
+    setLoading(true);
     try {
       const next = await fetchUpdate(date);
+      if (mine !== latestLoad.current) return; // a newer read has started: this answer is out of date
       setValues(valuesForDate(rows, values, next.rows, keep));
       setPage(next);
       setErrors({});
     } catch (e) {
+      if (mine !== latestLoad.current) return;
       const message = (e as Error).message;
       if (page) setBanner({ kind: "bad", text: message });
       else setLoadError(message);
+    } finally {
+      if (mine === latestLoad.current) setLoading(false);
     }
   };
+
+  // After a refused save the boxes come back to life, and then the first bad one gets the focus.
+  useEffect(() => {
+    if (busy || focusAfter.current === null) return;
+    const box = body.current?.querySelector<HTMLInputElement>(`input[data-id="${focusAfter.current}"]`);
+    focusAfter.current = null;
+    box?.focus();
+    box?.scrollIntoView({ block: "center" });
+  }, [busy]);
 
   useEffect(() => {
     void show(undefined, false);
@@ -81,7 +102,7 @@ export function UpdateBalances() {
   const requestDate = (date: string) => {
     window.clearTimeout(draftTimer.current);
     setDraft(null);
-    if (!date || date > page.today || date === page.date) return; // the date box shows page.date again
+    if (busy || !date || date > page.today || date === page.date) return; // the date box shows page.date again
     setBanner(null);
     if (dirty) setPending(date);
     else void show(date, false);
@@ -110,11 +131,9 @@ export function UpdateBalances() {
   };
 
   const save = async () => {
-    const amounts: Record<number, string> = {};
-    for (const row of rows) if ((values[row.id] ?? "").trim() !== "") amounts[row.id] = values[row.id];
     setSaving(true);
     try {
-      const saved = await saveUpdate(page.date, amounts);
+      const saved = await saveUpdate(page.date, toSend);
       setPage(saved);
       setValues(Object.fromEntries(saved.rows.map((row) => [row.id, baselineText(row)])));
       setErrors({});
@@ -126,12 +145,7 @@ export function UpdateBalances() {
       const byRow = Object.fromEntries(Object.entries(refused.errors ?? {}).map(([id, message]) => [Number(id), message]));
       setErrors(byRow);
       setBanner({ kind: "bad", text: refused.message });
-      const first = rows.find((row) => byRow[row.id] !== undefined);
-      if (first) {
-        const box = body.current?.querySelector<HTMLInputElement>(`input[data-id="${first.id}"]`);
-        box?.focus();
-        box?.scrollIntoView({ block: "center" });
-      }
+      focusAfter.current = rows.find((row) => byRow[row.id] !== undefined)?.id ?? null;
     } finally {
       setSaving(false);
     }
@@ -167,13 +181,13 @@ export function UpdateBalances() {
         </div>
         <div className="ub-date">
           <label htmlFor="ub-date">As of</label>
-          <button className="ub-step" aria-label="Previous day" onClick={() => step(-1)}>‹</button>
-          <input id="ub-date" type="date" value={draft ?? page.date} max={page.today}
+          <button className="ub-step" aria-label="Previous day" disabled={busy} onClick={() => step(-1)}>‹</button>
+          <input id="ub-date" type="date" value={draft ?? page.date} max={page.today} disabled={busy}
             onChange={(e) => typeDate(e.target.value)}
             onBlur={() => { if (draft !== null) requestDate(draft); }}
             onKeyDown={(e) => { if (e.key === "Enter" && draft !== null) requestDate(draft); }} />
-          <button className="ub-step" aria-label="Next day" disabled={page.date >= page.today} onClick={() => step(1)}>›</button>
-          <button className="ub-step" disabled={page.date === page.today} onClick={() => requestDate(page.today)}>Today</button>
+          <button className="ub-step" aria-label="Next day" disabled={busy || page.date >= page.today} onClick={() => step(1)}>›</button>
+          <button className="ub-step" disabled={busy || page.date === page.today} onClick={() => requestDate(page.today)}>Today</button>
         </div>
       </div>
 
@@ -204,7 +218,7 @@ export function UpdateBalances() {
                         <td className="r">
                           <div className="ub-in">
                             <i>$</i>
-                            <input data-id={row.id} className="num" inputMode="decimal" autoComplete="off"
+                            <input data-id={row.id} className="num" inputMode="decimal" autoComplete="off" disabled={busy}
                               aria-label={`New balance for ${row.name}`} aria-invalid={errors[row.id] !== undefined}
                               placeholder={row.class_name === "Asset" ? "balance" : "amount owed"}
                               autoFocus={row.id === first} value={text}
@@ -238,8 +252,8 @@ export function UpdateBalances() {
             </>
           )}
         </div>
-        {dirty && <button className="ub-discard" onClick={discard}>Discard</button>}
-        <button className="btn" ref={saveButton} disabled={!dirty || saving} onClick={() => void save()}>Save balances</button>
+        {dirty && <button className="ub-discard" disabled={busy} onClick={discard}>Discard</button>}
+        <button className="btn" ref={saveButton} disabled={Object.keys(toSend).length === 0 || busy} onClick={() => void save()}>Save balances</button>
       </div>
 
       {pending && (
