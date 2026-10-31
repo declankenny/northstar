@@ -1,21 +1,31 @@
 import { useEffect, useState } from "react";
-import { type AccountList, addAccount, fetchAccounts, type ListedAccount } from "./api";
-import { AddAccountDialog } from "./AccountDialogs";
+import {
+  type AccountList, type AccountPage, addAccount, addBalance, editAccount, fetchAccount, fetchAccounts, type ListedAccount,
+} from "./api";
+import { AddAccountDialog, BalanceDialog, EditAccountDialog } from "./AccountDialogs";
 import { formatDate } from "./dates";
 import { formatCents } from "./money";
+import { RowMenu } from "./RowMenu";
 
 function ago(days: number | null): string {
   if (days === null) return "";
   return days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-function Row({ account, showStale }: { account: ListedAccount; showStale: boolean }) {
+type RowActions = { onEdit: (a: ListedAccount) => void; onAddBalance: (a: ListedAccount) => void };
+
+function Row({ account, showStale, actions }: { account: ListedAccount; showStale: boolean; actions: RowActions }) {
   const stale = showStale && account.stale;
-  const open = () => { window.location.hash = `#/accounts/${account.id}`; };
+  const items = [
+    { label: "Open", onClick: () => { window.location.hash = `#/accounts/${account.id}`; } },
+    { label: "Edit", onClick: () => actions.onEdit(account) },
+    // A closed account takes no new balances, so its menu has no Add balance.
+    ...(showStale ? [{ label: "Add balance", onClick: () => actions.onAddBalance(account) }] : []),
+  ];
   return (
-    <tr className="row" onClick={open}>
+    <tr className="row">
       <td>
-        <a className="name" href={`#/accounts/${account.id}`} onClick={(e) => e.stopPropagation()}>{account.name}</a>
+        <a className="name" href={`#/accounts/${account.id}`}>{account.name}</a>
         {stale && <span className="badge stale">Stale</span>}
       </td>
       <td className="m">{account.type_name}</td>
@@ -29,6 +39,7 @@ function Row({ account, showStale }: { account: ListedAccount; showStale: boolea
       </td>
       <td className="r">{account.balance_count}</td>
       <td className="note" title={account.notes ?? undefined}>{account.notes}</td>
+      <td className="k"><RowMenu label={`Actions for ${account.name}`} items={items} /></td>
     </tr>
   );
 }
@@ -39,6 +50,8 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [adding, setAdding] = useState<"asset" | "liability" | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "edit" | "balance"; account: AccountPage } | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true; // ignore an answer that arrives after the other list was chosen
@@ -55,6 +68,18 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [menu]);
+
+  // The dialogs take the whole account, so fetch it first; the list only carries what its table shows.
+  const openDialog = (kind: "edit" | "balance") => (listed: ListedAccount) => {
+    setFailure(null);
+    fetchAccount(listed.id).then((account) => setDialog({ kind, account }), (e: Error) => setFailure(e.message));
+  };
+  const actions: RowActions = { onEdit: openDialog("edit"), onAddBalance: openDialog("balance") };
+  /** A change is saved on the account, then the list is read again so the row and its group total are right. */
+  const saved = async () => {
+    setList(await fetchAccounts(closed));
+    setDialog(null);
+  };
 
   if (error) return <p className="empty">Could not load accounts. {error}</p>;
   if (!list) return <p className="empty">Loading…</p>;
@@ -90,27 +115,33 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
-      <div className="acct-panel listpanel">
-        <div className="hist">
-          {groups.length === 0 ? (
-            <p className="empty pad">{closed ? "No closed accounts." : "No open accounts yet. Use Add account to create one."}</p>
-          ) : (
-            <table className="num list">
-              <colgroup>
-                <col style={{ width: "22%" }} /><col style={{ width: "13%" }} /><col style={{ width: "15%" }} />
-                <col style={{ width: "20%" }} /><col style={{ width: "9%" }} /><col />
-              </colgroup>
-              <thead>
-                <tr><th>Account</th><th>Type</th><th className="r">Latest balance</th><th>As of</th><th className="r">Balances</th><th className="note">Notes</th></tr>
-              </thead>
-              <tbody>
-                {groups.map((g) => (
-                  <GroupRows key={g.cls} name={g.name} total={g.total} rows={g.rows} showStale={!closed} />
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+      {failure && <p className="notice bad" role="alert">{failure}</p>}
+
+      <div className="stack">
+        {groups.length === 0 ? (
+          <div className="gcard"><p className="empty pad">{closed ? "No closed accounts." : "No open accounts yet. Use Add account to create one."}</p></div>
+        ) : (
+          groups.map((g) => (
+            <div key={g.cls} className={`gcard ${g.cls.toLowerCase()}`}>
+              <div className="gh">
+                <span className="gt">{g.name}</span>
+                {g.total !== undefined && <span className="tot num">{formatCents(g.total)}</span>}
+              </div>
+              <table className="num list">
+                <colgroup>
+                  <col style={{ width: "21%" }} /><col style={{ width: "12%" }} /><col style={{ width: "15%" }} />
+                  <col style={{ width: "20%" }} /><col style={{ width: "8%" }} /><col /><col style={{ width: "64px" }} />
+                </colgroup>
+                <thead>
+                  <tr><th>Account</th><th>Type</th><th className="r">Latest balance</th><th>As of</th><th className="r">Balances</th><th className="note">Notes</th><th /></tr>
+                </thead>
+                <tbody>
+                  {g.rows.map((a) => <Row key={a.id} account={a} showStale={!closed} actions={actions} />)}
+                </tbody>
+              </table>
+            </div>
+          ))
+        )}
       </div>
 
       {adding && (
@@ -122,19 +153,15 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
             setAdding(null);
           }} />
       )}
-    </div>
-  );
-}
 
-function GroupRows(props: { name: string; total: number | undefined; rows: ListedAccount[]; showStale: boolean }) {
-  return (
-    <>
-      <tr className="sect">
-        <td colSpan={2}>{props.name}</td>
-        <td className="r">{props.total === undefined ? "" : formatCents(props.total)}</td>
-        <td colSpan={3} />
-      </tr>
-      {props.rows.map((a) => <Row key={a.id} account={a} showStale={props.showStale} />)}
-    </>
+      {dialog?.kind === "edit" && (
+        <EditAccountDialog account={dialog.account} onClose={() => setDialog(null)}
+          onSave={async (change) => { await editAccount(dialog.account.id, change); await saved(); }} />
+      )}
+      {dialog?.kind === "balance" && (
+        <BalanceDialog account={dialog.account} editing={null} onClose={() => setDialog(null)}
+          onSave={async (entry) => { await addBalance(dialog.account.id, entry); await saved(); }} />
+      )}
+    </div>
   );
 }
