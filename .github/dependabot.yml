@@ -1,0 +1,45 @@
+# Dependabot proposes every update as a pull request, so nothing is bumped without CI and a review.
+# Versions are pinned exactly (pyproject.toml, package.json, the base image digests and the commit
+# SHAs of the actions), which is why these are needed: nothing moves on its own.
+#
+# Minor and patch updates of one ecosystem arrive together in one pull request, to keep the volume
+# manageable. Major updates, and security updates, each get their own pull request.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      python-dependencies:
+        applies-to: version-updates
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      frontend-dependencies:
+        applies-to: version-updates
+        update-types: [minor, patch]
+
+  # The two base images in the Dockerfile, which are pinned by digest.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+
+  # The actions in .github/workflows, which are pinned by commit SHA.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      github-actions:
+        applies-to: version-updates
+        update-types: [minor, patch]

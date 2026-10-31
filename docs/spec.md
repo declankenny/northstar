@@ -56,7 +56,7 @@ Track a household's financial position over time. Northstar records dated balanc
 ## Technical shape
 
 - **Stack**: Python, FastAPI and SQLite on the server. The interface is a React and TypeScript single-page app built with Vite and served by the same application on the same origin, so there is no CORS. The sign-in page is the one page rendered by the server, from a template, because the app itself cannot be public.
-- **Dependencies**: few, each with a stated reason, with versions pinned exactly.
+- **Dependencies**: few, each with a stated reason, with versions pinned exactly. The pins include the base images (by digest) and the CI actions (by commit SHA). Dependabot proposes every update as a pull request, and CI fails a pull request on a known vulnerability in the Python dependencies (`pip-audit`), in the frontend dependencies that ship in the bundle (`npm audit`), or in the built image (Trivy, HIGH and CRITICAL findings that have a fix). The same checks run weekly on `main`. The final image has no pip.
 - **Architecture**: business logic lives in plain Python functions, separate from the routes. Routes call them and add no rules. The JSON API under `/api` is internal and not a stable contract.
 - **Transactions**: any operation that reads in order to decide and then writes (closing an account, changing a balance, the admin rules, a password change) runs inside one `db.write_transaction`, which takes SQLite's write lock at the start, so two requests at the same moment cannot both pass the same check. Operations that need several writes to succeed together use the same helper.
 - **Schema**: changes ship as forward-only migrations, tested on a copy of a database first. A released migration is never edited.
