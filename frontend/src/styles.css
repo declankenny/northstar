@@ -2,13 +2,13 @@
   --bg: #0f1114; --sidebar: #14171b; --surface: #1a1e23; --border: #262b31;
   --text: #e8eaed; --muted: #8b939c; --accent: #6a9fd0; --accent-soft: rgba(106, 159, 208, .22);
   --pill: #20252b; --pill-active: #2b3238; --pos: #7fb08a; --neg: #d98a80; --on-accent: #0f1114;
-  --warn: #d9b36a; --warn-soft: rgba(217, 179, 106, .16); --overlay: rgba(0, 0, 0, .55);
+  --warn: #d9b36a; --warn-soft: rgba(217, 179, 106, .16); --overlay: rgba(0, 0, 0, .55); color-scheme: dark;
 }
 :root[data-theme="light"] {
   --bg: #f6f7f8; --sidebar: #ffffff; --surface: #ffffff; --border: #e3e6e9;
   --text: #1a1d21; --muted: #6a727b; --accent: #3a6d9c; --accent-soft: rgba(58, 109, 156, .16);
   --pill: #eceef0; --pill-active: #ffffff; --pos: #2f7d4f; --neg: #b4443a; --on-accent: #ffffff;
-  --warn: #9a6a12; --warn-soft: rgba(154, 106, 18, .12); --overlay: rgba(20, 24, 28, .4);
+  --warn: #9a6a12; --warn-soft: rgba(154, 106, 18, .12); --overlay: rgba(20, 24, 28, .4); color-scheme: light;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
@@ -167,3 +167,17 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .card .hint { margin-top: 5px; font-size: 12px; }
 .card .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .card .notice { margin-top: 12px; }
+
+/* Accounts list */
+.listbar { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+.listpanel { margin-top: 14px; flex: 1; }
+.list { min-width: 760px; table-layout: fixed; }
+.list th.note, .list td.note { padding-left: 32px; }
+.list td.note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.list tr.row { cursor: pointer; }
+.list tr.row:hover td { background: var(--pill); }
+.list tr.sect td { background: var(--bg); font-weight: 650; padding: 9px 16px; }
+.list a.name { color: var(--text); font-weight: 560; text-decoration: none; }
+.list .badge { margin-left: 8px; }
+.card .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.card .two label { margin-top: 12px; }

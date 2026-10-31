@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { type AccountPage, type BalanceEntry, type BalanceRow } from "./api";
+import { type AccountList, type AccountPage, type BalanceEntry, type BalanceRow, type NewAccount } from "./api";
 import { formatDate } from "./dates";
 import { centsToInput } from "./money";
 import { Modal, useAction } from "./Dialogs";
@@ -121,6 +121,70 @@ export function ChangeClassDialog(props: {
           <div className="foot">
             <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
             <button className="btn" disabled={busy || typeId === ""}>Change to {target.name}</button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+/** Add an account, and its first balance too when an amount is typed. A blank amount adds the account alone. */
+export function AddAccountDialog(props: {
+  list: AccountList;
+  accountClass: "asset" | "liability";
+  onSave: (account: NewAccount) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { list, accountClass } = props;
+  const cls = list.classes.find((c) => c.name.toLowerCase() === accountClass)!;
+  const owed = accountClass === "liability";
+  const [name, setName] = useState("");
+  const [typeId, setTypeId] = useState<number | "">(cls.types.length === 1 ? cls.types[0].id : "");
+  const [notes, setNotes] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(list.today);
+  const { busy, error, run } = useAction();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (typeId === "") return;
+    run(() => props.onSave({ account_class: accountClass, name, type_id: typeId, notes, amount, date }));
+  };
+
+  return (
+    <Modal title={`Add ${accountClass} account`} onClose={props.onClose}>
+      {cls.types.length === 0 ? (
+        <p className="sub">There are no {accountClass} types yet. <a href="/types">Add one on the Account types page</a> first.</p>
+      ) : (
+        <form onSubmit={submit}>
+          <label>Name
+            <input value={name} placeholder="e.g. Joint Savings" onChange={(e) => setName(e.target.value)} required autoFocus />
+          </label>
+          <label>Type
+            <select value={typeId} onChange={(e) => setTypeId(Number(e.target.value))} required>
+              <option value="" disabled>Choose a type</option>
+              {cls.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <label>Notes (optional)
+            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </label>
+          <div className="two">
+            <label>{owed ? "Amount owed (optional)" : "Current balance (optional)"}
+              <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </label>
+            <label>As of
+              <input type="date" value={date} max={list.today} onChange={(e) => setDate(e.target.value)} />
+            </label>
+          </div>
+          <div className="hint">
+            {owed ? "Enter what is owed as a positive number. Leave it blank to add the account without a balance."
+              : "Leave the balance blank to add the account without one."}
+          </div>
+          {error && <p className="notice bad" role="alert">{error}</p>}
+          <div className="foot">
+            <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
+            <button className="btn" disabled={busy || typeId === ""}>Add account</button>
           </div>
         </form>
       )}

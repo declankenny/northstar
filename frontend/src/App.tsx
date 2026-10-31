@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchMe, type Me, type Theme, updateMe } from "./api";
 import { AccountPage } from "./AccountPage";
+import { AccountsList } from "./AccountsList";
 import { Dashboard } from "./Dashboard";
 import { Profile } from "./Profile";
 import { accountIdFromHash, routeFromHash } from "./routes";
@@ -62,7 +63,7 @@ export function App() {
         </div>
         <a className={route === "dashboard" ? "active" : ""} href="#/">Dashboard</a>
         <a href="/balances/update">Update balances</a>
-        <a className={route === "account" ? "active" : ""} href="/accounts">Accounts</a>
+        <a className={route === "accounts" || route === "account" ? "active" : ""} href="#/accounts">Accounts</a>
         <div className="group">Admin</div>
         <a href="/types">Account types</a>
         {me?.is_admin && <a className={route === "users" ? "active" : ""} href="#/users">Users</a>}
@@ -75,6 +76,8 @@ export function App() {
       <main>
         {route === "dashboard" ? (
           <Dashboard />
+        ) : route === "accounts" ? (
+          <AccountsList />
         ) : route === "account" && accountId !== null ? (
           <AccountPage id={accountId} />
         ) : !me ? null : route === "profile" ? (

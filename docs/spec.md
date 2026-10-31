@@ -154,14 +154,21 @@ Stack, architecture, packaging, authentication and backup are decided. Deploymen
      - The open-accounts table is not on this Dashboard. It belongs on the Accounts page.
      - Style: steel blue accent, clean sans-serif with tabular numbers, system fonts (nothing is loaded from outside), a Light and Dark choice on the Profile page (dark by default, stored on the user, see "Authentication").
      - Balance entry is designed for a desktop browser only. There is no phone layout yet.
-   - **Account page in the new UI (decided, built)**: at `/app/#/accounts/<id>`, reached from a link on the classic account page until the Accounts list moves too. It replaces the classic detail page's job and uses the same rules.
+   - **Account page in the new UI (decided, built)**: at `/app/#/accounts/<id>`, reached from a row of the Accounts list (and from a link on the classic account page). It replaces the classic detail page's job and uses the same rules.
      - Layout: like the Dashboard it fits the window. A header (name, type and class, a Stale badge, a Closed badge, and **Add balance** with a **⋯** menu), three tiles, then the balance history chart on the left and the entries list on the right. Only the entries list scrolls.
      - Tiles: latest balance (its date, its age in days, and a warning when it is older than the type's stale limit), the change over the chosen range (a falling liability is shown green), and how many balances fall in the range out of all of them.
      - Chart: the Dashboard's chart limited to this account (`/api/networth?account_id=`), with the same range buttons and a tooltip of the date and balance.
      - Entries: newest first, with each entry's change from the one before it and its note. Edit and Delete show on hover.
      - Actions: Add and Edit balance are dialogs (date, amount, optional note). Edit account (name, type within its class, notes). **Change class** is its own menu item because it rewrites past totals, and its dialog says how many balances and from which date. Close asks first and says what it does (the latest balance must be zero, as before), and a closed account shows a Closed badge, cannot have balances changed, and offers Reopen. Delete (of a balance or of the account) states its consequence before it happens. Adding on a date that already has a balance replaces it, as on the classic pages.
      - Endpoints: `GET /api/accounts/{id}`, `PATCH /api/accounts/{id}`, `POST /api/accounts/{id}/change-class`, `close`, `reopen`, `DELETE /api/accounts/{id}`, `POST /api/accounts/{id}/balances`, and `PATCH` and `DELETE /api/balances/{id}`.
-   - Not yet in the new UI: Update balances, Accounts (the list) and Account types. The navigation links to the server-rendered pages for these. Which moves next is TODO.
+   - **Accounts list in the new UI (decided, built)**: at `/app/#/accounts`, the Accounts link in the navigation.
+     - A table grouped into Assets and Liabilities, with columns Account, Type, Latest balance, As of (the date and how many days ago), Balances (how many) and Notes. Each group's header shows its total as of today, which is `net_worth_on` for today, not a second sum. The page fits the window and only the table scrolls.
+     - An **Open | Closed** toggle. The Closed list has no totals and no stale flags (a closed account's last balance is meant to be old). An open account whose latest balance is older than its type's limit (or that has none) gets a **Stale** badge.
+     - A row opens the account page. There are no row actions: Close, Delete and the rest are on the account page, where they say what they will do.
+     - **Add account** is a button with an Asset or Liability choice, and opens a dialog: name, type (of that class), notes, and an optional **current balance** (**amount owed** for a liability, entered as a positive number) with an **as of** date that defaults to today. A blank amount adds the account with no balance and the date is ignored. A typed amount adds the account and its first balance together, all or nothing, so a bad amount leaves no half-made account. It is an ordinary first balance, not a separate opening-balance concept.
+     - Endpoints: `GET /api/accounts?closed=` (the list, the totals, and the types each class offers) and `POST /api/accounts`, which answers with the open list.
+     - The date field follows the theme (`color-scheme`), so the browser's own calendar popup is dark in the dark theme.
+   - Not yet in the new UI: Update balances and Account types. The navigation links to the server-rendered pages for these. Which moves next is TODO. The classic Accounts and account pages still work and link to the new ones.
    - Deployment is still out of scope until Declan approves.
 
 ## Open decisions
@@ -174,5 +181,5 @@ Resolved for the next phase: frontend stack (React, TypeScript and Vite), no cha
 
 Open for the next phase:
 
-- Which screen moves to the new UI next (the Accounts list is the likely one, and it would make the classic account page redundant), and which further charts to build (for example the mix of assets by type). TODO.
+- Which screen moves to the new UI next (Update balances is the likely one), and which further charts to build (for example the mix of assets by type). TODO.
 - Deployment gate: HTTPS and how the app is exposed on the deployment host. TODO. (Login itself is decided, see "Authentication".)
