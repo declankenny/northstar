@@ -61,3 +61,10 @@ def add_balance(conn, account_id, as_of_date, amount_cents):
         "INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, ?, ?)",
         (account_id, as_of_date, amount_cents),
     )
+
+
+@pytest.fixture(autouse=True)
+def no_built_frontend(monkeypatch, tmp_path_factory):
+    """Tests must not depend on whether the React bundle happens to be built on this machine.
+    A test that wants a bundle sets SPA_DIR itself."""
+    monkeypatch.setattr("northstar.web.app.SPA_DIR", tmp_path_factory.mktemp("no-spa") / "missing")

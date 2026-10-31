@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { addType, deleteType, editType, fetchTypes, type TypeList, type TypeRow } from "./api";
 import { ConfirmDialog, Modal, useAction } from "./Dialogs";
+import { RowMenu } from "./RowMenu";
 
 type Dialog = { kind: "edit"; type: TypeRow | null } | { kind: "delete"; type: TypeRow };
 
@@ -41,34 +42,6 @@ function TypeDialog(props: { list: TypeList; editing: TypeRow | null; onSave: (t
         </div>
       </form>
     </Modal>
-  );
-}
-
-function RowMenu(props: { type: TypeRow; onEdit: () => void; onDelete: () => void }) {
-  const [open, setOpen] = useState(false);
-  const { type } = props;
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [open]);
-
-  const n = type.account_count;
-  return (
-    <>
-      <button className={open ? "kebab on" : "kebab"} aria-label={`Actions for ${type.name}`} aria-haspopup="menu" aria-expanded={open}
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>⋯</button>
-      {open && (
-        <div className="menu rowmenu" role="menu">
-          <button role="menuitem" onClick={props.onEdit}>Edit</button>
-          {/* A type in use can't be deleted, so the reason sits right after the word. */}
-          <button role="menuitem" className="bad" disabled={n > 0} onClick={props.onDelete}>
-            Delete{n > 0 && <span className="why"> ({n} {n === 1 ? "account uses" : "accounts use"} this type. Change {n === 1 ? "its" : "their"} type first.)</span>}
-          </button>
-        </div>
-      )}
-    </>
   );
 }
 
@@ -122,7 +95,16 @@ export function AccountTypes() {
                         <td className="r">{t.stale_after_days}</td>
                         <td className={t.account_count ? "r" : "r m"}>{t.account_count}</td>
                         <td className="k">
-                          <RowMenu type={t} onEdit={() => setDialog({ kind: "edit", type: t })} onDelete={() => setDialog({ kind: "delete", type: t })} />
+                          <RowMenu label={`Actions for ${t.name}`} items={[
+                            { label: "Edit", onClick: () => setDialog({ kind: "edit", type: t }) },
+                            // A type in use can't be deleted, so the reason sits right after the word.
+                            {
+                              label: "Delete", danger: true, disabled: t.account_count > 0, onClick: () => setDialog({ kind: "delete", type: t }),
+                              note: t.account_count > 0
+                                ? `${t.account_count} ${t.account_count === 1 ? "account uses" : "accounts use"} this type. Change ${t.account_count === 1 ? "its" : "their"} type first.`
+                                : undefined,
+                            },
+                          ]} />
                         </td>
                       </tr>
                     ))}

@@ -28,11 +28,14 @@ def require_admin(request: Request):
     return user
 
 
-def safe_next(target: str) -> str:
-    """Only send people back to a path on this site, never to another address."""
-    if target.startswith("/") and not target.startswith("//") and "\\" not in target:
+def safe_next(target: str, landing: str = "/") -> str:
+    """Only send people back to a path on this site, never to another address.
+
+    The site root and anything unsafe go to the landing page: the React app once it is built.
+    """
+    if target != "/" and target.startswith("/") and not target.startswith("//") and "\\" not in target:
         return target
-    return "/"
+    return landing
 
 
 def _page(request: Request, status: int, next_path: str, error: str | None = None, email: str = ""):
@@ -43,13 +46,13 @@ def _page(request: Request, status: int, next_path: str, error: str | None = Non
 @router.get("/login")
 def login_form(request: Request, next: str = "/"):
     if request.state.user:
-        return RedirectResponse(safe_next(next), status_code=303)
-    return _page(request, 200, safe_next(next))
+        return RedirectResponse(safe_next(next, request.app.state.landing), status_code=303)
+    return _page(request, 200, safe_next(next, request.app.state.landing))
 
 
 @router.post("/login")
 def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("/")):
-    next_path = safe_next(next)
+    next_path = safe_next(next, request.app.state.landing)
     with closing(db.connect(request.app.state.db_path)) as conn:
         user = users.authenticate(conn, email, password)
         if user is None:
