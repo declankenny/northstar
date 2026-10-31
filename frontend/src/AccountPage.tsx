@@ -41,7 +41,7 @@ function deleteConsequence(balances: BalanceRow[], index: number): string {
   return head + `Until the next entry, the balance will go back to ${formatCents(before.amount_cents)} (entered ${formatDate(before.as_of_date)}).`;
 }
 
-export function AccountPage({ id }: { id: number }) {
+export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<Range>("1Y");
@@ -246,7 +246,7 @@ export function AccountPage({ id }: { id: number }) {
           onSave={async (change) => apply(await editAccount(id, change))} />
       )}
       {dialog?.kind === "class" && (
-        <ChangeClassDialog account={account} onClose={() => setDialog(null)}
+        <ChangeClassDialog account={account} isAdmin={isAdmin} onClose={() => setDialog(null)}
           onSave={async (typeId) => apply(await changeClass(id, typeId))} />
       )}
       {dialog?.kind === "close" && (

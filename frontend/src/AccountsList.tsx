@@ -33,7 +33,7 @@ function Row({ account, showStale }: { account: ListedAccount; showStale: boolea
   );
 }
 
-export function AccountsList() {
+export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
   const [closed, setClosed] = useState(false);
   const [list, setList] = useState<AccountList | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +114,7 @@ export function AccountsList() {
       </div>
 
       {adding && (
-        <AddAccountDialog list={list} accountClass={adding} onClose={() => setAdding(null)}
+        <AddAccountDialog list={list} isAdmin={isAdmin} accountClass={adding} onClose={() => setAdding(null)}
           onSave={async (account) => {
             const fresh = await addAccount(account); // answers with the open list, which now has the new account
             setClosed(false);

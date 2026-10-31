@@ -91,6 +91,7 @@ export function EditAccountDialog(props: {
 /** Moving an account between Asset and Liability rewrites past totals, so this says so first. */
 export function ChangeClassDialog(props: {
   account: AccountPage;
+  isAdmin: boolean;
   onSave: (typeId: number) => Promise<void>;
   onClose: () => void;
 }) {
@@ -108,7 +109,7 @@ export function ChangeClassDialog(props: {
           : `This account has ${count} balance${count === 1 ? "" : "s"}, the earliest on ${formatDate(account.earliest_date!)}. Net worth changes from that date onward.`}
       </p>
       {target.types.length === 0 ? (
-        <p className="sub">There are no {target.name.toLowerCase()} types yet. <a href="/types">Add one on the Account types page</a> first.</p>
+        <p className="sub">There are no {target.name.toLowerCase()} types yet. {props.isAdmin ? <><a href="#/types">Add one on the Account types page</a> first.</> : "Ask an admin to add one."}</p>
       ) : (
         <form onSubmit={(e) => { e.preventDefault(); if (typeId !== "") run(() => props.onSave(typeId)); }}>
           <label>New type
@@ -131,6 +132,7 @@ export function ChangeClassDialog(props: {
 /** Add an account, and its first balance too when an amount is typed. A blank amount adds the account alone. */
 export function AddAccountDialog(props: {
   list: AccountList;
+  isAdmin: boolean;
   accountClass: "asset" | "liability";
   onSave: (account: NewAccount) => Promise<void>;
   onClose: () => void;
@@ -154,7 +156,7 @@ export function AddAccountDialog(props: {
   return (
     <Modal title={`Add ${accountClass} account`} onClose={props.onClose}>
       {cls.types.length === 0 ? (
-        <p className="sub">There are no {accountClass} types yet. <a href="/types">Add one on the Account types page</a> first.</p>
+        <p className="sub">There are no {accountClass} types yet. {props.isAdmin ? <><a href="#/types">Add one on the Account types page</a> first.</> : "Ask an admin to add one."}</p>
       ) : (
         <form onSubmit={submit}>
           <label>Name
