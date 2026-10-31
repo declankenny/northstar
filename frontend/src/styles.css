@@ -2,11 +2,13 @@
   --bg: #0f1114; --sidebar: #14171b; --surface: #1a1e23; --border: #262b31;
   --text: #e8eaed; --muted: #8b939c; --accent: #6a9fd0; --accent-soft: rgba(106, 159, 208, .22);
   --pill: #20252b; --pill-active: #2b3238; --pos: #7fb08a; --neg: #d98a80; --on-accent: #0f1114;
+  --warn: #d9b36a; --warn-soft: rgba(217, 179, 106, .16); --overlay: rgba(0, 0, 0, .55);
 }
 :root[data-theme="light"] {
   --bg: #f6f7f8; --sidebar: #ffffff; --surface: #ffffff; --border: #e3e6e9;
   --text: #1a1d21; --muted: #6a727b; --accent: #3a6d9c; --accent-soft: rgba(58, 109, 156, .16);
   --pill: #eceef0; --pill-active: #ffffff; --pos: #2f7d4f; --neg: #b4443a; --on-accent: #ffffff;
+  --warn: #9a6a12; --warn-soft: rgba(154, 106, 18, .12); --overlay: rgba(20, 24, 28, .4);
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
@@ -104,3 +106,64 @@ button.link.danger { color: var(--neg); }
 .panel label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
 .panel label.check input { width: auto; }
 .top-notice { margin-top: 14px; }
+
+/* Account page: like the Dashboard it fits the window, and only the entries list scrolls */
+.acct { display: flex; flex-direction: column; flex: 1; min-height: 0; padding-bottom: 28px; }
+.acct .top { margin-top: 6px; }
+.crumb { color: var(--muted); font-size: 13px; }
+.crumb a { color: var(--muted); text-decoration: none; }
+.crumb a:hover { color: var(--text); }
+.titlerow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.titlerow h1 { margin: 0; }
+.titlerow .badge { margin-left: 0; }
+.badge.stale { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.sub { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+.w { color: var(--warn); font-weight: 600; }
+.p { color: var(--pos); } .n { color: var(--neg); } .m { color: var(--muted); }
+.acct .tiles { margin-top: 18px; }
+.acct-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.5fr 1fr; grid-template-rows: minmax(0, 1fr); gap: 14px; margin-top: 18px; }
+.acct-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.panelhead { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
+.panelhead .label { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.acct-panel .chartwrap { margin: 0; min-height: 120px; }
+.acct-panel .ranges button { padding: 6px 11px; }
+.pad { padding: 0 16px; margin-top: 0; }
+.hist { overflow-y: auto; flex: 1; min-height: 0; }
+.hist table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.hist th { position: sticky; top: 0; background: var(--surface); text-align: left; font-weight: 500; color: var(--muted);
+  font-size: 12px; letter-spacing: .05em; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.hist td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.hist .r { text-align: right; }
+.hist tr:hover td { background: var(--pill); }
+.rownote { color: var(--muted); font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+/* Edit and Delete float over the right end of the row, so they take no column of their own */
+.row-actions { position: relative; width: 0; padding: 0 !important; }
+.row-actions span { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--pill-active);
+  border: 1px solid var(--border); border-radius: 8px; padding: 2px 4px; }
+tr:hover .row-actions span, tr:focus-within .row-actions span { display: block; }
+.row-actions button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 6px; }
+.row-actions button:hover { color: var(--text); }
+.row-actions button.bad:hover { color: var(--neg); }
+
+.actions-bar { display: flex; gap: 8px; position: relative; }
+button.btn.ghost { background: var(--pill); color: var(--text); font-weight: 500; }
+button.btn.danger { background: var(--neg); color: var(--on-accent); }
+.menu { position: absolute; right: 0; top: 46px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px; min-width: 190px; box-shadow: 0 8px 24px rgba(0, 0, 0, .28); z-index: 5; }
+.menu button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); font: inherit;
+  padding: 9px 10px; border-radius: 7px; cursor: pointer; }
+.menu button:hover { background: var(--pill); }
+.menu button.bad { color: var(--neg); }
+.menu hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
+
+.modal { position: fixed; inset: 0; background: var(--overlay); display: grid; place-items: center; z-index: 10; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: 420px; max-width: calc(100vw - 32px); box-shadow: 0 16px 48px rgba(0, 0, 0, .4); }
+.card h2 { margin: 0 0 4px; font-size: 18px; }
+.card .sub { margin: 0 0 12px; }
+.card label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 5px; }
+.card input, .card select, .card textarea { display: block; width: 100%; margin-top: 5px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font: inherit; }
+.card input:focus, .card select:focus, .card textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.card .hint { margin-top: 5px; font-size: 12px; }
+.card .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.card .notice { margin-top: 12px; }

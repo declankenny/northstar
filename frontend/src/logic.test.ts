@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addMonths, dayNumber, formatDate, isoFromDay } from "./dates";
-import { formatCents, percentChange } from "./money";
+import { centsToInput, formatCents, percentChange } from "./money";
 import { PERIOD, RANGES, rangeStart } from "./ranges";
 
 describe("dates", () => {
@@ -73,5 +73,15 @@ describe("ranges", () => {
 
   it("gives every range a period, finer for short ranges", () => {
     expect(RANGES.map((r) => PERIOD[r])).toEqual(["day", "day", "week", "week", "week", "month", "month"]);
+  });
+});
+
+describe("centsToInput", () => {
+  it("gives plain text an amount box can start with", () => {
+    expect(centsToInput(123456)).toBe("1234.56");
+    expect(centsToInput(5)).toBe("0.05");
+    expect(centsToInput(0)).toBe("0.00");
+    expect(centsToInput(-2500)).toBe("-25.00");
+    expect(centsToInput(100000000)).toBe("1000000.00");
   });
 });

@@ -13,3 +13,9 @@ export function formatCents(cents: number): string {
 export function percentChange(diff: number, base: number): number | null {
   return base === 0 ? null : (diff / Math.abs(base)) * 100;
 }
+
+/** 123456 becomes "1234.56", the plain text an amount box starts with (no symbol or commas to strip). */
+export function centsToInput(cents: number): string {
+  const abs = Math.abs(cents);
+  return `${cents < 0 ? "-" : ""}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+}

@@ -1,0 +1,129 @@
+import { type FormEvent, useState } from "react";
+import { type AccountPage, type BalanceEntry, type BalanceRow } from "./api";
+import { formatDate } from "./dates";
+import { centsToInput } from "./money";
+import { Modal, useAction } from "./Dialogs";
+
+/** Add a balance, or edit one. The server checks every field, so a refusal shows here and nothing is lost. */
+export function BalanceDialog(props: {
+  account: AccountPage;
+  editing: BalanceRow | null;
+  onSave: (entry: BalanceEntry) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { account, editing } = props;
+  const [date, setDate] = useState(editing ? editing.as_of_date : account.today);
+  const [amount, setAmount] = useState(editing ? centsToInput(editing.amount_cents) : "");
+  const [note, setNote] = useState(editing?.note ?? "");
+  const { busy, error, run } = useAction();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    run(() => props.onSave({ date, amount, note }));
+  };
+
+  return (
+    <Modal title={editing ? "Edit balance" : "Add balance"} subtitle={account.name} onClose={props.onClose}>
+      <form onSubmit={submit}>
+        <label>Date
+          <input type="date" value={date} max={account.today} onChange={(e) => setDate(e.target.value)} required />
+        </label>
+        <div className="hint">
+          Not in the future.{!editing && " A date that already has a balance is replaced."}
+        </div>
+        <label>Balance
+          <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus />
+        </label>
+        <label>Note (optional)
+          <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+        </label>
+        {error && <p className="notice bad" role="alert">{error}</p>}
+        <div className="foot">
+          <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button className="btn" disabled={busy}>Save</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Name, type (within the account's class) and notes. The class has its own dialog. */
+export function EditAccountDialog(props: {
+  account: AccountPage;
+  onSave: (change: { name: string; type_id: number; notes: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { account } = props;
+  const [name, setName] = useState(account.name);
+  const [typeId, setTypeId] = useState(account.type_id);
+  const [notes, setNotes] = useState(account.notes ?? "");
+  const { busy, error, run } = useAction();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    run(() => props.onSave({ name, type_id: typeId, notes }));
+  };
+
+  return (
+    <Modal title="Edit account" subtitle={`${account.class_name} account`} onClose={props.onClose}>
+      <form onSubmit={submit}>
+        <label>Name
+          <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+        </label>
+        <label>Type
+          <select value={typeId} onChange={(e) => setTypeId(Number(e.target.value))}>
+            {account.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+        <label>Notes (optional)
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+        {error && <p className="notice bad" role="alert">{error}</p>}
+        <div className="foot">
+          <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button className="btn" disabled={busy}>Save</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Moving an account between Asset and Liability rewrites past totals, so this says so first. */
+export function ChangeClassDialog(props: {
+  account: AccountPage;
+  onSave: (typeId: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { account } = props;
+  const target = account.other_class;
+  const [typeId, setTypeId] = useState<number | "">("");
+  const { busy, error, run } = useAction();
+  const count = account.balance_count;
+
+  return (
+    <Modal title="Change class" subtitle={`${account.name}: ${account.class_name} to ${target.name}`} onClose={props.onClose}>
+      <p className="sub">
+        {count === 0
+          ? "This account has no balances, so past net worth does not change."
+          : `This account has ${count} balance${count === 1 ? "" : "s"}, the earliest on ${formatDate(account.earliest_date!)}. Net worth changes from that date onward.`}
+      </p>
+      {target.types.length === 0 ? (
+        <p className="sub">There are no {target.name.toLowerCase()} types yet. <a href="/types">Add one on the Account types page</a> first.</p>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); if (typeId !== "") run(() => props.onSave(typeId)); }}>
+          <label>New type
+            <select value={typeId} onChange={(e) => setTypeId(Number(e.target.value))} required autoFocus>
+              <option value="" disabled>Choose a {target.name.toLowerCase()} type</option>
+              {target.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          {error && <p className="notice bad" role="alert">{error}</p>}
+          <div className="foot">
+            <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
+            <button className="btn" disabled={busy || typeId === ""}>Change to {target.name}</button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}

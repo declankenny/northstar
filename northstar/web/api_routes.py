@@ -1,4 +1,4 @@
-"""JSON endpoints for the React frontend. Read-only until access is protected (see the spec).
+"""JSON endpoints for the React frontend: the net worth series, which only reads.
 
 Like the page routes, these call the plain functions and add no rules of their own.
 """
@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from northstar import clock, db, networth
-from northstar.errors import ValidationError
+from northstar.errors import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/api")
 
@@ -33,11 +33,13 @@ class NetWorthSeries(BaseModel):
 
 @router.get("/networth", response_model=NetWorthSeries)
 def net_worth_series(request: Request, start: date | None = None, end: date | None = None,
-                     period: Literal["day", "week", "month"] = "month"):
+                     period: Literal["day", "week", "month"] = "month", account_id: int | None = None):
     today = clock.today()
     with closing(db.connect(request.app.state.db_path)) as conn:
         try:
-            result = networth.net_worth_series(conn, today, start, end, period)
+            result = networth.net_worth_series(conn, today, start, end, period, account_id)
+        except NotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error))
         except ValidationError as error:
             raise HTTPException(status_code=422, detail=str(error))
     return {"today": today.isoformat(), **result}

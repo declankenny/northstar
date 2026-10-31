@@ -1,33 +1,9 @@
 import { useEffect, useState } from "react";
 import { fetchNetWorth, type NetWorthSeries } from "./api";
 import { formatDate } from "./dates";
-import { formatCents, percentChange } from "./money";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
-
-const WHEN: Record<Range, string> = {
-  "1M": "past month", "3M": "past 3 months", "6M": "past 6 months", YTD: "year to date",
-  "1Y": "past year", "5Y": "past 5 years", ALL: "all time",
-};
-
-function Tile(props: { label: string; value: number; first: number; goodWhenUp: boolean; when: string; main?: boolean }) {
-  const diff = props.value - props.first;
-  const pct = percentChange(diff, props.first);
-  const good = diff === 0 ? null : diff > 0 === props.goodWhenUp;
-  const sign = diff >= 0 ? "+" : "-";
-  return (
-    <div className={props.main ? "tile main" : "tile"}>
-      <div className="label">{props.label}</div>
-      <div className="val num">{formatCents(props.value)}</div>
-      <div className="delta num">
-        <span className={good === null ? "m" : good ? "p" : "n"}>
-          {sign}{formatCents(Math.abs(diff))}{pct === null ? "" : ` (${sign}${Math.abs(pct).toFixed(1)}%)`}
-        </span>{" "}
-        <span className="m">{props.when}</span>
-      </div>
-    </div>
-  );
-}
+import { Tile, WHEN } from "./Tile";
 
 export function Dashboard() {
   const [today, setToday] = useState<string | null>(null);

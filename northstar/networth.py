@@ -14,14 +14,19 @@ import calendar
 import sqlite3
 from datetime import date, timedelta
 
+from northstar import accounts
 from northstar.errors import ValidationError
 
 ASSET = "Asset"
 LIABILITY = "Liability"
 
 
-def net_worth_on(conn: sqlite3.Connection, as_of: date) -> dict:
-    """Assets, liabilities and net worth on one date, all in cents."""
+def net_worth_on(conn: sqlite3.Connection, as_of: date, account_id: int | None = None) -> dict:
+    """Assets, liabilities and net worth on one date, all in cents.
+
+    With an account_id the same calculation covers only that account: its balance lands in
+    assets or liabilities by its class, so a single account is just a small household.
+    """
     rows = conn.execute(
         "SELECT c.name AS class_name, SUM(b.amount_cents) AS total "
         "FROM accounts a "
@@ -29,8 +34,9 @@ def net_worth_on(conn: sqlite3.Connection, as_of: date) -> dict:
         "JOIN balances b ON b.account_id = a.id AND b.as_of_date = ("
         "    SELECT MAX(b2.as_of_date) FROM balances b2 "
         "    WHERE b2.account_id = a.id AND b2.as_of_date <= ?) "
+        "WHERE (? IS NULL OR a.id = ?) "
         "GROUP BY c.name",
-        (as_of.isoformat(),),
+        (as_of.isoformat(), account_id, account_id),
     ).fetchall()
     by_class = {row["class_name"]: row["total"] for row in rows}
     assets, liabilities = by_class.get(ASSET, 0), by_class.get(LIABILITY, 0)
@@ -66,27 +72,35 @@ def sample_dates(start: date, end: date, period: str) -> list[date]:
 
 
 def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None = None,
-                     end: date | None = None, period: str = "month") -> dict:
+                     end: date | None = None, period: str = "month",
+                     account_id: int | None = None) -> dict:
     """Net worth at regular dates between start and end, oldest first. Each point is net_worth_on.
 
     End defaults to today and cannot be after it. Start defaults to the date of the first balance
     and is never earlier than that: before any balance net worth is zero only because nothing has
     been entered, and drawing it would look like a climb from zero. The dates actually used are
     returned. Empty when there are no balances up to end.
+
+    With an account_id the series covers that account alone, and "the first balance" is that
+    account's own first balance. An unknown account raises NotFoundError.
     """
+    if account_id is not None:
+        accounts.get_account(conn, account_id)
     end = end or today
     if end > today:
         raise ValidationError("The end date cannot be after today.")
     if period not in PERIODS:
         raise ValidationError(f"The period must be one of: {', '.join(PERIODS)}.")
-    first = conn.execute("SELECT MIN(as_of_date) FROM balances").fetchone()[0]
+    first = conn.execute(
+        "SELECT MIN(as_of_date) FROM balances WHERE (? IS NULL OR account_id = ?)",
+        (account_id, account_id)).fetchone()[0]
     if first is None or date.fromisoformat(first) > end:
         return {"start": end.isoformat(), "end": end.isoformat(), "period": period, "series": []}
     start = max(start, date.fromisoformat(first)) if start else date.fromisoformat(first)
     if start > end:
         raise ValidationError("The start date cannot be after the end date.")
     return {"start": start.isoformat(), "end": end.isoformat(), "period": period,
-            "series": [net_worth_on(conn, day) for day in sample_dates(start, end, period)]}
+            "series": [net_worth_on(conn, day, account_id) for day in sample_dates(start, end, period)]}
 
 
 def month_end_dates(first: date, today: date) -> list[tuple[date, bool]]:
