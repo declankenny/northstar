@@ -92,18 +92,18 @@ ON_ENTRY_DATES = [
     ("2026-06-15", 41512475, 24898000, 16614475),
 ]
 
-# (month end, assets, liabilities, net worth, partial) in cents, from the second hand calculation.
+# (month end, assets, liabilities, net worth) in cents, from the second hand calculation.
 MONTH_ENDS = [
-    ("2026-01-31", 40650000, 25000000, 15650000, False),
-    ("2026-02-28", 40665050, 25040000, 15625050, False),
-    ("2026-03-31", 40645050, 24940000, 15705050, False),
-    ("2026-04-30", 40512475, 24898000, 15614475, False),
-    ("2026-05-31", 40512475, 24898000, 15614475, False),
-    ("2026-06-30", 41512475, 24898000, 16614475, False),
-    ("2026-07-31", 41512475, 24898000, 16614475, False),
-    ("2026-08-31", 41512475, 24898000, 16614475, False),
-    ("2026-09-30", 41512475, 24898000, 16614475, False),
-    ("2026-10-30", 41512475, 24898000, 16614475, True),
+    ("2026-01-31", 40650000, 25000000, 15650000),
+    ("2026-02-28", 40665050, 25040000, 15625050),
+    ("2026-03-31", 40645050, 24940000, 15705050),
+    ("2026-04-30", 40512475, 24898000, 15614475),
+    ("2026-05-31", 40512475, 24898000, 15614475),
+    ("2026-06-30", 41512475, 24898000, 16614475),
+    ("2026-07-31", 41512475, 24898000, 16614475),
+    ("2026-08-31", 41512475, 24898000, 16614475),
+    ("2026-09-30", 41512475, 24898000, 16614475),
+    ("2026-10-30", 41512475, 24898000, 16614475),
 ]
 
 
@@ -131,9 +131,18 @@ def household(conn):
     return ids
 
 
+def month_end_rows(conn, today=TODAY):
+    """Net worth at every month end from the first balance through today, oldest first: the series'
+    month dates, each asked of net_worth_on. Empty when there are no balances."""
+    first = conn.execute(
+        "SELECT MIN(as_of_date) FROM balances WHERE as_of_date <= ?", (today.isoformat(),)).fetchone()[0]
+    if first is None:
+        return []
+    return [networth.net_worth_on(conn, day) for day in networth.month_end_dates(date.fromisoformat(first), today)]
+
+
 def month_rows(conn, today=TODAY):
-    return [(r["date"], r["assets"], r["liabilities"], r["net_worth"], r["partial"])
-            for r in networth.net_worth_by_month(conn, today)]
+    return [(r["date"], r["assets"], r["liabilities"], r["net_worth"]) for r in month_end_rows(conn, today)]
 
 
 def reference_net_worth(conn, day: date) -> tuple[int, int, int]:
@@ -322,13 +331,13 @@ def test_negative_balances_on_either_class(conn, household):
 
 
 def test_several_balances_in_one_month_make_one_row(conn, household):
-    rows = networth.net_worth_by_month(conn, TODAY)
+    rows = month_end_rows(conn, TODAY)
     assert len(rows) == 10 and len({r["date"] for r in rows}) == 10
 
 
 def test_mid_month_entries_are_folded_into_the_month_end(conn, household):
     """The 06-15 house revaluation is not a row of its own: it shows in June's month end."""
-    dates = [r["date"] for r in networth.net_worth_by_month(conn, TODAY)]
+    dates = [r["date"] for r in month_end_rows(conn, TODAY)]
     assert "2026-06-15" not in dates and "2026-01-01" not in dates
 
 
@@ -339,7 +348,7 @@ def test_changing_an_accounts_class_changes_past_net_worth(conn, household):
     got = networth.net_worth_on(conn, date(2026, 2, 28))
     # assets 406,650.50 + card 400.00 = 407,050.50 ; liabilities 250,000.00 ; net 157,050.50
     assert (got["assets"], got["liabilities"], got["net_worth"]) == (40705050, 25000000, 15705050)
-    feb = {r["date"]: r for r in networth.net_worth_by_month(conn, TODAY)}["2026-02-28"]
+    feb = {r["date"]: r for r in month_end_rows(conn, TODAY)}["2026-02-28"]
     assert feb["net_worth"] == 15705050
 
 
@@ -363,44 +372,42 @@ def test_totals_equal_the_sum_of_the_open_accounts_latest_balances(conn, househo
     assert (got["assets"], got["liabilities"]) == (assets, liabilities)
 
 
-# -- which dates the month-end table asks about --
+# -- which dates the month series asks about --
 
 def test_month_end_dates_across_a_year_boundary_and_a_partial_month():
     assert networth.month_end_dates(date(2025, 11, 2), date(2026, 1, 5)) == [
-        (date(2025, 11, 30), False), (date(2025, 12, 31), False), (date(2026, 1, 5), True)]
+        date(2025, 11, 30), date(2025, 12, 31), date(2026, 1, 5)]
 
 
 def test_month_end_dates_in_a_leap_year():
-    assert networth.month_end_dates(date(2028, 2, 10), date(2028, 3, 31)) == [
-        (date(2028, 2, 29), False), (date(2028, 3, 31), False)]
+    assert networth.month_end_dates(date(2028, 2, 10), date(2028, 3, 31)) == [date(2028, 2, 29), date(2028, 3, 31)]
 
 
-def test_today_on_the_last_day_of_a_month_is_not_partial():
-    assert networth.month_end_dates(date(2026, 9, 1), date(2026, 10, 31)) == [
-        (date(2026, 9, 30), False), (date(2026, 10, 31), False)]
+def test_end_on_the_last_day_of_a_month_is_that_month_end():
+    assert networth.month_end_dates(date(2026, 9, 1), date(2026, 10, 31)) == [date(2026, 9, 30), date(2026, 10, 31)]
 
 
 def test_first_month_is_the_current_month():
-    assert networth.month_end_dates(date(2026, 10, 1), date(2026, 10, 30)) == [(date(2026, 10, 30), True)]
+    assert networth.month_end_dates(date(2026, 10, 1), date(2026, 10, 30)) == [date(2026, 10, 30)]
 
 
 # -- empty and tiny databases --
 
 def test_nothing_at_all(conn):
-    assert networth.net_worth_by_month(conn, TODAY) == []
+    assert month_end_rows(conn, TODAY) == []
     got = networth.net_worth_on(conn, TODAY)
     assert (got["assets"], got["liabilities"], got["net_worth"]) == (0, 0, 0)
 
 
 def test_accounts_but_no_balances(conn):
     add_account(conn, "A", ASSET, "Checking")
-    assert networth.net_worth_by_month(conn, TODAY) == []
+    assert month_end_rows(conn, TODAY) == []
     assert networth.net_worth_on(conn, TODAY)["net_worth"] == 0
 
 
 def test_a_liability_alone_makes_net_worth_negative(conn):
     acct = add_account(conn, "Loan", LIABILITY, "Loan")
     add_balance(conn, acct, "2026-09-10", 123456)
-    rows = networth.net_worth_by_month(conn, TODAY)
+    rows = month_end_rows(conn, TODAY)
     assert [(r["date"], r["net_worth"]) for r in rows] == [("2026-09-30", -123456), ("2026-10-30", -123456)]
     assert (rows[0]["assets"], rows[0]["liabilities"]) == (0, 123456)

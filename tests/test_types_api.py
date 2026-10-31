@@ -112,32 +112,6 @@ def test_an_ordinary_user_is_refused_on_every_type_endpoint(member_client):
     assert member_client.delete("/api/types/1").status_code == 403
 
 
-def test_an_ordinary_user_is_refused_on_the_classic_type_pages_too(member_client):
-    assert member_client.get("/types").status_code == 403
-    assert member_client.post("/types", data={"name": "x", "class_id": "1", "stale_after_days": "5"}).status_code == 403
-    assert member_client.post("/types/1", data={"name": "x", "stale_after_days": "5"}).status_code == 403
-    assert member_client.post("/types/1/delete").status_code == 403
-    with with_db(member_client) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM account_types WHERE name = 'x'").fetchone()[0] == 0
-
-
-def test_an_admin_still_sees_the_classic_page_and_its_nav_link(client):
-    page = client.get("/types")
-    assert page.status_code == 200
-    assert 'href="/types"' in client.get("/").text
-
-
-def test_the_classic_nav_hides_account_types_from_an_ordinary_user(member_client):
-    assert 'href="/types"' not in member_client.get("/").text
-
-
-def test_an_ordinary_user_is_told_to_ask_an_admin_when_a_class_has_no_types(member_client):
-    with with_db(member_client) as conn:
-        conn.execute("DELETE FROM account_types WHERE class_id = 2")
-    page = member_client.get("/accounts/new?class=liability")
-    assert "Ask an admin to add one" in page.text and 'href="/types"' not in page.text
-
-
 def test_signed_out_requests_get_401(anon_client):
     assert anon_client.get("/api/types").status_code == 401
     assert anon_client.delete("/api/types/1").status_code == 401

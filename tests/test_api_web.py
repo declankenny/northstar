@@ -118,7 +118,6 @@ def test_the_built_frontend_is_served_at_app_when_it_exists(tmp_path, monkeypatc
     client = sign_in(TestClient(create_app(tmp_path / "web.db")))
     page = client.get("/app/")
     assert page.status_code == 200 and "<title>Northstar</title>" in page.text
-    assert client.get("/", follow_redirects=False).status_code == 200      # the existing pages are untouched
 
 
 def test_without_a_build_there_is_no_app_page_and_nothing_else_changes(tmp_path, monkeypatch):

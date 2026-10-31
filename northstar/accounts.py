@@ -16,14 +16,6 @@ _SELECT = (
 )
 
 
-def list_accounts(conn: sqlite3.Connection, closed: bool = False) -> list[sqlite3.Row]:
-    """Open accounts, or closed ones, grouped by class and type."""
-    return conn.execute(
-        _SELECT + "WHERE a.is_open = ? ORDER BY a.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
-        (0 if closed else 1,),
-    ).fetchall()
-
-
 def get_account(conn: sqlite3.Connection, account_id: int) -> sqlite3.Row:
     row = conn.execute(_SELECT + "WHERE a.id = ?", (account_id,)).fetchone()
     if row is None:
@@ -174,15 +166,6 @@ def update_account(conn: sqlite3.Connection, account_id: int, name: str | None,
         "UPDATE accounts SET name = ?, type_id = ?, notes = ? WHERE id = ?",
         (name, type_id, _clean_notes(notes), account_id),
     )
-
-
-def class_change_impact(conn: sqlite3.Connection, account_id: int) -> dict:
-    """What a class change would touch: how many balances, and the earliest date."""
-    get_account(conn, account_id)
-    count, earliest = conn.execute(
-        "SELECT COUNT(*), MIN(as_of_date) FROM balances WHERE account_id = ?", (account_id,)
-    ).fetchone()
-    return {"balance_count": count, "earliest_date": earliest}
 
 
 def change_class(conn: sqlite3.Connection, account_id: int, new_type_id: int | None) -> None:

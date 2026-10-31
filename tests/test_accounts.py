@@ -61,14 +61,6 @@ def test_update_missing_account(conn):
         accounts.update_account(conn, 9999, "x", 1)
 
 
-def test_class_change_impact_with_and_without_balances(conn):
-    acct = add_account(conn, "Test", ASSET, "Checking")
-    assert accounts.class_change_impact(conn, acct) == {"balance_count": 0, "earliest_date": None}
-    add_balance(conn, acct, "2026-03-31", 100)
-    add_balance(conn, acct, "2026-01-31", 200)
-    assert accounts.class_change_impact(conn, acct) == {"balance_count": 2, "earliest_date": "2026-01-31"}
-
-
 def test_change_class_moves_class_and_type_together(conn):
     acct = add_account(conn, "Test", ASSET, "Checking")
     accounts.change_class(conn, acct, type_id(conn, "Loan"))
@@ -145,21 +137,6 @@ def test_delete_account_returns_balance_count_and_removes_balances(conn):
 def test_delete_missing_account(conn):
     with pytest.raises(ValidationError, match="no longer exists"):
         accounts.delete_account(conn, 9999)
-
-
-def test_list_open_and_closed(conn):
-    open_one = add_account(conn, "Open one", ASSET, "Checking")
-    closed_one = add_account(conn, "Closed one", ASSET, "Savings")
-    accounts.close_account(conn, closed_one)
-    assert [r["id"] for r in accounts.list_accounts(conn)] == [open_one]
-    assert [r["id"] for r in accounts.list_accounts(conn, closed=True)] == [closed_one]
-
-
-def test_list_is_grouped_by_class_then_type(conn):
-    add_account(conn, "Z loan", LIABILITY, "Loan")
-    add_account(conn, "B checking", ASSET, "Checking")
-    add_account(conn, "A checking", ASSET, "Checking")
-    assert [r["name"] for r in accounts.list_accounts(conn)] == ["A checking", "B checking", "Z loan"]
 
 
 def test_types_for_class_and_other_class(conn):

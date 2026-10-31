@@ -10,23 +10,18 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from northstar import backup, db, networth
+from northstar import backup, db
 from northstar.errors import ValidationError
 from northstar.web.app import create_app
 
 # The hand-calculation household and its expected month-end numbers live in the net worth tests.
-from test_networth import MONTH_ENDS, TODAY, household  # noqa: F401  (a pytest fixture)
+from test_networth import MONTH_ENDS, TODAY, household, month_rows  # noqa: F401  (household is a pytest fixture)
 
 from conftest import add_account, add_balance, sign_in
 
 
 def path_of(conn) -> Path:
     return Path(conn.execute("PRAGMA database_list").fetchone()["file"])
-
-
-def month_rows(conn):
-    return [(r["date"], r["assets"], r["liabilities"], r["net_worth"], r["partial"])
-            for r in networth.net_worth_by_month(conn, TODAY)]
 
 
 def tamper_free_copy_exists(folder: Path) -> list[str]:
@@ -294,7 +289,7 @@ def test_command_line_restore_without_replace_leaves_the_live_database_alone(
 def test_data_survives_restarting_the_app(tmp_path):
     db_file = tmp_path / "app.db"
     first = sign_in(TestClient(create_app(db_file)))
-    first.post("/accounts", data={"class": "asset", "name": "Survivor", "type_id": "1", "notes": ""})
+    assert first.post("/api/accounts", json={"account_class": "asset", "name": "Survivor", "type_id": 1}).status_code == 201
     second = TestClient(create_app(db_file))                 # a fresh app on the same file
     second.cookies.set("northstar_session", first.cookies["northstar_session"])   # sessions survive too
-    assert "Survivor" in second.get("/accounts").text
+    assert "Survivor" in [a["name"] for a in second.get("/api/accounts").json()["accounts"]]
