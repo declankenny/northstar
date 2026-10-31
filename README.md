@@ -17,7 +17,9 @@ python -m northstar.users create you@example.com "Your Name" --admin
 docker compose exec northstar python -m northstar.users create you@example.com "Your Name" --admin   # in Docker
 ```
 
-`set-password EMAIL` changes a password and signs that user out everywhere, and `list` shows users. When the app is served over HTTPS, set `NORTHSTAR_COOKIE_SECURE=1`.
+`set-password EMAIL` changes a password and signs that user out everywhere, and `list` shows users. When the app is served over HTTPS, set `NORTHSTAR_COOKIE_SECURE=1` (exactly `1`). Without it the app logs a warning at startup, because the sign-in cookie is then also sent over plain HTTP.
+
+Passwords are hashed with scrypt, which is deliberately slow and memory-hungry: each sign-in takes about half a second and 128 MiB on a modern computer (more time on a small device such as a Raspberry Pi), and at most two run at the same time.
 
 ### Limits on failed sign-ins
 

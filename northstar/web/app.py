@@ -1,5 +1,6 @@
 """App setup. Routes live in their own modules and call plain functions."""
 
+import logging
 from contextlib import closing
 from pathlib import Path
 from urllib.parse import quote, urlsplit
@@ -9,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from northstar import config, db, sessions, throttle
+from northstar import config, db, sessions, throttle, users
 from northstar.web import (account_api, api_routes, auth_routes, profile_api, security_headers, types_api,
                            update_api, users_api)
 
@@ -51,12 +52,23 @@ async def require_login(request: Request, call_next):
     return RedirectResponse(f"/login?next={quote(target, safe='')}", status_code=303)
 
 
+def warn_if_cookie_is_not_secure() -> None:
+    """Say so at startup when the sign-in cookie is not marked Secure, because that is easy to leave off."""
+    if not config.cookie_secure():
+        logging.getLogger("uvicorn.error").warning(
+            "NORTHSTAR_COOKIE_SECURE is not set, so the sign-in cookie is also sent over plain HTTP, where anyone "
+            "on the network can read it. That is fine for trying Northstar out on one machine. Anything beyond "
+            "that should be served over HTTPS, with NORTHSTAR_COOKIE_SECURE=1 set (the value must be exactly 1).")
+
+
 def create_app(db_path: str | Path | None = None) -> FastAPI:
     db_path = Path(db_path) if db_path else config.database_path()
     db.prepare(db_path)
     with closing(db.connect(db_path)) as conn:
         db.migrate(conn)
     throttle.log_limits()
+    warn_if_cookie_is_not_secure()
+    users.prepare_dummy_hash()
 
     app = FastAPI(title="Northstar")
     app.state.db_path = db_path
