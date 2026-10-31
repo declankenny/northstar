@@ -1,5 +1,7 @@
 # northstar
 
+[![CI](https://github.com/declankenny/northstar/actions/workflows/ci.yml/badge.svg)](https://github.com/declankenny/northstar/actions/workflows/ci.yml)
+
 Self-hosted tracker of household net worth over time. `docs/spec.md` is the source of truth for scope.
 
 > **Pre-release.** Northstar has no published release or Docker image yet. Run it from a checkout and with synthetic data only, and do not expose it to the internet: login throttling and the other release hardening in `docs/spec.md` ("Release and distribution") are not built yet. All data in the tests and examples is synthetic.
