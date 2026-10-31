@@ -5,7 +5,8 @@ import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
 import { Dashboard } from "./Dashboard";
 import { Profile } from "./Profile";
-import { accountIdFromHash, routeFromHash } from "./routes";
+import { Link, usePath } from "./router";
+import { accountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
 import { Users } from "./Users";
 
@@ -19,18 +20,20 @@ function applyTheme(theme: Theme) {
   }
 }
 
-function useRoute() {
-  const [hash, setHash] = useState(window.location.hash);
-  useEffect(() => {
-    const onChange = () => setHash(window.location.hash);
-    window.addEventListener("hashchange", onChange);
-    return () => window.removeEventListener("hashchange", onChange);
-  }, []);
-  return { route: routeFromHash(hash), accountId: accountIdFromHash(hash) };
+function NotFound() {
+  return (
+    <div className="empty">
+      <h1>Page not found</h1>
+      <p>There is no page at this address.</p>
+      <p><Link to={PATHS.dashboard}>Go to the Dashboard</Link></p>
+    </div>
+  );
 }
 
 export function App() {
-  const { route, accountId } = useRoute();
+  const path = usePath();
+  const route = routeFromPath(path);
+  const accountId = accountIdFromPath(path);
   const [me, setMe] = useState<Me | null>(null);
 
   // The account's theme wins over whatever this browser remembered.
@@ -62,18 +65,18 @@ export function App() {
         <div className="brand">
           <i>★</i> Northstar
         </div>
-        <a className={route === "dashboard" ? "active" : ""} href="#/">Dashboard</a>
-        <a className={route === "accounts" || route === "account" ? "active" : ""} href="#/accounts">Accounts</a>
-        <a className={route === "update" ? "active" : ""} href="#/update">Update balances</a>
+        <Link className={route === "dashboard" ? "active" : ""} to={PATHS.dashboard}>Dashboard</Link>
+        <Link className={route === "accounts" || route === "account" ? "active" : ""} to={PATHS.accounts}>Accounts</Link>
+        <Link className={route === "update" ? "active" : ""} to={PATHS.update}>Update balances</Link>
         {me?.is_admin && (
           <>
             <div className="group">Admin</div>
-            <a className={route === "types" ? "active" : ""} href="#/types">Account types</a>
-            <a className={route === "users" ? "active" : ""} href="#/users">Users</a>
+            <Link className={route === "types" ? "active" : ""} to={PATHS.types}>Account types</Link>
+            <Link className={route === "users" ? "active" : ""} to={PATHS.users}>Users</Link>
           </>
         )}
         <div className="spacer" />
-        <a className={route === "profile" ? "active" : ""} href="#/profile">{me ? me.display_name : "Profile"}</a>
+        <Link className={route === "profile" ? "active" : ""} to={PATHS.profile}>{me ? me.display_name : "Profile"}</Link>
         <form method="post" action="/logout">
           <button className="signout">Sign out</button>
         </form>
@@ -85,6 +88,8 @@ export function App() {
           <AccountsList isAdmin={me?.is_admin ?? false} />
         ) : route === "update" ? (
           <UpdateBalances />
+        ) : route === "notfound" ? (
+          <NotFound />
         ) : route === "account" && accountId !== null ? (
           <AccountPage id={accountId} isAdmin={me?.is_admin ?? false} />
         ) : !me ? null : route === "types" ? (

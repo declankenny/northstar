@@ -1,14 +1,13 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// The build goes into the Python package, where FastAPI serves it at /app (see app.py).
+// The build goes into the Python package, where FastAPI serves it from the site root (see app.py).
 // In development, `npm run dev` serves the page on its own port and sends the API and the sign-in
 // page (the one server-rendered page) to the Python app, so the browser still sees one origin.
 const python = "http://127.0.0.1:8000";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/app/",
   build: { outDir: "../northstar/web/spa", emptyOutDir: true },
   server: {
     proxy: Object.fromEntries(

@@ -10,7 +10,7 @@ Ideas and follow-ups that are decided to wait. `docs/spec.md` stays the source o
 
 ## Frontend
 
-- **URL design and cleanup.** The React app uses hash URLs (`/app/#/profile`, `/app/#/users`) so it needs no router library and no server change. Every screen is now in React, so switch to clean paths such as `/app/users`: a catch-all route in FastAPI that serves the bundle's `index.html` for any `/app/...` path, and a small history-based router in the frontend (about 30 lines, no dependency, or `react-router` if the routing needs grow). Keep the `next` redirect after login working with the new paths, and update every `#/` link, the leave-the-page prompt on Update balances, and the route tests. The classic pages are gone (decided with their removal: their URLs just return 404, and only `/` redirects to `/app/`), so nothing needs redirecting. Its own PR, after the removal.
+- **Page state in the address.** Addresses are clean paths now (see `docs/spec.md`, "Addresses"). The next step would be state in the query string, such as `/balance-update?date=2026-10-28` or the Open/Closed choice on `/accounts`, so a view can be bookmarked. Not needed yet.
 
 ## Product
 

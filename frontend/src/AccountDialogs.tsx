@@ -3,6 +3,8 @@ import { type AccountList, type AccountPage, type BalanceEntry, type BalanceRow,
 import { formatDate } from "./dates";
 import { centsToInput } from "./money";
 import { Modal, useAction } from "./Dialogs";
+import { Link } from "./router";
+import { PATHS } from "./routes";
 
 /** Add a balance, or edit one. The server checks every field, so a refusal shows here and nothing is lost. */
 export function BalanceDialog(props: {
@@ -109,7 +111,7 @@ export function ChangeClassDialog(props: {
           : `This account has ${count} balance${count === 1 ? "" : "s"}, the earliest on ${formatDate(account.earliest_date!)}. Net worth changes from that date onward.`}
       </p>
       {target.types.length === 0 ? (
-        <p className="sub">There are no {target.name.toLowerCase()} types yet. {props.isAdmin ? <><a href="#/types">Add one on the Account types page</a> first.</> : "Ask an admin to add one."}</p>
+        <p className="sub">There are no {target.name.toLowerCase()} types yet. {props.isAdmin ? <><Link to={PATHS.types}>Add one on the Account types page</Link> first.</> : "Ask an admin to add one."}</p>
       ) : (
         <form onSubmit={(e) => { e.preventDefault(); if (typeId !== "") run(() => props.onSave(typeId)); }}>
           <label>New type
@@ -156,7 +158,7 @@ export function AddAccountDialog(props: {
   return (
     <Modal title={`Add ${accountClass} account`} onClose={props.onClose}>
       {cls.types.length === 0 ? (
-        <p className="sub">There are no {accountClass} types yet. {props.isAdmin ? <><a href="#/types">Add one on the Account types page</a> first.</> : "Ask an admin to add one."}</p>
+        <p className="sub">There are no {accountClass} types yet. {props.isAdmin ? <><Link to={PATHS.types}>Add one on the Account types page</Link> first.</> : "Ask an admin to add one."}</p>
       ) : (
         <form onSubmit={submit}>
           <label>Name

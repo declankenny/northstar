@@ -9,7 +9,7 @@ from northstar import config, db, sessions, users
 
 router = APIRouter()
 COOKIE = "northstar_session"
-LANDING = "/app/"   # where people go after signing in, and from the site root
+LANDING = "/dashboard"   # where people go after signing in, and from the site root
 
 
 def current_user(request: Request):
@@ -32,7 +32,7 @@ def require_admin(request: Request):
 def safe_next(target: str) -> str:
     """Only send people back to a path on this site, never to another address.
 
-    The site root and anything unsafe go to the landing page: the React app.
+    The site root and anything unsafe go to the landing page: the Dashboard.
     """
     if target != "/" and target.startswith("/") and not target.startswith("//") and "\\" not in target:
         return target

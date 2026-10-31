@@ -12,7 +12,7 @@ def anon(anon_client):
     return anon_client
 
 
-@pytest.mark.parametrize("path", ["/", "/app/", "/accounts"])
+@pytest.mark.parametrize("path", ["/", "/dashboard", "/accounts"])
 def test_pages_redirect_to_login_when_signed_out(anon, path):
     response = anon.get(path)
     assert response.status_code == 303
@@ -43,10 +43,10 @@ def test_login_page_is_the_styled_standalone_page(anon):
 
 def test_login_sets_a_http_only_cookie_and_opens_the_app(anon):
     response = anon.post("/login", data={"email": "A@example.com", "password": PASSWORD})
-    assert response.status_code == 303 and response.headers["location"] == "/app/"
+    assert response.status_code == 303 and response.headers["location"] == "/dashboard"
     cookie = response.headers["set-cookie"].lower()
     assert "httponly" in cookie and "samesite=lax" in cookie and "secure" not in cookie
-    assert anon.get("/").headers["location"] == "/app/"      # the site root goes to the React app
+    assert anon.get("/").headers["location"] == "/dashboard"      # the site root goes to the Dashboard
     assert anon.get("/api/networth").status_code == 200
 
 
@@ -58,7 +58,7 @@ def test_login_returns_to_the_page_asked_for(anon):
 @pytest.mark.parametrize("target", ["https://evil.example/", "//evil.example/", "/\\evil.example", "accounts"])
 def test_login_never_redirects_off_site(anon, target):
     response = anon.post("/login", data={"email": "a@example.com", "password": PASSWORD, "next": target})
-    assert response.headers["location"] == "/app/"
+    assert response.headers["location"] == "/dashboard"
 
 
 def test_wrong_password_and_unknown_email_look_the_same(anon):
@@ -84,9 +84,9 @@ def test_logout_ends_the_session_on_the_server(anon):
     assert anon.get("/api/networth").status_code == 401
 
 
-def test_login_page_while_signed_in_goes_to_the_app(client):
+def test_login_page_while_signed_in_goes_to_the_dashboard(client):
     response = client.get("/login", follow_redirects=False)
-    assert response.status_code == 303 and response.headers["location"] == "/app/"
+    assert response.status_code == 303 and response.headers["location"] == "/dashboard"
 
 
 def test_garbage_cookie_is_signed_out(anon):
@@ -94,8 +94,8 @@ def test_garbage_cookie_is_signed_out(anon):
     assert anon.get("/api/networth").status_code == 401
 
 
-def test_a_signed_out_visit_to_the_site_root_lands_in_the_react_app_after_login(anon):
+def test_a_signed_out_visit_to_the_site_root_lands_on_the_dashboard_after_login(anon):
     next_path = anon.get("/").headers["location"].split("next=")[1]
     assert next_path == "%2F"
     response = anon.post("/login", data={"email": "a@example.com", "password": PASSWORD, "next": "/"})
-    assert response.headers["location"] == "/app/"
+    assert response.headers["location"] == "/dashboard"

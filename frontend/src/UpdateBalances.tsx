@@ -3,6 +3,7 @@ import { fetchUpdate, RequestError, saveUpdate, type UpdatePage, type UpdateRow 
 import { dayNumber, formatDate, isoFromDay } from "./dates";
 import { Modal } from "./Dialogs";
 import { formatCents } from "./money";
+import { useLeaveGuard } from "./router";
 import { baselineText, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
 
 type Banner = { kind: "ok" | "bad"; text: string };
@@ -72,19 +73,7 @@ export function UpdateBalances() {
   }, []);
 
   // Leaving with unsaved typing asks first: closing or reloading the tab, and moving to another page.
-  useEffect(() => {
-    if (!dirty) return;
-    const beforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
-    const hashChange = () => {
-      if (window.location.hash !== "#/update" && !window.confirm(LEAVE)) window.location.hash = "#/update";
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    window.addEventListener("hashchange", hashChange);
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      window.removeEventListener("hashchange", hashChange);
-    };
-  }, [dirty]);
+  useLeaveGuard(dirty, LEAVE);
 
   if (loadError) return <p className="empty">Could not load the accounts. {loadError}</p>;
   if (!page) return <p className="empty">Loading…</p>;
