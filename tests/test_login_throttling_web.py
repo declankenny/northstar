@@ -142,6 +142,36 @@ def test_behind_a_trusted_proxy_the_real_address_is_used(app_client, clock, capl
     assert not [r for r in caplog.records if "FORWARDED_ALLOW_IPS" in r.getMessage()]
 
 
+def behind_traefik(client, forwarded_for, proxy="172.19.0.5"):
+    """The app as the server really runs it: uvicorn's own proxy middleware in front, trusting the proxy's network,
+    and requests carrying the headers Traefik adds."""
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+    app = ProxyHeadersMiddleware(client.app, trusted_hosts="172.19.0.0/16")
+    headers = {"X-Forwarded-For": forwarded_for, "X-Real-Ip": forwarded_for, "X-Forwarded-Proto": "https",
+               "X-Forwarded-Host": "northstar.example.com", "X-Forwarded-Port": "443", "X-Forwarded-Server": "proxy"}
+    return TestClient(app, client=(proxy, 50000), headers=headers, follow_redirects=False)
+
+
+def test_behind_traefik_with_the_network_trusted_the_real_address_is_limited_and_nothing_is_warned(app_client, clock, caplog):
+    """The setup the operator guide describes, with Traefik's headers. X-Real-Ip arrives beside X-Forwarded-For."""
+    visitor = behind_traefik(app_client, ELSEWHERE)
+    with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
+        assert [fail(visitor, f"user{i}@example.com").status_code for i in range(20)] == [400] * 20
+        assert fail(visitor, "another@example.com").status_code == 429          # the address limit works
+        assert sign_in(behind_traefik(app_client, HOME)).status_code == 303      # another visitor is unaffected
+    assert not [r for r in caplog.records if "FORWARDED_ALLOW_IPS" in r.getMessage()]
+
+
+def test_behind_traefik_with_the_network_not_trusted_the_operator_is_told_once(app_client, clock, caplog):
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+    app = ProxyHeadersMiddleware(app_client.app, trusted_hosts="127.0.0.1")       # the default: Traefik is not listed
+    visitor = TestClient(app, client=("172.19.0.5", 50000), follow_redirects=False,
+                         headers={"X-Forwarded-For": ELSEWHERE, "X-Real-Ip": ELSEWHERE})
+    with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
+        assert [fail(visitor, f"user{i}@example.com").status_code for i in range(25)] == [400] * 25
+    assert len([r for r in caplog.records if "FORWARDED_ALLOW_IPS" in r.getMessage()]) == 1
+
+
 def test_a_spoofed_forwarded_header_cannot_dodge_the_email_limit(app_client, clock):
     """Someone connecting directly who claims to be someone else is treated as an unknown address, which
     only switches the address limit off. The email limits still apply."""

@@ -218,6 +218,38 @@ def test_headers_uvicorn_does_not_interpret_also_mean_an_untrusted_proxy(name):
     assert throttle.client_address(HOME, headers(**{name: "for=198.51.100.7"})) == (None, True)
 
 
+# What Traefik sends with every request it forwards: X-Real-Ip as well as X-Forwarded-For, and others.
+TRAEFIK = dict(x_forwarded_host="northstar.example.com", x_forwarded_port="443", x_forwarded_proto="https",
+               x_forwarded_server="proxy")
+
+
+def test_x_real_ip_next_to_x_forwarded_for_does_not_hide_a_trusted_proxy():
+    """Uvicorn acts only on X-Forwarded-For. X-Real-Ip beside it, as Traefik and nginx send it, changes nothing."""
+    sent = headers(x_forwarded_for=ELSEWHERE, x_real_ip=ELSEWHERE, **TRAEFIK)
+    assert throttle.client_address(ELSEWHERE, sent) == (ELSEWHERE, False)
+
+
+def test_the_forwarded_header_next_to_x_forwarded_for_does_not_hide_a_trusted_proxy_either():
+    sent = headers(x_forwarded_for=ELSEWHERE, forwarded=f"for={ELSEWHERE}", x_real_ip=ELSEWHERE)
+    assert throttle.client_address(ELSEWHERE, sent) == (ELSEWHERE, False)
+
+
+def test_an_untrusted_proxy_is_still_flagged_when_it_also_sends_x_real_ip():
+    """The connecting address is the proxy's and is not in the chain, whatever else arrives with it."""
+    sent = headers(x_forwarded_for=ELSEWHERE, x_real_ip=ELSEWHERE, **TRAEFIK)
+    assert throttle.client_address("172.18.0.2", sent) == (None, True)
+
+
+def test_a_made_up_chain_with_x_real_ip_does_not_get_a_trusted_address():
+    """Someone connecting directly who claims to be another address: it is not in the chain, so it is unknown."""
+    sent = headers(x_forwarded_for="192.0.2.1", x_real_ip="192.0.2.1")
+    assert throttle.client_address(ELSEWHERE, sent) == (None, True)
+
+
+def test_x_real_ip_alone_still_means_a_proxy_that_uvicorn_cannot_read():
+    assert throttle.client_address("172.18.0.2", headers(x_real_ip=ELSEWHERE, **TRAEFIK)) == (None, True)
+
+
 def test_an_address_that_is_not_an_ip_is_unknown_without_a_proxy_flag():
     assert throttle.client_address("testclient", headers()) == (None, False)
     assert throttle.client_address(None, headers()) == (None, False)
