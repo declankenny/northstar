@@ -118,21 +118,3 @@ def test_command_line_refuses_mismatched_passwords(tmp_path, monkeypatch, capsys
     monkeypatch.setattr("getpass.getpass", lambda prompt="": next(answers))
     assert users.main(["create", "a@example.com", "A"]) == 1
     assert "did not match" in capsys.readouterr().err
-
-
-def test_users_migration_applies_to_a_populated_database_without_touching_it(tmp_path):
-    """The 0002 migration on top of an existing 0001 database that already holds (synthetic) data."""
-    from northstar import db
-    from conftest import add_account, add_balance
-    old = tmp_path / "migrations"
-    old.mkdir()
-    (old / "0001_initial.sql").write_text((db.MIGRATIONS_DIR / "0001_initial.sql").read_text(encoding="utf-8"), encoding="utf-8")
-    conn = db.connect(tmp_path / "copy.db")
-    assert db.migrate(conn, old) == ["0001_initial"]
-    account = add_account(conn, "Test checking", 1, "Checking")
-    add_balance(conn, account, "2026-01-31", 123456)
-    assert db.migrate(conn) == ["0002_users", "0003_user_theme"]
-    assert conn.execute("SELECT amount_cents FROM balances").fetchone()[0] == 123456
-    assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0     # no default user
-    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
-    conn.close()

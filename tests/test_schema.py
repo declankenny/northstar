@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from northstar import db
+from northstar import db, users
 
 from conftest import add_account, type_id
 
@@ -21,11 +21,28 @@ def test_seed_classes_and_types(conn):
     classes = [r["name"] for r in conn.execute("SELECT name FROM account_classes ORDER BY id")]
     assert classes == ["Asset", "Liability"]
     types = {r["name"]: (r["class_id"], r["stale_after_days"]) for r in conn.execute("SELECT * FROM account_types")}
-    assert len(types) == 12
+    assert len(types) == 11
     assert types["Checking"] == (ASSET, 35)
     assert types["Real estate"] == (ASSET, 365)
-    assert types["Vehicle"] == (ASSET, 365)
+    assert "Vehicle" not in types
     assert types["Mortgage"] == (LIABILITY, 35)
+
+
+def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn):
+    assert [r["version"] for r in conn.execute("SELECT version FROM schema_migrations")] == ["0001_initial"]
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
+    assert {"email", "password_hash", "is_admin", "theme"} <= columns
+    assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sessions'").fetchone()[0] == 1
+    users.create_user(conn, "a@example.com", "Test A", "synthetic-pass-123")
+    assert conn.execute("SELECT theme FROM users").fetchone()[0] == "dark"       # the default
+
+
+def test_a_database_that_recorded_the_old_split_migrations_still_opens(conn):
+    """The initial migration used to be three files. A database that applied all three has their names
+    recorded, and the one remaining file must be treated as applied, with nothing run again."""
+    conn.executemany("INSERT INTO schema_migrations (version) VALUES (?)", [("0002_users",), ("0003_user_theme",)])
+    assert db.migrate(conn) == []
+    assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
 
 
 def test_account_with_type_from_the_other_class_is_rejected(conn):
