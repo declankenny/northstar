@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { addUser, deleteUser, fetchUsers, type Me, resetPassword, setAdmin, type UserRow } from "./api";
+import { ConfirmDialog, Modal, useAction } from "./Dialogs";
+import { RowMenu } from "./RowMenu";
 
 type Notice = { ok: boolean; text: string } | null;
 
@@ -48,80 +50,54 @@ function AddUserForm({ onAdded }: { onAdded: (user: UserRow) => void }) {
   );
 }
 
-type RowMode = "none" | "reset" | "delete";
-
-function Row(props: { user: UserRow; isMe: boolean; onChanged: (user: UserRow) => void; onRemoved: (id: number) => void; onNotice: (n: Notice) => void }) {
-  const { user, isMe, onChanged, onRemoved, onNotice } = props;
-  const [mode, setMode] = useState<RowMode>("none");
+/** An admin sets another user's password. The user is signed out everywhere. */
+function ResetPasswordDialog(props: { user: UserRow; onDone: () => void; onClose: () => void }) {
   const [password, setPassword] = useState("");
-
-  const fail = (e: Error) => onNotice({ ok: false, text: e.message });
-
-  const toggleAdmin = () =>
-    setAdmin(user.id, !user.is_admin).then((updated) => {
-      onChanged(updated);
-      onNotice({ ok: true, text: `${updated.email} is ${updated.is_admin ? "now an admin" : "no longer an admin"}.` });
-    }, fail);
-
-  const reset = (event: FormEvent) => {
+  const { busy, error, run } = useAction();
+  const submit = (event: FormEvent) => {
     event.preventDefault();
-    resetPassword(user.id, password).then(() => {
-      setPassword("");
-      setMode("none");
-      onNotice({ ok: true, text: `Password reset for ${user.email}. They were signed out everywhere.` });
-    }, fail);
+    run(async () => {
+      await resetPassword(props.user.id, password);
+      props.onDone();
+    });
   };
-
-  const remove = () =>
-    deleteUser(user.id).then(() => {
-      onRemoved(user.id);
-      onNotice({ ok: true, text: `Deleted ${user.email}.` });
-    }, fail);
-
   return (
-    <tr>
-      <td>{user.display_name}{isMe && <span className="badge you">You</span>}</td>
-      <td>{user.email}</td>
-      <td>{user.is_admin ? <span className="badge admin">Admin</span> : "User"}</td>
-      <td className="num">{user.created_at.slice(0, 10)}</td>
-      <td className="actions">
-        {isMe ? (
-          <span className="m">Use your Profile</span>
-        ) : mode === "reset" ? (
-          <form className="inline" onSubmit={reset}>
-            <input type="password" autoComplete="new-password" placeholder="New password" aria-label={`New password for ${user.email}`}
-              value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
-            <button className="link">Set</button>
-            <button type="button" className="link" onClick={() => { setMode("none"); setPassword(""); }}>Cancel</button>
-          </form>
-        ) : mode === "delete" ? (
-          <span className="inline">
-            Delete {user.display_name}?
-            <button className="link danger" onClick={remove}>Delete</button>
-            <button className="link" onClick={() => setMode("none")}>Cancel</button>
-          </span>
-        ) : (
-          <span className="inline">
-            <button className="link" onClick={toggleAdmin}>{user.is_admin ? "Remove admin" : "Make admin"}</button>
-            <button className="link" onClick={() => setMode("reset")}>Reset password</button>
-            <button className="link danger" onClick={() => setMode("delete")}>Delete</button>
-          </span>
-        )}
-      </td>
-    </tr>
+    <Modal title="Reset password" subtitle={props.user.email} onClose={props.onClose}>
+      <form onSubmit={submit}>
+        <label>New password
+          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
+        </label>
+        <div className="hint">They are signed out everywhere and use this to sign in again.</div>
+        {error && <p className="notice bad" role="alert">{error}</p>}
+        <div className="foot">
+          <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button className="btn" disabled={busy}>Set password</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
+
+type Dialog = { kind: "reset"; user: UserRow } | { kind: "delete"; user: UserRow };
 
 export function Users({ me }: { me: Me }) {
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
+  const [dialog, setDialog] = useState<Dialog | null>(null);
 
   useEffect(() => {
     fetchUsers().then(setUsers, (e: Error) => setError(e.message));
   }, []);
 
   const sorted = (list: UserRow[]) => [...list].sort((a, b) => a.email.localeCompare(b.email));
+  const fail = (e: Error) => setNotice({ ok: false, text: e.message });
+
+  const toggleAdmin = (user: UserRow) =>
+    setAdmin(user.id, !user.is_admin).then((updated) => {
+      setUsers((list) => list && list.map((u) => (u.id === updated.id ? updated : u)));
+      setNotice({ ok: true, text: `${updated.email} is ${updated.is_admin ? "now an admin" : "no longer an admin"}.` });
+    }, fail);
 
   return (
     <div className="page">
@@ -141,9 +117,23 @@ export function Users({ me }: { me: Me }) {
             </thead>
             <tbody>
               {users.map((user) => (
-                <Row key={user.id} user={user} isMe={user.id === me.id} onNotice={setNotice}
-                  onChanged={(updated) => setUsers((list) => list && list.map((u) => (u.id === updated.id ? updated : u)))}
-                  onRemoved={(id) => setUsers((list) => list && list.filter((u) => u.id !== id))} />
+                <tr key={user.id}>
+                  <td>{user.display_name}{user.id === me.id && <span className="badge you">You</span>}</td>
+                  <td>{user.email}</td>
+                  <td>{user.is_admin ? <span className="badge admin">Admin</span> : "User"}</td>
+                  <td className="num">{user.created_at.slice(0, 10)}</td>
+                  <td className="k">
+                    {user.id === me.id ? (
+                      <span className="m">Use your Profile</span>
+                    ) : (
+                      <RowMenu label={`Actions for ${user.email}`} items={[
+                        { label: user.is_admin ? "Remove admin" : "Make admin", onClick: () => toggleAdmin(user) },
+                        { label: "Reset password", onClick: () => setDialog({ kind: "reset", user }) },
+                        { label: "Delete", danger: true, onClick: () => setDialog({ kind: "delete", user }) },
+                      ]} />
+                    )}
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -152,6 +142,24 @@ export function Users({ me }: { me: Me }) {
       <div className="panels wide">
         <AddUserForm onAdded={(user) => setUsers((list) => sorted([...(list ?? []), user]))} />
       </div>
+
+      {dialog?.kind === "reset" && (
+        <ResetPasswordDialog user={dialog.user} onClose={() => setDialog(null)}
+          onDone={() => {
+            setNotice({ ok: true, text: `Password reset for ${dialog.user.email}. They were signed out everywhere.` });
+            setDialog(null);
+          }} />
+      )}
+      {dialog?.kind === "delete" && (
+        <ConfirmDialog title={`Delete ${dialog.user.display_name}?`} confirmLabel="Delete user" danger onClose={() => setDialog(null)}
+          text={`${dialog.user.email} is removed and signed out at once. This can't be undone.`}
+          onConfirm={async () => {
+            await deleteUser(dialog.user.id);
+            setUsers((list) => list && list.filter((u) => u.id !== dialog.user.id));
+            setNotice({ ok: true, text: `Deleted ${dialog.user.email}.` });
+            setDialog(null);
+          }} />
+      )}
     </div>
   );
 }

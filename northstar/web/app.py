@@ -58,6 +58,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
 
     app = FastAPI(title="Northstar")
     app.state.db_path = db_path
+    # Where people land after signing in: the React app once it is built, else the classic Dashboard.
+    app.state.landing = "/app/" if (SPA_DIR / "index.html").exists() else "/"
     app.state.templates = Jinja2Templates(directory=WEB_DIR / "templates")
     app.state.templates.env.filters["money"] = format_cents
     app.state.templates.env.filters["money_input"] = cents_to_input

@@ -201,7 +201,11 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .gcard td.k { text-align: right; padding: 6px 12px; position: relative; }
 .kebab { background: none; border: 0; color: var(--muted); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 7px; }
 .kebab:hover, .kebab.on { background: var(--pill-active); color: var(--text); }
-.menu.rowmenu { top: 40px; right: 12px; width: 250px; }
+.menu.rowmenu { top: 40px; right: 12px; width: 250px; white-space: normal; }
 .menu button:disabled { color: var(--muted); cursor: default; }
 .menu button:disabled:hover { background: none; }
 .menu button .why { font-size: 13px; }
+
+/* Users rows share the Account types row menu */
+.tablepanel td.k { text-align: right; padding: 6px 12px; position: relative; }
+.tablepanel th:last-child { width: 170px; }

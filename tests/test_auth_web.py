@@ -1,6 +1,8 @@
 import pytest
+from fastapi.testclient import TestClient
 
 from northstar import users
+from northstar.web.app import create_app
 from conftest import with_db
 
 PASSWORD = "synthetic-pass-123"
@@ -98,3 +100,43 @@ def test_login_page_while_signed_in_goes_home(client):
 def test_garbage_cookie_is_signed_out(anon):
     anon.cookies.set("northstar_session", "garbage")
     assert anon.get("/").status_code == 303
+
+
+@pytest.fixture
+def built_app(anon_client, tmp_path, monkeypatch):
+    """A client for an app that has the React bundle built, so people land in it after signing in."""
+    spa = tmp_path / "spa"
+    spa.mkdir()
+    (spa / "index.html").write_text("<!doctype html><title>Northstar</title>")
+    monkeypatch.setattr("northstar.web.app.SPA_DIR", spa)
+    client = TestClient(create_app(tmp_path / "built.db"), follow_redirects=False)
+    with with_db(client) as conn:
+        users.create_user(conn, "a@example.com", "Test A", PASSWORD)
+    return client
+
+
+def test_with_the_react_app_built_login_lands_in_it(built_app):
+    response = built_app.post("/login", data={"email": "a@example.com", "password": PASSWORD})
+    assert response.headers["location"] == "/app/"
+
+
+def test_a_signed_out_visit_to_the_site_root_lands_in_the_react_app_after_login(built_app):
+    next_path = built_app.get("/").headers["location"].split("next=")[1]
+    assert next_path == "%2F"
+    response = built_app.post("/login", data={"email": "a@example.com", "password": PASSWORD, "next": "/"})
+    assert response.headers["location"] == "/app/"
+
+
+def test_with_the_react_app_built_login_still_returns_to_a_page_asked_for(built_app):
+    response = built_app.post("/login", data={"email": "a@example.com", "password": PASSWORD, "next": "/accounts"})
+    assert response.headers["location"] == "/accounts"
+
+
+def test_with_the_react_app_built_nothing_unsafe_redirects_off_site_either(built_app):
+    response = built_app.post("/login", data={"email": "a@example.com", "password": PASSWORD, "next": "//evil.example/"})
+    assert response.headers["location"] == "/app/"
+
+
+def test_with_the_react_app_built_the_login_page_when_signed_in_goes_to_it(built_app):
+    built_app.post("/login", data={"email": "a@example.com", "password": PASSWORD})
+    assert built_app.get("/login").headers["location"] == "/app/"
