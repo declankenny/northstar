@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from northstar import config, db, sessions
+from northstar import config, db, sessions, throttle
 from northstar.web import account_api, api_routes, auth_routes, profile_api, types_api, update_api, users_api
 
 WEB_DIR = Path(__file__).parent
@@ -55,6 +55,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     db.prepare(db_path)
     with closing(db.connect(db_path)) as conn:
         db.migrate(conn)
+    throttle.log_limits()
 
     app = FastAPI(title="Northstar")
     app.state.db_path = db_path

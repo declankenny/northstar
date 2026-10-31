@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from northstar import db, users
+from northstar import clock, db, throttle, users
 from northstar.errors import ValidationError
 from northstar.web.auth_routes import COOKIE, current_user
 
@@ -74,6 +74,25 @@ def change_me(body: ProfileChange, request: Request):
 @router.post("/password", status_code=204)
 def change_password(body: PasswordChange, request: Request):
     user = current_user(request)
-    _run(request, lambda conn: users.change_own_password(
-        conn, user["id"], body.current_password, body.new_password, request.cookies.get(COOKIE)))
+    address = throttle.address_of(request)
+
+    def action(conn):
+        # Guessing the current password is limited like signing in, so a stolen session cannot be used to
+        # work out the password. An attempt in which the current password was right is not held against
+        # the person, even when the new password is refused.
+        _, wait = throttle.begin(conn, user["email"], address, clock.now())
+        if wait is not None:
+            raise HTTPException(status_code=429, headers={"Retry-After": str(wait)},
+                                detail=f"Too many attempts. Try again in about {throttle.describe(wait)}.")
+        try:
+            users.change_own_password(conn, user["id"], body.current_password, body.new_password,
+                                      request.cookies.get(COOKIE))
+        except users.WrongPasswordError:
+            raise
+        except ValidationError:
+            throttle.clear(conn, user["email"], address)
+            raise
+        throttle.clear(conn, user["email"], address)
+
+    _run(request, action)
     return Response(status_code=204)

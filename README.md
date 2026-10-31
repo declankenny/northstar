@@ -4,7 +4,7 @@
 
 Self-hosted tracker of household net worth over time. `docs/spec.md` is the source of truth for scope.
 
-> **Pre-release.** Northstar has no published release or Docker image yet. Run it from a checkout and with synthetic data only, and do not expose it to the internet: login throttling and the other release hardening in `docs/spec.md` ("Release and distribution") are not built yet. All data in the tests and examples is synthetic.
+> **Pre-release.** Northstar has no published release or Docker image yet. Run it from a checkout and with synthetic data only, and do not expose it to the internet: security headers and the other release hardening in `docs/spec.md` ("Release and distribution") are not built yet. All data in the tests and examples is synthetic.
 
 Licensed under the [MIT License](LICENSE).
 
@@ -18,6 +18,16 @@ docker compose exec northstar python -m northstar.users create you@example.com "
 ```
 
 `set-password EMAIL` changes a password and signs that user out everywhere, and `list` shows users. When the app is served over HTTPS, set `NORTHSTAR_COOKIE_SECURE=1`.
+
+### Limits on failed sign-ins
+
+Failed sign-ins are limited: 5 in 15 minutes per email from one address, 30 an hour per email from any address, and 20 in 15 minutes per address. A blocked sign-in says how long to wait and does not check the password.
+
+Behind a reverse proxy (Traefik, Caddy, nginx), tell the app which proxy to trust, or the app cannot see the visitors' real addresses and switches the per-address limit off (it logs a warning that says so). Set `FORWARDED_ALLOW_IPS` to the proxy's address or network, for example the Docker network the proxy shares with Northstar, and never to `*`. Without a proxy, set nothing.
+
+```
+FORWARDED_ALLOW_IPS=172.18.0.0/16
+```
 
 ## Run it
 
