@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchMe, type Me, type Theme, updateMe } from "./api";
+import { fetchMe, fetchVersion, type Me, type Theme, updateMe } from "./api";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
@@ -9,6 +9,7 @@ import { Link, usePath } from "./router";
 import { accountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
 import { Users } from "./Users";
+import { versionLabel } from "./version";
 
 /** Show a theme now, and remember it in the browser so the sign-in page and the first paint match. */
 function applyTheme(theme: Theme) {
@@ -35,6 +36,11 @@ export function App() {
   const route = routeFromPath(path);
   const accountId = accountIdFromPath(path);
   const [me, setMe] = useState<Me | null>(null);
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchVersion().then(setVersion, () => {}); // a footer only: the app works without it
+  }, []);
 
   // The account's theme wins over whatever this browser remembered.
   useEffect(() => {
@@ -80,6 +86,7 @@ export function App() {
         <form method="post" action="/logout">
           <button className="signout">Sign out</button>
         </form>
+        <div className="version">{versionLabel(version)}</div>
       </nav>
       <main>
         {route === "dashboard" ? (
