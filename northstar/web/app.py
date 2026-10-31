@@ -97,7 +97,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             that is not a page is a 404, never the app's HTML: a mistyped /api address or a missing
             script would otherwise come back as a web page."""
             first = path.split("/", 1)[0]
-            if first in SERVER_PATHS:
+            if first in SERVER_PATHS or "\x00" in path:     # no file has a null byte in its name, and the file system calls raise on one
                 raise HTTPException(status_code=404)
             # The requested path is only turned into a file after it is known to be inside the build, and the
             # file system is not asked about anything outside it.

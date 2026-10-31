@@ -97,3 +97,11 @@ def test_files_inside_the_build_are_still_served(secret_beside_the_build):
     client, _ = secret_beside_the_build
     assert "console.log" in client.get("/assets/app.js").text
     assert "<title>Northstar</title>" in client.get("/index.html").text
+
+
+@pytest.mark.parametrize("path", ["/%00", "/a%00b", "/assets/%00.js", "/assets/app.js%00.png"])
+def test_a_path_with_a_null_byte_is_a_404_and_never_an_error(secret_beside_the_build, path):
+    """No file name has one. On Linux the file system calls raise ValueError for it, which would be a 500."""
+    client, _ = secret_beside_the_build
+    response = client.get(path)
+    assert response.status_code == 404 and "<title>" not in response.text
