@@ -1,15 +1,18 @@
 services:
   northstar:
-    build: .
+    image: ghcr.io/declankenny/northstar:latest
     restart: unless-stopped
     environment:
-      # "Today" is the container's date, so this must match the household's timezone.
-      TZ: America/Chicago
+      TZ: ${TZ:-UTC}
+      NORTHSTAR_COOKIE_SECURE: ${NORTHSTAR_COOKIE_SECURE:-1}
     ports:
-      # Login is in the app, but plain HTTP: publish on this machine only. Change the host port with NORTHSTAR_PORT.
       - "127.0.0.1:${NORTHSTAR_PORT:-8000}:8000"
     volumes:
       - northstar-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   northstar-data:

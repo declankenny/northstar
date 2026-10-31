@@ -33,7 +33,7 @@ FORWARDED_ALLOW_IPS=172.18.0.0/16
 
 ## Run it
 
-Docker (how it normally runs): `docker compose up -d --build`, then open http://127.0.0.1:8000. The image builds the React frontend itself, so nothing else is needed.
+Docker (how it normally runs): `compose.yaml` uses the published image, and there is none yet, so until the first release build from source with `docker compose -f compose.dev.yaml up -d --build`, then open http://localhost:8000. The image builds the React frontend itself, so nothing else is needed. Settings go in a `.env` file beside the compose file (copy `.env.example`): `TZ`, `NORTHSTAR_PORT` and `NORTHSTAR_COOKIE_SECURE`. The cookie setting defaults to `1`, which browsers accept on `http://localhost` but drop on a plain-HTTP address such as `http://192.168.1.10:8000`, where sign-in then appears to do nothing: serve the app over HTTPS, or set it to `0` for a trial on your own network.
 
 Without Docker, for development (Python 3.14, Node):
 
