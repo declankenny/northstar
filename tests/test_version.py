@@ -48,9 +48,11 @@ def changelog():
 def test_the_changelog_has_an_unreleased_section_and_a_section_for_this_version():
     text = changelog()
     assert re.search(r"^## \[Unreleased\]$", text, re.M)
-    # Until the release is made the date is a TODO, and the release workflow refuses a tag while one remains.
-    assert re.search(rf"^## \[{re.escape(declared_version())}\] - (\d{{4}}-\d{{2}}-\d{{2}}|TODO release date)$", text, re.M), \
-        f"CHANGELOG.md has no section for {declared_version()}"
+    # A release candidate (0.1.0rc1) is listed under the version it leads up to (0.1.0). Until the release is made
+    # the date is a TODO, and the release workflow refuses a final tag while one remains.
+    base = declared_version().split("rc")[0]
+    assert re.search(rf"^## \[{re.escape(base)}\] - (\d{{4}}-\d{{2}}-\d{{2}}|TODO release date)$", text, re.M), \
+        f"CHANGELOG.md has no section for {base}"
 
 
 def test_the_changelog_says_what_is_breaking_in_each_released_version():
