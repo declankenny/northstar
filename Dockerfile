@@ -36,4 +36,9 @@ WORKDIR /data
 VOLUME /data
 EXPOSE 8000
 
+# Healthy when the sign-in page answers. It is public and does not touch the database, and Python is already
+# in the image, so nothing like curl is needed. urlopen raises on any error status, which makes the check fail.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/login', timeout=4)"]
+
 CMD ["uvicorn", "--factory", "northstar.web.app:create_app", "--host", "0.0.0.0", "--port", "8000"]

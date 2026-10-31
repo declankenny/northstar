@@ -117,6 +117,19 @@ jobs:
           assert (a.WEB_DIR / 'static' / 'theme.js').is_file(), 'the theme script is not in the image';
           assert (a.WEB_DIR / 'static' / 'login.css').is_file(), 'the sign-in stylesheet is not in the image';
           print('image ok')"
+      - name: Start the image and check that it reports healthy and runs as a non-root user
+        run: |
+          docker run --detach --name northstar-ci northstar:ci
+          for attempt in $(seq 1 30); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' northstar-ci)
+            echo "health: $status"
+            [ "$status" = healthy ] && break
+            sleep 2
+          done
+          [ "$status" = healthy ] || { docker logs northstar-ci; exit 1; }
+          user=$(docker exec northstar-ci id -u)
+          [ "$user" != 0 ] || { echo "the container runs as root"; exit 1; }
+          docker rm --force northstar-ci > /dev/null
       - name: Scan the image for vulnerabilities (Trivy)
         # Fails on a HIGH or CRITICAL finding that has a fix available, in the operating system packages
         # or the Python packages. A finding with no fix yet cannot be acted on, so it is not a failure.

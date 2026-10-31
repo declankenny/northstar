@@ -1,0 +1,18 @@
+services:
+  northstar:
+    build: .
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+      NORTHSTAR_COOKIE_SECURE: ${NORTHSTAR_COOKIE_SECURE:-1}
+    ports:
+      - "127.0.0.1:${NORTHSTAR_PORT:-8000}:8000"
+    volumes:
+      - northstar-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  northstar-data:
