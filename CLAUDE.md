@@ -2,7 +2,7 @@
 
 ## What this is
 
-A self-hosted tracker of household financial position over time, run as a docker container on Declan's home server (`the deployment host`). `docs/spec.md` is the source of truth for scope. v1 is manual balance entry only: no transactions and no bank feeds.
+A self-hosted tracker of household financial position over time, run as a docker container on Declan's home server. `docs/spec.md` is the source of truth for scope. v1 is manual balance entry only: no transactions and no bank feeds.
 
 ## Working rules
 
@@ -34,4 +34,4 @@ A self-hosted tracker of household financial position over time, run as a docker
 
 ## Deployment
 
-- Out of scope until v1 runs locally. Deploying means a stack in Declan's `the deployment repo` repo through that repo's PR workflow. Do not touch that repo or the server without approval.
+- Out of scope until v1 runs locally. Deploying means a stack in Declan's separate deployment repo through that repo's PR workflow. Do not touch that repo or the server without approval.

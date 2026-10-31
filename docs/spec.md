@@ -1,8 +1,8 @@
 # Northstar: v1 spec
 
-Status: v1 complete (2026-10-30). Every acceptance item is met, including a restart of the container running in Docker Desktop on the development PC. It is not deployed to the deployment host. The next phase (a React frontend) has started, and its first page, the Dashboard, is built, as is every other v1 screen including Update balances (see "After v1", item 6). Local login (accounts and sessions) is built (see "Authentication"). The server-rendered pages have been removed (2026-10-31), except the sign-in page (see "After v1", item 6). Items marked TODO or "Decision" are unresolved. Do not guess them.
+Status: v1 complete (2026-10-30). Every acceptance item is met, including a restart of the container running in Docker Desktop on the development PC. It is not deployed anywhere yet. The first target is Declan's home server. The next phase (a React frontend) has started, and its first page, the Dashboard, is built, as is every other v1 screen including Update balances (see "After v1", item 6). Local login (accounts and sessions) is built (see "Authentication"). The server-rendered pages have been removed (2026-10-31), except the sign-in page (see "After v1", item 6). Items marked TODO or "Decision" are unresolved. Do not guess them.
 
-Northstar is the app name. The repo is `github.com/declankenny/northstar` (private).
+Northstar is the app name. The repo is `github.com/declankenny/northstar`.
 
 ## Purpose
 
@@ -101,7 +101,7 @@ Stack, architecture, packaging, authentication and backup are decided. Deploymen
   - A restore checks the backup first and needs the app stopped. It refuses to replace an existing database unless `--replace` is given, and then it moves the old file aside as `<name>.before-restore-<time>` instead of deleting it. Leftover journal files are moved aside too, so an old journal can't corrupt the restored file.
   - The tool reports only counts, never names or amounts. A backup file holds the real financial data, so it stays out of the repository (`backups/` and backup file names are ignored) and in a private place.
   - There is no backup page in the web app, so there is no new way to read the data over the network.
-  - TODO scheduling backups and the off-site copy, aligned with the deployment host's snapshot setup. That belongs to deployment.
+  - TODO scheduling backups and the off-site copy, aligned with the home server's snapshot setup. That belongs to deployment.
 - **Authentication (decided)**: local accounts. The React app, every `/api` endpoint and every other address need a signed-in user. Only `/login` and its stylesheet are public. Addresses other than `/api` redirect to `/login`, and `/api` answers 401.
   - **Users**: a `users` table (email, display name, password hash, `is_admin`, `theme`). `is_admin` is returned by `current_user()` and gates the Users page and the Account types page, with their endpoints (everything else is open to every signed-in user, because every signed-in user sees all household data, so there is no per-user data).
   - **Passwords**: scrypt from Python's standard library (no new dependency), minimum 12 characters, no other composition rules. A wrong password and an unknown email give the same message and take about the same time. There is no lockout or rate limit yet (see `docs/backlog.md`).
@@ -113,8 +113,16 @@ Stack, architecture, packaging, authentication and backup are decided. Deploymen
   - **First user and user management (decided)**: there is no default user and no password in the image or compose file. The first admin is created from the command line, which asks for the password at a prompt (the command line also works for the rest, and is the way back in if every admin is locked out): `python -m northstar.users create EMAIL NAME [--admin]`, `set-password EMAIL` and `list`. In Docker: `docker compose exec northstar python -m northstar.users create ...`. Reason: nothing to ship or leak, and no open signup route. A first-run setup page waits (see `docs/backlog.md`).
   - **Backups** now contain password hashes and sessions. They stay private, as before.
   - **OIDC (for example Pocket ID) is not in this phase.** It is in `docs/backlog.md`.
-  - **Deployment gate**: unchanged in spirit. Login is now in the app, but deployment to the deployment host still needs HTTPS (so `Secure` cookies) and Declan's approval. TODO choose how it is exposed (reverse proxy and network) when deployment starts.
-- **Deployment**: a stack in `the deployment repo` through its PR workflow. Out of scope until v1 runs locally.
+  - **Deployment gate**: unchanged in spirit. Login is now in the app, but deployment to the home server still needs HTTPS (so `Secure` cookies) and Declan's approval. TODO choose how it is exposed (reverse proxy and network) when deployment starts.
+- **Deployment**: a stack in Declan's separate deployment repo through its PR workflow. Out of scope until v1 runs locally.
+- **Release and distribution (decided 2026-10-31, built later)**: Northstar is open source for other people to run themselves, so it must be secure by default, have defined releases, and be easy to install and update.
+  - **License and repository (decided)**: MIT, copyright Declan Kenny. The repo goes public as soon as the files and history are clean. Declan's own deployment uses the same released image as everyone else.
+  - **Versions (decided)**: semantic versions. Before 1.0 anything may change, with notes. These count as breaking and are always in the release notes: database migrations, environment variables and the backup format. The JSON API under `/api` is internal, not a stable contract.
+  - **Branches (decided)**: `main` is development. `release/X.Y` is cut when `vX.Y.0` is tagged, starting with `release/0.1`. A fix lands on `main` first and is then backported, and each release is a tag `vX.Y.Z`. Only the latest minor version gets fixes until 1.0. Once the repo is public, rulesets protect `main`, `release/*` and `v*` tags (a pull request and passing checks required, no force-push or deletion).
+  - **Security before v0.1.0 (decided, not built)**: login throttling, per email address always and per IP address only when the real client address is known (a direct connection or a configured trusted proxy), because behind a proxy every request looks like the proxy's. Also security headers including a content security policy, a loud startup warning when `NORTHSTAR_COOKIE_SECURE` is off, a review of the password hashing cost, dependency and image scanning, and a `SECURITY.md` (supported versions, private reporting through GitHub, what to expect, the threat model).
+  - **HTTPS (decided)**: the app serves plain HTTP and expects a reverse proxy to provide HTTPS. The documentation includes a Traefik example (entrypoint and certificate resolver names are placeholders until confirmed) and states that plain HTTP is for trying it out only.
+  - **Images and updating (proposed, not yet confirmed)**: a public image `ghcr.io/declankenny/northstar` for amd64 and arm64, built by GitHub Actions when a `v*` tag is pushed, tagged `X.Y.Z` (never reused), `X.Y` and `latest`. A user-facing `compose.yaml` with `image:` and no `build:`, with the developer build in a separate file. Updating is `docker compose pull && docker compose up -d`. The app backs up the database before applying a pending migration and refuses to start on a database newer than itself, so a rollback is a restore of that backup. A health check in the image, a `CHANGELOG`, and a README quick start.
+  - **Roadmap**: the first-run setup page (with a React sign-in screen) is planned for v0.2, and OIDC after that (see `docs/backlog.md`). How the roadmap is kept in git is TODO.
 
 ## Acceptance for v1
 
@@ -207,4 +215,4 @@ Resolved for the next phase: frontend stack (React, TypeScript and Vite), no cha
 Open for the next phase:
 
 - Which further charts to build (for example the mix of assets by type), and when to move to clean URLs (see `docs/backlog.md`). TODO.
-- Deployment gate: HTTPS and how the app is exposed on the deployment host. TODO. (Login itself is decided, see "Authentication".)
+- Deployment gate: HTTPS and how the app is exposed on the home server. TODO. (Login itself is decided, see "Authentication".)
