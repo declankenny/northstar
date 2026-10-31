@@ -6,6 +6,7 @@ import { AccountTypes } from "./AccountTypes";
 import { Dashboard } from "./Dashboard";
 import { Profile } from "./Profile";
 import { accountIdFromHash, routeFromHash } from "./routes";
+import { UpdateBalances } from "./UpdateBalances";
 import { Users } from "./Users";
 
 /** Show a theme now, and remember it in the browser so the sign-in page and the first paint match. */
@@ -63,8 +64,8 @@ export function App() {
           <i>★</i> Northstar
         </div>
         <a className={route === "dashboard" ? "active" : ""} href="#/">Dashboard</a>
-        <a href="/balances/update">Update balances</a>
         <a className={route === "accounts" || route === "account" ? "active" : ""} href="#/accounts">Accounts</a>
+        <a className={route === "update" ? "active" : ""} href="#/update">Update balances</a>
         {me?.is_admin && (
           <>
             <div className="group">Admin</div>
@@ -83,6 +84,8 @@ export function App() {
           <Dashboard />
         ) : route === "accounts" ? (
           <AccountsList isAdmin={me?.is_admin ?? false} />
+        ) : route === "update" ? (
+          <UpdateBalances />
         ) : route === "account" && accountId !== null ? (
           <AccountPage id={accountId} isAdmin={me?.is_admin ?? false} />
         ) : !me ? null : route === "types" ? (

@@ -1,5 +1,5 @@
 /** The app's pages. The page is chosen by the part of the address after the #, so no router library is needed. */
-export type Route = "dashboard" | "profile" | "users" | "accounts" | "account" | "types";
+export type Route = "dashboard" | "profile" | "users" | "accounts" | "account" | "types" | "update";
 
 const ACCOUNT = /^#\/accounts\/(\d+)$/;
 
@@ -8,6 +8,7 @@ export function routeFromHash(hash: string): Route {
   if (hash === "#/users") return "users";
   if (hash === "#/accounts") return "accounts";
   if (hash === "#/types") return "types";
+  if (hash === "#/update") return "update";
   if (ACCOUNT.test(hash)) return "account";
   return "dashboard";
 }

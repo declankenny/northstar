@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addMonths, dayNumber, formatDate, isoFromDay } from "./dates";
-import { centsToInput, formatCents, percentChange } from "./money";
+import { centsToInput, formatCents, parseCents, percentChange } from "./money";
 import { PERIOD, RANGES, rangeStart } from "./ranges";
 
 describe("dates", () => {
@@ -83,5 +83,30 @@ describe("centsToInput", () => {
     expect(centsToInput(0)).toBe("0.00");
     expect(centsToInput(-2500)).toBe("-25.00");
     expect(centsToInput(100000000)).toBe("1000000.00");
+  });
+});
+
+describe("parseCents", () => {
+  it("reads what the server reads", () => {
+    expect(parseCents("1,234.56")).toBe(123456);
+    expect(parseCents("$25")).toBe(2500);
+    expect(parseCents("-$25.00")).toBe(-2500);
+    expect(parseCents("-25")).toBe(-2500);
+    expect(parseCents(" 12 000.5 ")).toBe(1200050); // spaces are dropped, as on the server
+    expect(parseCents("0")).toBe(0);
+    expect(parseCents("-0")).toBe(0);
+    expect(parseCents(".5")).toBe(50);
+    expect(parseCents("7.")).toBeNull();
+  });
+
+  it("refuses what the server refuses", () => {
+    for (const bad of ["", "  ", "abc", "12,3x", "1.234", "1,23", "--5", "$", "-", ".", "1,2345.00", "100,000,000,000.00"]) {
+      expect(parseCents(bad), bad).toBeNull();
+    }
+  });
+
+  it("accepts the largest amount and refuses one cent more", () => {
+    expect(parseCents("99,999,999,999.99")).toBe(9_999_999_999_999);
+    expect(parseCents("100,000,000,000.00")).toBeNull();
   });
 });

@@ -9,6 +9,25 @@ export function formatCents(cents: number): string {
   return `${cents < 0 ? "-" : ""}$${dollars}.${rest}`;
 }
 
+// About $100 billion, in cents: the same limit as the server's, so a typo is caught the same way.
+const MAX_CENTS = 99_999_999_999_99;
+const AMOUNT = /^(\d{1,3}(?:,\d{3})+|\d+)?(?:\.(\d{1,2}))?$/;
+
+/** Typed text such as "1,234.56", "$25" or "-$25.00" as integer cents, or null when the server would
+ *  refuse it. This mirrors the server's parse_cents so the page can show a change as you type; the
+ *  server still checks every amount when it is saved. */
+export function parseCents(text: string): number | null {
+  let s = text.trim().replace(/ /g, "");
+  const negative = s.startsWith("-");
+  if (negative) s = s.slice(1);
+  if (s.startsWith("$")) s = s.slice(1);
+  const match = AMOUNT.exec(s);
+  if (!s || !match || (match[1] === undefined && match[2] === undefined)) return null;
+  const cents = Number((match[1] ?? "0").replace(/,/g, "")) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+  if (cents > MAX_CENTS) return null;
+  return negative && cents !== 0 ? -cents : cents;
+}
+
 /** The change as a percent of where it started, or null when there is no sensible base (zero). */
 export function percentChange(diff: number, base: number): number | null {
   return base === 0 ? null : (diff / Math.abs(base)) * 100;

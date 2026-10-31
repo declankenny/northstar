@@ -28,6 +28,16 @@ export type Theme = "light" | "dark";
 /** The signed-in user. The email and is_admin are read-only here. */
 export type Me = { id: number; email: string; display_name: string; is_admin: boolean; theme: Theme };
 
+/** A refusal from the server. The message is fit to show the user. `errors` maps a row's id to its own
+ *  message, for a save that is refused because of particular rows. */
+export class RequestError extends Error {
+  errors: Record<string, string>;
+  constructor(message: string, errors: Record<string, string> = {}) {
+    super(message);
+    this.errors = errors;
+  }
+}
+
 /** Send a change and return the JSON answer, or throw an Error whose message is fit to show the user. */
 async function send<T>(method: string, url: string, body: unknown): Promise<T | null> {
   const response = await fetch(url, {
@@ -40,8 +50,9 @@ async function send<T>(method: string, url: string, body: unknown): Promise<T | 
     throw new Error("You are signed out.");
   }
   if (!response.ok) {
-    const detail = (await response.json().catch(() => null))?.detail;
-    throw new Error(typeof detail === "string" ? detail : `The server answered ${response.status}`);
+    const answer = await response.json().catch(() => null);
+    const detail = answer?.detail;
+    throw new RequestError(typeof detail === "string" ? detail : `The server answered ${response.status}`, answer?.errors ?? {});
   }
   return response.status === 204 ? null : response.json();
 }
@@ -215,4 +226,37 @@ export async function editType(id: number, type: { name: string; class_id: numbe
 
 export async function deleteType(id: number): Promise<TypeList> {
   return (await send<TypeList>("DELETE", `/api/types/${id}`, undefined))!;
+}
+
+/** One open account on the Update balances screen. existing_cents is what is already saved on the chosen date. */
+export type UpdateRow = {
+  id: number;
+  name: string;
+  class_name: "Asset" | "Liability";
+  type_name: string;
+  stale_after_days: number;
+  last_date: string | null;
+  last_cents: number | null;
+  days_since: number | null;
+  stale: boolean;
+  existing_cents: number | null;
+};
+
+/** The open accounts for one date, grouped by class (assets first). `saved` is set only on the answer to a save. */
+export type UpdatePage = {
+  date: string;
+  today: string;
+  rows: UpdateRow[];
+  saved: { added: number; updated: number; unchanged: number } | null;
+};
+
+/** Reading a date writes nothing. With no date the server uses today. */
+export async function fetchUpdate(date?: string): Promise<UpdatePage> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  return (await send<UpdatePage>("GET", `/api/balances/update${query}`, undefined))!;
+}
+
+/** Amounts are typed text by account id. A bad amount is a RequestError whose `errors` say which, and nothing is saved. */
+export async function saveUpdate(date: string, amounts: Record<number, string>): Promise<UpdatePage> {
+  return (await send<UpdatePage>("POST", "/api/balances/update", { date, amounts }))!;
 }
