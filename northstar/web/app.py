@@ -63,9 +63,7 @@ def warn_if_cookie_is_not_secure() -> None:
 
 def create_app(db_path: str | Path | None = None) -> FastAPI:
     db_path = Path(db_path) if db_path else config.database_path()
-    db.prepare(db_path)
-    with closing(db.connect(db_path)) as conn:
-        db.migrate(conn)
+    db.upgrade(db_path)     # a backup first if a migration is pending, and a refusal if the database is newer
     throttle.log_limits()
     warn_if_cookie_is_not_secure()
     users.prepare_dummy_hash()

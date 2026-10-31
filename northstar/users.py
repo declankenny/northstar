@@ -289,9 +289,11 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("list", help="list users")
     args = parser.parse_args(argv)
     try:
-        db.prepare(config.database_path())
-        with closing(db.connect(config.database_path())) as conn:
-            db.migrate(conn)
+        path = config.database_path()
+        if not path.is_file():      # connecting would create an empty one, and only the app sets a database up
+            raise ValidationError(f"There is no database at {path}. Start Northstar once to set one up, then run this again.")
+        with closing(db.connect(path)) as conn:
+            db.require_current(conn, path)
             if args.command == "create":
                 create_user(conn, args.email, args.name, _ask_password(), args.admin)
                 print(f"Created {args.email.strip().lower()}{' (admin)' if args.admin else ''}.")
