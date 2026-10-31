@@ -32,7 +32,10 @@ class NewUser(BaseModel):
 
 
 class UserChange(BaseModel):
-    is_admin: bool
+    """Any of the three; a field left out stays as it is."""
+    email: str | None = None
+    display_name: str | None = None
+    is_admin: bool | None = None
 
 
 class NewPassword(BaseModel):
@@ -73,8 +76,10 @@ def add_user(body: NewUser, request: Request):
 
 @router.patch("/{user_id}", response_model=UserOut)
 def change_user(user_id: int, body: UserChange, request: Request):
+    acting_id = current_user(request)["id"]
+
     def action(conn):
-        users.set_admin(conn, user_id, body.is_admin)
+        users.update_user(conn, user_id, acting_id, body.email, body.display_name, body.is_admin)
         return _listed(conn, user_id)
     return _run(request, action)
 

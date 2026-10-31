@@ -130,12 +130,17 @@ def change_own_password(conn: sqlite3.Connection, user_id: int, current: str, ne
     set_user_password(conn, user_id, new, keep_token=keep_token)
 
 
-def set_display_name(conn: sqlite3.Connection, user_id: int, display_name: str) -> None:
+def _clean_name(display_name: str) -> str:
     display_name = display_name.strip()
     if not display_name:
         raise ValidationError("Enter a name.")
     if len(display_name) > MAX_NAME_LENGTH:
         raise ValidationError(f"The name can be at most {MAX_NAME_LENGTH} characters.")
+    return display_name
+
+
+def set_display_name(conn: sqlite3.Connection, user_id: int, display_name: str) -> None:
+    display_name = _clean_name(display_name)
     get_user(conn, user_id)
     conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (display_name, user_id))
 
@@ -152,12 +157,28 @@ def _is_last_admin(conn: sqlite3.Connection, user: sqlite3.Row) -> bool:
         "SELECT COUNT(*) FROM users WHERE is_admin = 1").fetchone()[0] == 1
 
 
-def set_admin(conn: sqlite3.Connection, user_id: int, is_admin: bool) -> None:
-    """Make a user an admin or not. The last admin can't be demoted, so someone can always manage users."""
+def update_user(conn: sqlite3.Connection, user_id: int, acting_user_id: int, email: str | None = None,
+                display_name: str | None = None, is_admin: bool | None = None) -> None:
+    """An admin changes another user's email, name and admin flag (None leaves a field alone).
+
+    Everything is checked before anything is written, so a refusal changes nothing. Changing an email
+    doesn't end the user's sessions: they stay signed in and use the new address next time. You can't
+    remove your own admin, and the last admin can't be demoted.
+    """
     user = get_user(conn, user_id)
-    if not is_admin and _is_last_admin(conn, user):
-        raise ValidationError("There must be at least one admin.")
-    conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (1 if is_admin else 0, user_id))
+    new_email = user["email"] if email is None else _clean_email(email)
+    new_name = user["display_name"] if display_name is None else _clean_name(display_name)
+    new_admin = bool(user["is_admin"]) if is_admin is None else is_admin
+    if not new_admin and user["is_admin"]:
+        if _is_last_admin(conn, user):
+            raise ValidationError("There must be at least one admin.")
+        if user_id == acting_user_id:
+            raise ValidationError("You can't remove your own admin. Ask another admin.")
+    try:
+        conn.execute("UPDATE users SET email = ?, display_name = ?, is_admin = ? WHERE id = ?",
+                     (new_email, new_name, 1 if new_admin else 0, user_id))
+    except sqlite3.IntegrityError:
+        raise ValidationError("A user with that email already exists.")
 
 
 def delete_user(conn: sqlite3.Connection, user_id: int, acting_user_id: int) -> None:

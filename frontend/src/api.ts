@@ -76,8 +76,8 @@ export async function addUser(user: { email: string; display_name: string; passw
   return (await send<UserRow>("POST", "/api/users", user))!;
 }
 
-export async function setAdmin(id: number, isAdmin: boolean): Promise<UserRow> {
-  return (await send<UserRow>("PATCH", `/api/users/${id}`, { is_admin: isAdmin }))!;
+export async function updateUser(id: number, change: { email: string; display_name: string; is_admin: boolean }): Promise<UserRow> {
+  return (await send<UserRow>("PATCH", `/api/users/${id}`, change))!;
 }
 
 export async function resetPassword(id: number, password: string): Promise<void> {

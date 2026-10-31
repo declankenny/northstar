@@ -28,7 +28,7 @@ function NameForm({ me, onChange }: { me: Me; onChange: (me: Me) => void }) {
     <form className="panel" onSubmit={save}>
       <h2>Profile</h2>
       <label>Email<input value={me.email} readOnly aria-describedby="email-note" /></label>
-      <div className="hint" id="email-note">Your email is how you sign in, so it can't be changed here.</div>
+      <div className="hint" id="email-note">Your email is how you sign in. Ask an admin to change it.</div>
       <label>Display name<input value={name} onChange={(e) => setName(e.target.value)} required /></label>
       <Message notice={notice} />
       <button className="btn" disabled={name.trim() === me.display_name}>Save name</button>
@@ -110,10 +110,14 @@ export function Profile(props: { me: Me; onChange: (me: Me) => void; onTheme: (t
           <h1>Profile</h1>
         </div>
       </div>
-      <div className="panels">
-        <NameForm me={props.me} onChange={props.onChange} />
-        <ThemeForm me={props.me} onTheme={props.onTheme} />
-        <PasswordForm />
+      <div className="panels two">
+        <div className="col">
+          <NameForm me={props.me} onChange={props.onChange} />
+          <ThemeForm me={props.me} onTheme={props.onTheme} />
+        </div>
+        <div className="col">
+          <PasswordForm />
+        </div>
       </div>
     </div>
   );
