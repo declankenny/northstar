@@ -235,6 +235,7 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .ub-in input { width: 100%; font: inherit; text-align: right; color: var(--text); background: var(--bg); border: 1px solid var(--border);
   border-radius: 9px; padding: 8px 12px 8px 24px; }
 .ub-in input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.ub-in input:disabled, .ub-date input:disabled { opacity: .6; cursor: default; }
 .ub-table tr.typed .ub-in input { border-color: var(--accent); background: var(--accent-soft); }
 .ub-table tr.err .ub-in input { border-color: var(--neg); }
 .ub-msg { font-size: 12px; margin-top: 3px; white-space: normal; }

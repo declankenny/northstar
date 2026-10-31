@@ -91,7 +91,7 @@ export function App() {
         ) : route === "notfound" ? (
           <NotFound />
         ) : route === "account" && accountId !== null ? (
-          <AccountPage id={accountId} isAdmin={me?.is_admin ?? false} />
+          <AccountPage key={accountId} id={accountId} isAdmin={me?.is_admin ?? false} />
         ) : !me ? null : route === "types" ? (
           me.is_admin ? <AccountTypes /> : <p className="empty">Only admins can manage account types.</p>
         ) : route === "profile" ? (
