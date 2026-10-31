@@ -112,6 +112,17 @@ def test_command_line_creates_a_user_and_never_prints_the_password(tmp_path, mon
     assert users.main(["create", "admin@example.com", "Again"]) == 1       # duplicate: error, not a crash
 
 
+def test_command_line_creates_the_data_folder_when_it_does_not_exist(tmp_path, monkeypatch):
+    """The default data/ folder is not in a fresh checkout, so the first command must create it,
+    as starting the app does."""
+    target = tmp_path / "data" / "northstar.db"
+    assert not target.parent.exists()
+    monkeypatch.setenv("NORTHSTAR_DB", str(target))
+    monkeypatch.setattr("getpass.getpass", lambda prompt="": PASSWORD)
+    assert users.main(["create", "first@example.com", "First Admin", "--admin"]) == 0
+    assert target.is_file()
+
+
 def test_command_line_refuses_mismatched_passwords(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("NORTHSTAR_DB", str(tmp_path / "cli.db"))
     answers = iter([PASSWORD, "a-different-password"])

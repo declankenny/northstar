@@ -218,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("list", help="list users")
     args = parser.parse_args(argv)
     try:
+        db.prepare(config.database_path())
         with closing(db.connect(config.database_path())) as conn:
             db.migrate(conn)
             if args.command == "create":

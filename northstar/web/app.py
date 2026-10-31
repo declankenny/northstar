@@ -52,7 +52,7 @@ async def require_login(request: Request, call_next):
 
 def create_app(db_path: str | Path | None = None) -> FastAPI:
     db_path = Path(db_path) if db_path else config.database_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db.prepare(db_path)
     with closing(db.connect(db_path)) as conn:
         db.migrate(conn)
 
