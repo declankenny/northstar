@@ -31,6 +31,13 @@ RUN pip uninstall --yes pip
 RUN useradd --system --uid 1000 --no-create-home northstar \
     && mkdir /data && chown northstar:northstar /data
 
+# The version is passed in by whoever builds the image (CI reads it from pyproject.toml), so a build made
+# without it says "unknown" and not a wrong number. Declared late so a new version only rebuilds the last layers.
+ARG VERSION=unknown
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/declankenny/northstar" \
+      org.opencontainers.image.licenses="MIT"
+
 USER northstar
 WORKDIR /data
 VOLUME /data

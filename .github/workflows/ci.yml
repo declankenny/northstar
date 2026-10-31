@@ -104,7 +104,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Build the image
-        run: docker build --tag northstar:ci .
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version: $version"
+          docker build --build-arg VERSION="$version" --tag northstar:ci .
+          label=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' northstar:ci)
+          [ "$label" = "$version" ] || { echo "the image is labelled '$label', pyproject.toml says '$version'"; exit 1; }
       - name: Check that the React app, the migrations and the static files are inside the image
         # The image installs the package into site-packages, so a missing package-data entry would only
         # show up here, as a missing file, and not in the tests, which run from the source tree.

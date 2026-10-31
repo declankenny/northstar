@@ -1,0 +1,40 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Use **synthetic data only**: never paste real balances, account numbers, credentials or a real database file. A security problem belongs in a private report, not here (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Northstar version
+      description: Shown at the bottom of the left-hand menu, for example v0.1.0.
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running it?
+      options: [Docker image, Built from source with Docker, Without Docker]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Go to ...\n2. Click ...\n3. See ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove anything private first.

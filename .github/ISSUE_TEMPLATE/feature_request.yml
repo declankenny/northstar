@@ -1,0 +1,25 @@
+name: Feature request
+description: An idea for something Northstar could do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Northstar deliberately does less than other finance tools. Read the scope in `docs/spec.md` first: it lists what is included, what is not, and the roadmap.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the problem, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Northstar to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried or considered instead?

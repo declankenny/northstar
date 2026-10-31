@@ -265,3 +265,14 @@ export async function fetchUpdate(date?: string): Promise<UpdatePage> {
 export async function saveUpdate(date: string, amounts: Record<number, string>): Promise<UpdatePage> {
   return (await send<UpdatePage>("POST", "/api/balances/update", { date, amounts }))!;
 }
+
+/** The version of the running app, for the footer of the navigation. */
+export async function fetchVersion(): Promise<string> {
+  const response = await fetch("/api/version");
+  if (response.status === 401) {
+    signIn();
+    throw new Error("You are signed out.");
+  }
+  if (!response.ok) throw new Error(`The server answered ${response.status}`);
+  return (await response.json()).version;
+}
