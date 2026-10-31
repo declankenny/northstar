@@ -153,3 +153,45 @@ export async function editBalance(balanceId: number, entry: BalanceEntry): Promi
 export async function deleteBalance(balanceId: number): Promise<AccountPage> {
   return (await send<AccountPage>("DELETE", `/api/balances/${balanceId}`, undefined))!;
 }
+
+/** One row of the Accounts list. last_* are the latest balance, null for an account with none. */
+export type ListedAccount = {
+  id: number;
+  name: string;
+  class_name: "Asset" | "Liability";
+  type_name: string;
+  notes: string | null;
+  balance_count: number;
+  last_date: string | null;
+  last_cents: number | null;
+  days_since: number | null;
+  stale: boolean;
+};
+
+export type ClassTypes = { id: number; name: string; types: TypeChoice[] };
+
+export type AccountList = {
+  closed: boolean;
+  accounts: ListedAccount[]; // grouped by class, then type, then name
+  totals: { assets: number; liabilities: number } | null; // as of today; only for the open list
+  classes: ClassTypes[]; // what the Add account dialog offers
+  today: string;
+};
+
+export type NewAccount = {
+  account_class: "asset" | "liability";
+  name: string;
+  type_id: number;
+  notes: string;
+  amount: string; // typed text; blank adds the account with no balance
+  date: string; // as of; ignored when the amount is blank
+};
+
+export async function fetchAccounts(closed: boolean): Promise<AccountList> {
+  return (await send<AccountList>("GET", `/api/accounts?closed=${closed}`, undefined))!;
+}
+
+/** Answers with the open list, which now includes the new account. */
+export async function addAccount(account: NewAccount): Promise<AccountList> {
+  return (await send<AccountList>("POST", "/api/accounts", account))!;
+}

@@ -90,6 +90,30 @@ def add_balance(conn: sqlite3.Connection, account_id: int, date_text: str | None
     return record_balance(conn, account_id, as_of, cents, note)
 
 
+def add_account_with_balance(conn: sqlite3.Connection, class_slug: str | None, name: str | None,
+                             type_id: int | None, notes: str | None, amount_text: str | None,
+                             date_text: str | None, today: date) -> int:
+    """Add an account, and its first balance when an amount is typed, all or nothing. Returns the id.
+
+    A blank amount adds the account with no balance and the date is ignored. A typed amount with a
+    blank date is as of today. Anything wrong refuses the whole thing, so no half-made account is left.
+    """
+    cls = accounts.get_class_by_slug(conn, class_slug)
+    entry = None
+    if (amount_text or "").strip():
+        entry = (parse_date((date_text or "").strip() or today.isoformat(), today), parse_cents(amount_text))
+    conn.execute("BEGIN")
+    try:
+        account_id = accounts.add_account(conn, name, cls["id"], type_id, notes)
+        if entry:
+            record_balance(conn, account_id, entry[0], entry[1])
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    conn.execute("COMMIT")
+    return account_id
+
+
 def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
     """One balance with its account's name and open state."""
     row = conn.execute(

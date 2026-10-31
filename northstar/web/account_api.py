@@ -10,7 +10,7 @@ from contextlib import closing
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from northstar import accounts, balances, clock, db
+from northstar import accounts, balances, clock, db, networth
 from northstar.errors import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/api")
@@ -55,6 +55,47 @@ class AccountOut(BaseModel):
     today: str               # the server's today(), so the browser never needs its own clock
 
 
+class ListedAccount(BaseModel):
+    id: int
+    name: str
+    class_name: str
+    type_name: str
+    notes: str | None
+    balance_count: int
+    last_date: str | None
+    last_cents: int | None
+    days_since: int | None
+    stale: bool
+
+
+class ClassTypes(BaseModel):
+    id: int
+    name: str
+    types: list[TypeOut]
+
+
+class Totals(BaseModel):
+    assets: int
+    liabilities: int
+
+
+class AccountList(BaseModel):
+    closed: bool
+    accounts: list[ListedAccount]    # grouped by class, then type, then name
+    totals: Totals | None            # as of today, from net_worth_on; only for the open list
+    classes: list[ClassTypes]        # what the Add account dialog offers
+    today: str
+
+
+class NewAccount(BaseModel):
+    account_class: str               # "asset" or "liability"
+    name: str
+    type_id: int
+    notes: str | None = None
+    amount: str | None = None        # typed text; blank adds the account with no balance
+    date: str | None = None          # as of; blank means today
+
+
 class AccountChange(BaseModel):
     name: str
     type_id: int
@@ -85,6 +126,28 @@ def _run(request: Request, action):
 def _page(conn, account_id: int) -> dict:
     today = clock.today()
     return {**accounts.account_page(conn, account_id, today), "today": today.isoformat()}
+
+
+def _list(conn, closed: bool) -> dict:
+    today = clock.today()
+    totals = None if closed else networth.net_worth_on(conn, today)
+    return {"closed": closed, "accounts": accounts.account_rows(conn, today, closed),
+            "totals": totals, "classes": accounts.classes_with_types(conn), "today": today.isoformat()}
+
+
+@router.get("/accounts", response_model=AccountList)
+def list_accounts(request: Request, closed: bool = False):
+    return _run(request, lambda conn: _list(conn, closed))
+
+
+@router.post("/accounts", response_model=AccountList, status_code=201)
+def add_account(body: NewAccount, request: Request):
+    """Adds the account (and its first balance, if an amount is typed) and answers with the open list."""
+    def action(conn):
+        balances.add_account_with_balance(conn, body.account_class, body.name, body.type_id, body.notes,
+                                          body.amount, body.date, clock.today())
+        return _list(conn, closed=False)
+    return _run(request, action)
 
 
 @router.get("/accounts/{account_id}", response_model=AccountOut)

@@ -77,7 +77,7 @@ export function AccountPage({ id }: { id: number }) {
     return () => document.removeEventListener("click", close);
   }, [menu]);
 
-  if (error) return <p className="empty">Could not load this account. {error} <a href="/accounts">Back to Accounts</a></p>;
+  if (error) return <p className="empty">Could not load this account. {error} <a href="#/accounts">Back to Accounts</a></p>;
   if (!account) return <p className="empty">Loading…</p>;
 
   /** Every change answers with the account as it now is. */
@@ -99,7 +99,7 @@ export function AccountPage({ id }: { id: number }) {
 
   return (
     <div className="acct">
-      <div className="crumb"><a href="/accounts">Accounts</a> / {account.name}</div>
+      <div className="crumb"><a href="#/accounts">Accounts</a> / {account.name}</div>
       <div className="top">
         <div>
           <div className="titlerow">
@@ -262,7 +262,7 @@ export function AccountPage({ id }: { id: number }) {
       {dialog?.kind === "delete-account" && (
         <ConfirmDialog title={`Delete ${account.name}?`} confirmLabel="Delete account" danger onClose={() => setDialog(null)}
           text={`This permanently deletes the account${account.balance_count ? ` and its ${plural(account.balance_count, "balance")}` : ""}. Net worth history changes to match. This can't be undone. To hide an account but keep its history, close it instead.`}
-          onConfirm={async () => { await deleteAccount(id); window.location.href = "/accounts"; }} />
+          onConfirm={async () => { await deleteAccount(id); window.location.hash = "#/accounts"; }} />
       )}
     </div>
   );

@@ -64,6 +64,42 @@ def balance_history(conn: sqlite3.Connection, account_id: int) -> list[sqlite3.R
     ).fetchall()
 
 
+def account_rows(conn: sqlite3.Connection, today: date, closed: bool = False) -> list[dict]:
+    """The Accounts list: open accounts, or closed ones, each with its latest balance, how old that
+    is and whether it is stale for its type. Grouped by class, then type, then name.
+
+    Closed accounts are never flagged stale: their last balance is meant to be old.
+    """
+    rows = conn.execute(
+        "SELECT a.id, a.name, c.name AS class_name, t.name AS type_name, t.stale_after_days, a.notes, a.is_open, "
+        "  (SELECT COUNT(*) FROM balances b WHERE b.account_id = a.id) AS balance_count, "
+        "  (SELECT b.as_of_date FROM balances b WHERE b.account_id = a.id "
+        "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_date, "
+        "  (SELECT b.amount_cents FROM balances b WHERE b.account_id = a.id "
+        "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_cents "
+        "FROM accounts a "
+        "JOIN account_classes c ON c.id = a.class_id "
+        "JOIN account_types t ON t.id = a.type_id "
+        "WHERE a.is_open = ? "
+        "ORDER BY a.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
+        (0 if closed else 1,),
+    ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["days_since"] = staleness.days_since(row["last_date"], today)
+        item["stale"] = bool(row["is_open"]) and staleness.is_stale(row["last_date"], today, row["stale_after_days"])
+        result.append(item)
+    return result
+
+
+def classes_with_types(conn: sqlite3.Connection) -> list[dict]:
+    """Both classes with the types each offers, for the Add account dialog."""
+    classes = conn.execute("SELECT id, name FROM account_classes ORDER BY id").fetchall()
+    return [{"id": c["id"], "name": c["name"], "types": [dict(t) for t in types_for_class(conn, c["id"])]}
+            for c in classes]
+
+
 def account_page(conn: sqlite3.Connection, account_id: int, today: date) -> dict:
     """Everything the account page shows: the summary, every balance (newest first), and the types
     to offer in its Edit and Change class dialogs (its own class's, and the other class's)."""
