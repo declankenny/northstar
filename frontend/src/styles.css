@@ -140,13 +140,15 @@ button.link.danger { color: var(--neg); }
 .hist .r { text-align: right; }
 .hist tr:hover td { background: var(--pill); }
 .rownote { color: var(--muted); font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-/* Edit and Delete float over the right end of the row, so they take no column of their own */
+/* Edit and Delete float over the right end of the row, so they take no column of their own. They are hidden
+   with opacity, not display: none, so they stay in the tab order and appear when the keyboard reaches them. */
 .row-actions { position: relative; width: 0; padding: 0 !important; }
-.row-actions span { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--pill-active);
+.row-actions span { opacity: 0; pointer-events: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--pill-active);
   border: 1px solid var(--border); border-radius: 8px; padding: 2px 4px; }
-tr:hover .row-actions span, tr:focus-within .row-actions span { display: block; }
+tr:hover .row-actions span, tr:focus-within .row-actions span { opacity: 1; pointer-events: auto; }
 .row-actions button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 6px; }
 .row-actions button:hover { color: var(--text); }
+.row-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--text); }
 .row-actions button.bad:hover { color: var(--neg); }
 
 .actions-bar { display: flex; gap: 8px; position: relative; }

@@ -224,8 +224,8 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
                         <td className="row-actions">
                           {open && (
                             <span>
-                              <button onClick={() => setDialog({ kind: "balance", editing: b })}>Edit</button>
-                              <button className="bad" onClick={() => setDialog({ kind: "delete-balance", index: i })}>Delete</button>
+                              <button aria-label={`Edit balance of ${formatDate(b.as_of_date)}`} onClick={() => setDialog({ kind: "balance", editing: b })}>Edit</button>
+                              <button className="bad" aria-label={`Delete balance of ${formatDate(b.as_of_date)}`} onClick={() => setDialog({ kind: "delete-balance", index: i })}>Delete</button>
                             </span>
                           )}
                         </td>

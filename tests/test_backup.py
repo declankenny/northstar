@@ -162,6 +162,42 @@ def test_restore_refuses_a_database_from_something_else(tmp_path):
         backup.restore_backup(other, tmp_path / "restored.db")
 
 
+def _database_missing(tables, conn, tmp_path, name):
+    """A copy of the household database with the named sign-in tables dropped. Foreign keys are off
+    in a plain connection, so users can be dropped while sessions still refers to it."""
+    broken = tmp_path / name
+    source = sqlite3.connect(path_of(conn))
+    target = sqlite3.connect(broken)
+    source.backup(target)
+    source.close()
+    for table in tables:
+        target.execute(f"DROP TABLE {table}")
+    target.commit()
+    target.close()
+    return broken
+
+
+@pytest.mark.parametrize("tables", [("sessions",), ("users",), ("sessions", "users")])
+def test_restore_refuses_a_backup_that_cannot_run_the_app(conn, household, tmp_path, tables):
+    """Without users and sessions the app fails on its first sign-in, and the migrations apply nothing
+    because the initial migration is already recorded, so such a file must never be accepted."""
+    broken = _database_missing(tables, conn, tmp_path, "broken.bak")
+    target = tmp_path / "restored.db"
+    with pytest.raises(ValidationError, match="not a valid Northstar database"):
+        backup.restore_backup(broken, target)
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("tables", [("sessions",), ("users",), ("sessions", "users")])
+def test_backup_refuses_a_database_that_cannot_run_the_app(conn, household, tmp_path, tables):
+    broken = _database_missing(tables, conn, tmp_path, "broken.db")
+    out = tmp_path / "out.bak"
+    with pytest.raises(ValidationError, match="not a valid Northstar database"):
+        backup.create_backup(broken, out)
+    assert not out.exists()
+    assert not [p for p in tmp_path.iterdir() if ".partial" in p.name]       # nothing half-written is left
+
+
 def test_restore_refuses_a_missing_backup(tmp_path):
     with pytest.raises(ValidationError, match="no file"):
         backup.restore_backup(tmp_path / "missing.bak", tmp_path / "restored.db")

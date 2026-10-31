@@ -6,6 +6,13 @@ from pathlib import Path
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
+def prepare(path: str | Path) -> None:
+    """Create the database's folder if it is missing. SQLite creates the file but not the folder, and the
+    default data/ folder is not in a fresh checkout. Starting the app and the command line tools both
+    call this before opening the database."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+
 def connect(path: str | Path) -> sqlite3.Connection:
     """Open the database with foreign keys on. SQLite has them off by default."""
     conn = sqlite3.connect(path, isolation_level=None)

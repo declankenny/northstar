@@ -21,7 +21,9 @@ from pathlib import Path
 from northstar import config
 from northstar.errors import ValidationError
 
-REQUIRED_TABLES = {"account_classes", "account_types", "accounts", "balances", "schema_migrations"}
+# Every table of the initial schema. A file without the sign-in tables cannot run the app, and the
+# migrations would apply nothing to it, because the initial migration is already recorded.
+REQUIRED_TABLES = {"account_classes", "account_types", "accounts", "balances", "schema_migrations", "users", "sessions"}
 SIDECAR_SUFFIXES = ("-journal", "-wal", "-shm")   # files SQLite keeps beside the database
 
 
