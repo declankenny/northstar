@@ -195,3 +195,24 @@ export async function fetchAccounts(closed: boolean): Promise<AccountList> {
 export async function addAccount(account: NewAccount): Promise<AccountList> {
   return (await send<AccountList>("POST", "/api/accounts", account))!;
 }
+
+/** One account type. account_count is how many accounts use it: a type in use can't be deleted or change class. */
+export type TypeRow = { id: number; name: string; class_id: number; class_name: string; stale_after_days: number; account_count: number };
+export type TypeList = { types: TypeRow[]; classes: { id: number; name: string }[] };
+
+export async function fetchTypes(): Promise<TypeList> {
+  return (await send<TypeList>("GET", "/api/types", undefined))!;
+}
+
+/** Each of these answers with the whole list as it now is. */
+export async function addType(type: { name: string; class_id: number; stale_after_days: number }): Promise<TypeList> {
+  return (await send<TypeList>("POST", "/api/types", type))!;
+}
+
+export async function editType(id: number, type: { name: string; class_id: number; stale_after_days: number }): Promise<TypeList> {
+  return (await send<TypeList>("PATCH", `/api/types/${id}`, type))!;
+}
+
+export async function deleteType(id: number): Promise<TypeList> {
+  return (await send<TypeList>("DELETE", `/api/types/${id}`, undefined))!;
+}

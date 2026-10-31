@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from northstar.errors import ValidationError
+from northstar.errors import NotFoundError, ValidationError
 
 
 def list_types(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -25,7 +25,7 @@ def get_type(conn: sqlite3.Connection, type_id: int) -> sqlite3.Row:
         (type_id,),
     ).fetchone()
     if row is None:
-        raise ValidationError("That account type no longer exists.")
+        raise NotFoundError("That account type no longer exists.")
     return row
 
 

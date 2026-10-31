@@ -7,7 +7,6 @@ Ideas and follow-ups that are decided to wait. `docs/spec.md` stays the source o
 - **OIDC login (for example Pocket ID).** Modeled on Mealie: client ID and secret and the discovery URL from environment variables, users matched by email, refused unless the IdP says the email is verified, optional user and admin groups from a groups claim, new users created only if signup is enabled. Needs `authlib` and `httpx`, a nullable `password_hash` (or an `auth_method` column), and a test against a fake provider. Local login can then be switched off.
 - **First-run setup page** that creates the first admin when there are no users. Only with a guard such as a one-time token printed in the container log, because it is an unauthenticated route that grants admin.
 - **Login rate limit or lockout** after repeated failures. Not needed on a local-only app, but needed before the app is exposed beyond the household.
-- **Gate some screens on `is_admin`** (for example Account types) once there is a reason.
 
 ## Frontend
 

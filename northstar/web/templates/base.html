@@ -14,7 +14,7 @@
       <a href="/">Dashboard</a>
       <a href="/balances/update">Update balances</a>
       <a href="/accounts">Accounts</a>
-      <a href="/types">Account types</a>
+      {% if request.state.user.is_admin %}<a href="/types">Account types</a>{% endif %}
       <form method="post" action="/logout" class="signout">
         <a href="/app/#/profile">{{ request.state.user.display_name }}</a>
         <button>Sign out</button>

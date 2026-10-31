@@ -1,14 +1,15 @@
-"""Account types screen."""
+"""Account types screen (classic page). Admins only, like the new one."""
 
 from contextlib import closing
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
 from northstar import account_types, db
 from northstar.errors import ValidationError
+from northstar.web.auth_routes import require_admin
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 def _int(value: str | None) -> int | None:

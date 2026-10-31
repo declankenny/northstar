@@ -6,7 +6,7 @@
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
 {% if not types %}
-<p>There are no {{ cls.name|lower }} types yet. <a href="/types">Add one on the Account types page</a> first.</p>
+<p>There are no {{ cls.name|lower }} types yet. {% if request.state.user.is_admin %}<a href="/types">Add one on the Account types page</a> first.{% else %}Ask an admin to add one.{% endif %}</p>
 {% else %}
 <form method="post" action="{{ '/accounts/' ~ account.id if account else '/accounts' }}" class="stack">
   {% if not account %}<input type="hidden" name="class" value="{{ cls.name|lower }}">{% endif %}

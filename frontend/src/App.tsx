@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchMe, type Me, type Theme, updateMe } from "./api";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
+import { AccountTypes } from "./AccountTypes";
 import { Dashboard } from "./Dashboard";
 import { Profile } from "./Profile";
 import { accountIdFromHash, routeFromHash } from "./routes";
@@ -64,9 +65,13 @@ export function App() {
         <a className={route === "dashboard" ? "active" : ""} href="#/">Dashboard</a>
         <a href="/balances/update">Update balances</a>
         <a className={route === "accounts" || route === "account" ? "active" : ""} href="#/accounts">Accounts</a>
-        <div className="group">Admin</div>
-        <a href="/types">Account types</a>
-        {me?.is_admin && <a className={route === "users" ? "active" : ""} href="#/users">Users</a>}
+        {me?.is_admin && (
+          <>
+            <div className="group">Admin</div>
+            <a className={route === "types" ? "active" : ""} href="#/types">Account types</a>
+            <a className={route === "users" ? "active" : ""} href="#/users">Users</a>
+          </>
+        )}
         <div className="spacer" />
         <a className={route === "profile" ? "active" : ""} href="#/profile">{me ? me.display_name : "Profile"}</a>
         <form method="post" action="/logout">
@@ -77,10 +82,12 @@ export function App() {
         {route === "dashboard" ? (
           <Dashboard />
         ) : route === "accounts" ? (
-          <AccountsList />
+          <AccountsList isAdmin={me?.is_admin ?? false} />
         ) : route === "account" && accountId !== null ? (
-          <AccountPage id={accountId} />
-        ) : !me ? null : route === "profile" ? (
+          <AccountPage id={accountId} isAdmin={me?.is_admin ?? false} />
+        ) : !me ? null : route === "types" ? (
+          me.is_admin ? <AccountTypes /> : <p className="empty">Only admins can manage account types.</p>
+        ) : route === "profile" ? (
           <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
         ) : me.is_admin ? (
           <Users me={me} />

@@ -181,3 +181,27 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .list .badge { margin-left: 8px; }
 .card .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
 .card .two label { margin-top: 12px; }
+
+/* Account types: a card per class, a row menu instead of inline edits */
+.stack { margin-top: 20px; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; padding-bottom: 4px; }
+.gcard { flex: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.gcard.asset { border-top: 3px solid var(--pos); }
+.gcard.liability { border-top: 3px solid var(--neg); }
+.gh { display: flex; align-items: baseline; gap: 10px; padding: 14px 16px 6px; }
+.gt { font-size: 16px; font-weight: 650; }
+.gh .m { font-size: 13px; }
+.gcard table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 14px; }
+.gcard th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; letter-spacing: .05em; text-transform: uppercase;
+  padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.gcard th.r, .gcard td.r { text-align: right; }
+.gcard td { padding: 11px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.gcard tr.row:last-child td { border-bottom: 0; }
+.gcard tr.row:hover td { background: var(--pill); }
+.gcard td.name { font-weight: 560; }
+.gcard td.k { text-align: right; padding: 6px 12px; position: relative; }
+.kebab { background: none; border: 0; color: var(--muted); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 7px; }
+.kebab:hover, .kebab.on { background: var(--pill-active); color: var(--text); }
+.menu.rowmenu { top: 40px; right: 12px; width: 250px; }
+.menu button:disabled { color: var(--muted); cursor: default; }
+.menu button:disabled:hover { background: none; }
+.menu button .why { font-size: 13px; }
