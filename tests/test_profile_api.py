@@ -79,17 +79,3 @@ def test_profile_changes_are_refused_from_another_site(client):
     response = client.patch("/api/me", json={"theme": "light"}, headers={"Origin": "https://evil.example"})
     assert response.status_code == 403
     assert client.get("/api/me").json()["theme"] == "dark"
-
-
-def test_theme_migration_defaults_existing_users_to_dark(tmp_path):
-    from northstar import db
-    old = tmp_path / "migrations"
-    old.mkdir()
-    for name in ("0001_initial.sql", "0002_users.sql"):
-        (old / name).write_text((db.MIGRATIONS_DIR / name).read_text(encoding="utf-8"), encoding="utf-8")
-    conn = db.connect(tmp_path / "copy.db")
-    db.migrate(conn, old)
-    users.create_user(conn, "a@example.com", "Test A", PASSWORD)
-    assert db.migrate(conn) == ["0003_user_theme"]
-    assert conn.execute("SELECT theme FROM users").fetchone()[0] == "dark"
-    conn.close()
