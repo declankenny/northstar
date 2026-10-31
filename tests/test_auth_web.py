@@ -37,7 +37,7 @@ def test_login_page_and_stylesheet_are_public(anon):
 
 def test_login_page_is_the_styled_standalone_page(anon):
     page = anon.get("/login").text
-    assert "/static/login.css" in page and "northstar-theme" in page and "Sign in" in page
+    assert "/static/login.css" in page and "/static/theme.js" in page and "Sign in" in page
     assert "<nav>" not in page
 
 

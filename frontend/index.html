@@ -4,13 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Northstar</title>
-    <script>
-      // Apply the saved theme before the first paint, so a light-mode user never sees a dark flash.
-      try {
-        var saved = localStorage.getItem("northstar-theme");
-        if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
-      } catch (e) {}
-    </script>
+    <!-- Applies the saved theme before the first paint. A shared file served by the Python app (see
+         northstar/web/static/theme.js), because the content security policy allows no inline script. -->
+    <script src="/static/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>
