@@ -211,3 +211,34 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 /* Users rows share the Account types row menu */
 .tablepanel td.k { text-align: right; padding: 6px 12px; position: relative; }
 .tablepanel th:last-child { width: 170px; }
+
+/* Update balances: fits the window; only the cards scroll, and the footer with Save stays in view */
+.ub { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.ub .top { margin-top: 6px; align-items: flex-end; }
+.ub-date { display: flex; align-items: center; gap: 8px; }
+.ub-date label { color: var(--muted); font-size: 13px; }
+.ub-date input, .ub-step { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 9px; padding: 8px 11px; }
+.ub-step { cursor: pointer; padding: 8px 12px; }
+.ub-step:disabled { opacity: .45; cursor: default; }
+.ub-banner { margin: 14px 0 0; padding: 10px 14px; border-radius: 9px; }
+.ub-banner.ok { background: rgba(127, 176, 138, .14); }
+.ub-banner.bad { background: rgba(217, 138, 128, .14); }
+.ub .stack { padding-bottom: 16px; }
+.ub-table td { padding: 8px 16px; vertical-align: middle; }
+.ub-name { font-weight: 560; }
+.ub-sub { font-size: 12px; }
+.ub-in { position: relative; width: 170px; margin-left: auto; }
+.ub-in i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); font-style: normal; pointer-events: none; }
+.ub-in input { width: 100%; font: inherit; text-align: right; color: var(--text); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 9px; padding: 8px 12px 8px 24px; }
+.ub-in input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.ub-table tr.typed .ub-in input { border-color: var(--accent); background: var(--accent-soft); }
+.ub-table tr.err .ub-in input { border-color: var(--neg); }
+.ub-msg { font-size: 12px; margin-top: 3px; white-space: normal; }
+.ub-foot { margin: 0 -36px; padding: 12px 36px; display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--border); background: var(--sidebar); }
+.ub-status { flex: 1; color: var(--muted); }
+.ub-status b { color: var(--text); }
+.ub-discard { border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
+.ub-discard:hover { color: var(--text); }
+.ub-foot .btn { align-self: center; }
