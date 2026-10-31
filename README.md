@@ -4,7 +4,7 @@
 
 Self-hosted tracker of household net worth over time. `docs/spec.md` is the source of truth for scope.
 
-> **Pre-release.** Northstar has no published release or Docker image yet. Run it from a checkout and with synthetic data only, and do not expose it to the internet: security headers and the other release hardening in `docs/spec.md` ("Release and distribution") are not built yet. All data in the tests and examples is synthetic.
+> **Pre-release.** Northstar has no published release or Docker image yet. Run it from a checkout and with synthetic data only, and do not expose it to the internet: the remaining release hardening in `docs/spec.md` ("Release and distribution") is not built yet. All data in the tests and examples is synthetic.
 
 Licensed under the [MIT License](LICENSE).
 

@@ -105,14 +105,17 @@ jobs:
           persist-credentials: false
       - name: Build the image
         run: docker build --tag northstar:ci .
-      - name: Check that the React app and the migration are inside the image
+      - name: Check that the React app, the migrations and the static files are inside the image
         # The image installs the package into site-packages, so a missing package-data entry would only
         # show up here, as a missing file, and not in the tests, which run from the source tree.
         run: >
           docker run --rm northstar:ci python -c
           "import pathlib, northstar.web.app as a, northstar.db as d;
           assert (pathlib.Path(a.SPA_DIR) / 'index.html').is_file(), 'the React app is not in the image';
-          assert (d.MIGRATIONS_DIR / '0001_initial.sql').is_file(), 'the migration is not in the image';
+          assert (d.MIGRATIONS_DIR / '0001_initial.sql').is_file(), 'the first migration is not in the image';
+          assert (d.MIGRATIONS_DIR / '0002_login_attempts.sql').is_file(), 'the second migration is not in the image';
+          assert (a.WEB_DIR / 'static' / 'theme.js').is_file(), 'the theme script is not in the image';
+          assert (a.WEB_DIR / 'static' / 'login.css').is_file(), 'the sign-in stylesheet is not in the image';
           print('image ok')"
       - name: Scan the image for vulnerabilities (Trivy)
         # Fails on a HIGH or CRITICAL finding that has a fix available, in the operating system packages
