@@ -33,7 +33,7 @@ def fixed_time(monkeypatch):
 def recorded(path):
     conn = sqlite3.connect(path)
     try:
-        return [row[0] for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version")]
+        return [row[0] for row in conn.execute("SELECT version FROM sys_schema_migrations ORDER BY version")]
     finally:
         conn.close()
 
@@ -174,7 +174,7 @@ def test_a_newer_database_is_refused_unchanged_and_without_a_backup(tmp_path):
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO schema_migrations (version) VALUES ('0003_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0003_from_the_future')")
     conn.commit()
     conn.close()
     before = path.read_bytes()
@@ -190,7 +190,7 @@ def test_the_app_refuses_to_start_on_a_newer_database(tmp_path):
     path = tmp_path / "web.db"
     db.upgrade(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO schema_migrations (version) VALUES ('0009_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0009_from_the_future')")
     conn.commit()
     conn.close()
     with pytest.raises(ValidationError, match="newer version"):
@@ -202,7 +202,7 @@ def test_a_database_from_before_the_squash_still_opens_and_is_backed_up(tmp_path
     this version's own second migration, so they must be recognised and not mistaken for a newer database."""
     path = database_at_an_older_version(tmp_path, older_migrations)
     conn = sqlite3.connect(path)
-    conn.executemany("INSERT INTO schema_migrations (version) VALUES (?)", [("0002_users",), ("0003_user_theme",)])
+    conn.executemany("INSERT INTO sys_schema_migrations (version) VALUES (?)", [("0002_users",), ("0003_user_theme",)])
     conn.commit()
     conn.close()
     assert db.upgrade(path) == ["0002_login_attempts"]
@@ -261,7 +261,7 @@ def test_the_command_line_refuses_a_newer_database(cli, tmp_path, capsys):
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO schema_migrations (version) VALUES ('0009_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0009_from_the_future')")
     conn.commit()
     conn.close()
     assert cli(path, "list") == 1

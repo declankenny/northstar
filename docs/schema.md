@@ -61,7 +61,7 @@ erDiagram
         text address_hash "nullable"
         text attempted_at "UTC"
     }
-    schema_migrations {
+    sys_schema_migrations {
         text version PK
         text applied_at "UTC"
     }
@@ -71,7 +71,7 @@ erDiagram
 
 - Money is integer cents. A balance date is a calendar date, `YYYY-MM-DD`, with no timezone. Row timestamps are UTC text, `YYYY-MM-DDTHH:MM:SSZ`.
 - `is_open` and `is_admin` are 0 or 1, because SQLite has no boolean type.
-- `schema_migrations` is created by the migrator in `northstar/db.py`, not by a migration file.
+- `sys_schema_migrations` is created by the migration runner in `northstar/db.py`, not by a migration file. Releases before 0.2 called it `schema_migrations`, and the runner renames it (keeping its rows) the first time a newer version starts, after a backup.
 - `login_attempts` has no relationships on purpose: it keeps only hashes of the email and the address, never the typed values.
 
 ## What the diagram cannot show

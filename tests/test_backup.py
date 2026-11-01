@@ -230,7 +230,7 @@ def test_a_backup_from_before_the_latest_migration_is_still_valid_and_upgrades(t
 
 def test_a_backup_that_records_no_known_migration_is_refused(conn, tmp_path):
     empty = _database_missing((), conn, tmp_path, "no_record.bak")
-    sqlite3.connect(empty).execute("DELETE FROM schema_migrations").connection.commit()
+    sqlite3.connect(empty).execute("DELETE FROM sys_schema_migrations").connection.commit()
     with pytest.raises(ValidationError, match="not a valid Northstar database"):
         backup.check_database(empty)
 
