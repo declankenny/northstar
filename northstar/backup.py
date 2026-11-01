@@ -108,6 +108,20 @@ def _sidecars(db_path: Path) -> list[Path]:
     return [p for p in (db_path.with_name(db_path.name + s) for s in SIDECAR_SUFFIXES) if p.exists()]
 
 
+def _free_aside_names(olds: list[Path], stamp: str) -> list[Path]:
+    """Names to move the files in olds to, none of which exists yet. The timestamp has one-second
+    resolution, so a second restore in the same second (or a repeated local hour at a daylight-saving
+    change) gets a -2, -3 and so on instead of replacing the earlier file. The database and its journal
+    files share one suffix, so they stay together. os.replace overwrites, so the check is made here."""
+    attempt = 1
+    while True:
+        suffix = f".before-restore-{stamp}" + (f"-{attempt}" if attempt > 1 else "")
+        names = [old.with_name(old.name + suffix) for old in olds]
+        if not any(name.exists() for name in names):
+            return names
+        attempt += 1
+
+
 def restore_backup(backup_path: str | Path, db_path: str | Path, replace: bool = False) -> dict:
     """Put a backup in place as the database. The app must be stopped.
 
@@ -124,11 +138,11 @@ def restore_backup(backup_path: str | Path, db_path: str | Path, replace: bool =
             f"{db_path} already exists. Stop the app and use --replace to move it aside and restore.")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     temp = _copy_to_temp(backup_path, db_path.parent, db_path.name)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    olds = ([db_path] if db_path.exists() else []) + _sidecars(db_path)
+    asides = _free_aside_names(olds, datetime.now().strftime("%Y%m%d-%H%M%S"))
     moved: list[tuple[Path, Path]] = []
     try:
-        for old in ([db_path] if db_path.exists() else []) + _sidecars(db_path):
-            aside = old.with_name(f"{old.name}.before-restore-{stamp}")
+        for old, aside in zip(olds, asides):
             os.replace(old, aside)
             moved.append((old, aside))
         os.replace(temp, db_path)
