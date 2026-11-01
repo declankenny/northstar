@@ -2,7 +2,7 @@
 
 Status: version 0.x, so anything may change between minor versions. Northstar tracks a household's net worth over time from balances entered by hand, and every feature described here is built.
 
-This file records what the code cannot tell you: what Northstar is for, what it will and will not do, and the rules its data must obey. The reasons behind decisions are in `decisions.md`. Screens, layouts and endpoints are not described anywhere in prose: the code and its tests are the reference. A change to a rule here ships in the same pull request as the code. Anything marked TODO is unresolved: do not guess it.
+This file records what the code cannot tell you: what Northstar is for, what it will and will not do, and the rules its data must obey. The reasons behind decisions are in `decisions.md`, and what is planned but not built is in `roadmap.md`. Screens, layouts and endpoints are not described anywhere in prose: the code and its tests are the reference. A change to a rule here ships in the same pull request as the code. Anything marked TODO is unresolved: do not guess it.
 
 ## Purpose
 
@@ -18,14 +18,21 @@ Track a household's financial position over time. Northstar records dated balanc
 - Closing an account to declutter, without losing its history.
 - Local sign-in for a household: admins and ordinary users, a light or dark theme.
 
-**Not included**
+**Not included yet**
 
+These are left out of the current release to keep it focused, not ruled out. Their GitHub milestones say when, and `roadmap.md` says why.
+
+- CSV import and export.
+- Multiple currencies and locale-aware number and date formatting. Until then, every amount is US dollars in integer cents and no currency is stored. A balance held in another currency or in crypto is entered as its US dollar value at the time. Existing balances stay valid when currencies arrive because they are US dollars.
 - Transactions, opening balances and reconciliation.
-- Investment positions or holdings.
-- Budgets, categories and goals.
-- Bank feeds. SimpleFIN is the first planned addition (see "Roadmap").
-- Multiple currencies. Every amount is US dollars in integer cents and no currency is stored. A balance held in another currency or in crypto is entered as its US dollar value at the time. Supporting currencies later means a currency on each account, a rate per balance and rounding rules, which is a separate design. Existing balances stay valid because they default to USD.
+- Bank feeds, starting with SimpleFIN.
+- Budgets and categories.
+- Savings goals (backlog: might be done, not yet scheduled).
 - Loan schedules. A loan is a liability with a balance history.
+
+**Not planned**
+
+- Investment positions or holdings, tax reporting and bill payment. Each would need a concrete use case and its own design.
 
 ## Data model
 
@@ -79,7 +86,7 @@ Track a household's financial position over time. Northstar records dated balanc
 
 Northstar is open source (MIT, copyright Declan Kenny) for other people to run themselves, so it must be secure by default, have defined releases and be easy to install and update.
 
-- **Versions**: semantic versions. Before 1.0 anything may change, with notes. Database migrations, environment variables and the backup format always count as breaking and are always in the release notes.
+- **Versions**: semantic versions. Before 1.0 anything may change, with notes, and database migrations, environment variables and the backup format always count as breaking. From 1.0, the compatibility promise in `roadmap.md` defines what is breaking. Migrations, environment variable changes and backup format changes are always in the release notes.
 - **Branches**: `main` is development. `release/X.Y` is cut when `vX.Y.0` is tagged, starting with `release/0.1`. A fix lands on `main` first and is backported, and each release is a tag `vX.Y.Z`. Only the latest minor version gets fixes until 1.0. Once the repo is public, rulesets protect `main`, `release/*` and `v*` tags: a pull request and passing checks are required, with no force-push or deletion.
 - **Version**: written once, as `version` in `pyproject.toml`. The app reads it from the installed package and shows it, and the image carries it as a label. Tests fail if the frontend package declares another version or the changelog has no section for it, and the release workflow refuses a tag that does not match it or a changelog section that still has a TODO date.
 - **Changelog**: `CHANGELOG.md`, in the Keep a Changelog format, has a section per version with a **Breaking** heading that says what an upgrade means for migrations, environment variables and the backup format, which always count as breaking before 1.0. A release's section is its release notes.
@@ -97,17 +104,6 @@ Northstar is open source (MIT, copyright Declan Kenny) for other people to run t
 - Tests use synthetic data only.
 - Everything under "Release and distribution" is built, the image is published, and an install and an upgrade have been rehearsed from the published image on a clean machine.
 
-## Roadmap (not built)
+## Roadmap
 
-Tracked as GitHub issues and milestones once the repo is public. In rough order:
-
-1. **v0.2**: a first-run setup page that creates the first admin, with a React sign-in screen. The setup page is an unauthenticated route that grants admin, so it needs a guard such as a one-time token printed in the container log.
-2. **OIDC sign-in** (for example Pocket ID): client settings from environment variables, users matched by verified email, optional admin and user groups, local sign-in switchable off. Needs a nullable password hash and a test against a fake provider.
-3. **SimpleFIN daily balances pull.** What a real response taught us: every connected account returned a balance, including accounts with no positions or usable transactions. A balances-only request option skips transactions. The Bridge expects about 24 requests a day or fewer and can disable a token that exceeds that. The access URL is a credential and a setup token can be claimed once. Transactions come back for only about the last day unless a start date is passed, and positions came back for only some accounts.
-4. Page state in the address (for example the date on the update screen).
-5. More charts, such as the mix of assets by type, and a phone layout for balance entry.
-6. Loan details such as rate and payment, CSV import and export, and retirement planning (not yet scoped). Transactions only if a real need appears.
-
-## Open decisions
-
-- TODO: how the roadmap is kept in git (issues, milestones, a project board).
+What is planned but not built, and why, is in `roadmap.md`, which also says how the roadmap is kept in GitHub milestones and issues. A planned feature moves into this file in the pull request that builds it.

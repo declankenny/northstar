@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Northstar deliberately does less than other finance tools. Read the scope in `docs/spec.md` first: it lists what is included, what is not, and the roadmap.
+        Northstar deliberately does less than other finance tools. Read `docs/roadmap.md` first: it lists what is planned, the backlog, and what is not planned. `docs/spec.md` describes what is built today.
   - type: textarea
     id: problem
     attributes:
