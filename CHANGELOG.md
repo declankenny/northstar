@@ -6,6 +6,10 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Added
+
+- A roadmap, `docs/roadmap.md`, that sets out where Northstar is going, what 1.0 will promise, and why the planned releases come in their order. The releases themselves are GitHub milestones.
+
 ## [0.1.1] - TODO release date
 
 Fixes to backup, restore and the sign-in page.

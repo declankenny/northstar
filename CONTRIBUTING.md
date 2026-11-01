@@ -4,7 +4,7 @@ Thank you for thinking about it. Northstar is a small project kept by one person
 
 ## Before you start
 
-- **Open an issue first** for anything bigger than a typo or an obvious bug fix, and say what you want to change and why. Northstar deliberately does less than other finance tools (no transactions, no budgets, no bank feeds yet), and `docs/spec.md` says what is in and out of scope. A good idea that does not fit may be declined, and it is kinder to find that out before you write the code.
+- **Open an issue first** for anything bigger than a typo or an obvious bug fix, and say what you want to change and why. Northstar deliberately does less than other finance tools (no transactions, no budgets, no bank feeds yet). `docs/spec.md` says what is in scope today, and `docs/roadmap.md` says what is planned, what is on the backlog and what is not planned. A good idea that does not fit may be declined, and it is kinder to find that out before you write the code.
 - **`docs/spec.md` is the source of truth** for scope and rules. A change to a rule changes the spec in the same pull request, and a decision worth explaining gets an entry in `docs/decisions.md`, also in the same pull request.
 - **Security problems are not issues.** Report them privately, as described in [SECURITY.md](SECURITY.md).
 
