@@ -6,6 +6,20 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+## [0.1.1] - TODO release date
+
+Fixes to backup, restore and the sign-in page.
+
+### Breaking
+
+Nothing: no migrations, no environment variables and no change to the backup format.
+
+### Fixed
+
+- Restoring twice within the same second no longer overwrites the database the first restore set aside. Each gets its own name, with `-2`, `-3` and so on added when needed (#54).
+- A backup that records a migration but is missing the table it creates, such as `login_attempts`, is now refused, instead of being restored and then failing at the first sign-in. Backups made before a migration remain valid (#53).
+- The sign-in page and the app now have a browser tab icon. The icon files are served from `/static/` without signing in (#50).
+
 ## [0.1.0] - 2026-10-31
 
 The first release.
