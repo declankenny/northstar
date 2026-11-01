@@ -1,6 +1,6 @@
 # Northstar: specification
 
-Status: pre-release. Northstar tracks a household's net worth over time from balances entered by hand, and every feature described here is built. The first release, v0.1.0, is waiting on the security work under "Release and distribution".
+Status: version 0.x, so anything may change between minor versions. Northstar tracks a household's net worth over time from balances entered by hand, and every feature described here is built.
 
 This file records what the code cannot tell you: what Northstar is for, what it will and will not do, and the rules its data must obey. The reasons behind decisions are in `decisions.md`. Screens, layouts and endpoints are not described anywhere in prose: the code and its tests are the reference. A change to a rule here ships in the same pull request as the code. Anything marked TODO is unresolved: do not guess it.
 

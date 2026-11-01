@@ -6,7 +6,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-## [0.1.0] - TODO release date
+## [0.1.0] - 2026-10-31
 
 The first release.
 
