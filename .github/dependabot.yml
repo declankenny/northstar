@@ -32,6 +32,13 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Node only builds the frontend. A new Node major is moved to deliberately, onto an LTS line,
+    # rather than proposed here: Dependabot offers every new major, including ones that are never
+    # LTS or are already out of support. Digest and patch updates within the current major still
+    # arrive. See docs/decisions.md.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
 
   # The actions in .github/workflows, which are pinned by commit SHA.
   - package-ecosystem: github-actions
