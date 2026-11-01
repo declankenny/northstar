@@ -5,6 +5,7 @@ restore it, and check that net worth comes out exactly as the hand calculation s
 """
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -235,6 +236,56 @@ def test_replace_moves_the_old_database_aside_and_never_deletes_it(conn, househo
         assert old.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 7   # the extra account is safe
     finally:
         old.close()
+
+
+class FixedClock:
+    """Stands in for backup.datetime, so every restore gets the same timestamp."""
+    @classmethod
+    def now(cls):
+        return datetime(2026, 11, 1, 12, 0, 0)
+
+
+def _account_names(path: Path) -> set[str]:
+    check = sqlite3.connect(path)
+    try:
+        return {row[0] for row in check.execute("SELECT name FROM accounts")}
+    finally:
+        check.close()
+
+
+def test_two_restores_in_the_same_second_keep_both_old_databases(conn, household, tmp_path, monkeypatch):
+    """Each restore preserves the database it replaces. The second must not overwrite the first's copy."""
+    monkeypatch.setattr(backup, "datetime", FixedClock)
+    good = make_backup(conn, tmp_path)
+    live = path_of(conn)
+    add_account(conn, "First marker", 1, "Checking")
+    conn.close()
+    first = backup.restore_backup(good, live, replace=True)["moved_aside"][0]
+
+    again = db.connect(live)
+    add_account(again, "Second marker", 1, "Checking")
+    again.close()
+    second = backup.restore_backup(good, live, replace=True)["moved_aside"][0]
+
+    assert first != second and ".before-restore-20261101-120000" in second
+    assert "First marker" in _account_names(Path(first))
+    assert "Second marker" in _account_names(Path(second))
+    assert "First marker" not in _account_names(live) and "Second marker" not in _account_names(live)
+
+
+def test_a_preservation_file_that_already_exists_is_never_overwritten(conn, household, tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "datetime", FixedClock)
+    good = make_backup(conn, tmp_path)
+    live = path_of(conn)
+    conn.close()
+    taken = live.with_name(live.name + ".before-restore-20261101-120000")
+    taken.write_bytes(b"an earlier preserved database")
+    stale = live.with_name(live.name + "-journal")                       # a journal is moved aside with it
+    stale.write_bytes(b"stale journal")
+    result = backup.restore_backup(good, live, replace=True)
+    assert taken.read_bytes() == b"an earlier preserved database"
+    assert {Path(p).name[len(live.name):] for p in result["moved_aside"]} == {
+        ".before-restore-20261101-120000-2", "-journal.before-restore-20261101-120000-2"}
 
 
 def test_leftover_journal_files_are_moved_aside_so_they_cannot_corrupt_the_restore(conn, household, tmp_path):
