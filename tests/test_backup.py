@@ -199,6 +199,42 @@ def test_backup_refuses_a_database_that_cannot_run_the_app(conn, household, tmp_
     assert not [p for p in tmp_path.iterdir() if ".partial" in p.name]       # nothing half-written is left
 
 
+def test_restore_refuses_a_backup_that_records_a_migration_but_lacks_its_table(conn, household, tmp_path):
+    """login_attempts comes from migration 0002. A file that records 0002 without it fails on the first sign-in."""
+    broken = _database_missing(("login_attempts",), conn, tmp_path, "broken.bak")
+    live = tmp_path / "live.db"
+    live.write_bytes(b"existing")
+    with pytest.raises(ValidationError, match="not a valid Northstar database"):
+        backup.restore_backup(broken, live, replace=True)
+    assert live.read_bytes() == b"existing" and [p.name for p in tmp_path.iterdir() if "before-restore" in p.name] == []
+
+
+def test_a_backup_from_before_the_latest_migration_is_still_valid_and_upgrades(tmp_path):
+    """A backup that records only migration 0001 has no login_attempts, and that is correct: it must
+    still restore, so upgrades and rollbacks work, and the app's start-up migration then adds the table."""
+    first_only = tmp_path / "migrations"
+    first_only.mkdir()
+    first = sorted(db.MIGRATIONS_DIR.glob("*.sql"))[0]
+    (first_only / first.name).write_text(first.read_text(encoding="utf-8"), encoding="utf-8")
+    old = tmp_path / "old.bak"
+    old_conn = db.connect(old)
+    assert db.migrate(old_conn, first_only) == [first.stem]
+    old_conn.close()
+
+    assert backup.check_database(old)["migrations"] == 1
+    restored = tmp_path / "restored.db"
+    backup.restore_backup(old, restored)
+    assert db.upgrade(restored) == [f.stem for f in sorted(db.MIGRATIONS_DIR.glob("*.sql"))[1:]]
+    assert backup.check_database(restored)["migrations"] == len(list(db.MIGRATIONS_DIR.glob("*.sql")))
+
+
+def test_a_backup_that_records_no_known_migration_is_refused(conn, tmp_path):
+    empty = _database_missing((), conn, tmp_path, "no_record.bak")
+    sqlite3.connect(empty).execute("DELETE FROM schema_migrations").connection.commit()
+    with pytest.raises(ValidationError, match="not a valid Northstar database"):
+        backup.check_database(empty)
+
+
 def test_restore_refuses_a_missing_backup(tmp_path):
     with pytest.raises(ValidationError, match="no file"):
         backup.restore_backup(tmp_path / "missing.bak", tmp_path / "restored.db")
