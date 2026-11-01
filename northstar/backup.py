@@ -21,14 +21,32 @@ from pathlib import Path
 from northstar import config
 from northstar.errors import ValidationError
 
-# Every table of the initial schema. A file without the sign-in tables cannot run the app, and the
-# migrations would apply nothing to it, because the initial migration is already recorded.
-REQUIRED_TABLES = {"account_classes", "account_types", "accounts", "balances", "schema_migrations", "users", "sessions"}
 SIDECAR_SUFFIXES = ("-journal", "-wal", "-shm")   # files SQLite keeps beside the database
 
 
 def _uri(path: Path, mode: str) -> str:
     return f"{path.resolve().as_uri()}?mode={mode}"
+
+
+def _tables_for(recorded: set[str]) -> set[str]:
+    """The tables a database must have, given the migrations it records: those the recorded migrations
+    create, found by running them on an empty in-memory database. A file missing one of them cannot run
+    the app, and the migrations would apply nothing to it, because they are already recorded. Deriving
+    them means a new migration needs no list updated here, and a backup made before a migration (which
+    records fewer) is still valid, so upgrades and rollbacks keep working. Migrations this version does
+    not know are skipped: the app refuses those databases itself (see db.upgrade)."""
+    from northstar.db import MIGRATIONS_DIR    # db imports this module, so it is imported here
+    files = [file for file in sorted(MIGRATIONS_DIR.glob("*.sql")) if file.stem in recorded]
+    if not files:
+        raise sqlite3.DatabaseError("no known migration is recorded")
+    scratch = sqlite3.connect(":memory:")
+    try:
+        for file in files:
+            scratch.executescript(file.read_text(encoding="utf-8"))
+        return {row[0] for row in scratch.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")}
+    finally:
+        scratch.close()
 
 
 def check_database(path: str | Path) -> dict:
@@ -46,7 +64,10 @@ def check_database(path: str | Path) -> dict:
         raise not_valid from None
     try:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-        if not REQUIRED_TABLES <= tables:
+        if "schema_migrations" not in tables:
+            raise not_valid
+        recorded = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
+        if not _tables_for(recorded) <= tables:
             raise not_valid
         if conn.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
             raise ValidationError(f"{path} failed SQLite's integrity check.")
@@ -108,6 +129,20 @@ def _sidecars(db_path: Path) -> list[Path]:
     return [p for p in (db_path.with_name(db_path.name + s) for s in SIDECAR_SUFFIXES) if p.exists()]
 
 
+def _free_aside_names(olds: list[Path], stamp: str) -> list[Path]:
+    """Names to move the files in olds to, none of which exists yet. The timestamp has one-second
+    resolution, so a second restore in the same second (or a repeated local hour at a daylight-saving
+    change) gets a -2, -3 and so on instead of replacing the earlier file. The database and its journal
+    files share one suffix, so they stay together. os.replace overwrites, so the check is made here."""
+    attempt = 1
+    while True:
+        suffix = f".before-restore-{stamp}" + (f"-{attempt}" if attempt > 1 else "")
+        names = [old.with_name(old.name + suffix) for old in olds]
+        if not any(name.exists() for name in names):
+            return names
+        attempt += 1
+
+
 def restore_backup(backup_path: str | Path, db_path: str | Path, replace: bool = False) -> dict:
     """Put a backup in place as the database. The app must be stopped.
 
@@ -124,11 +159,11 @@ def restore_backup(backup_path: str | Path, db_path: str | Path, replace: bool =
             f"{db_path} already exists. Stop the app and use --replace to move it aside and restore.")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     temp = _copy_to_temp(backup_path, db_path.parent, db_path.name)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    olds = ([db_path] if db_path.exists() else []) + _sidecars(db_path)
+    asides = _free_aside_names(olds, datetime.now().strftime("%Y%m%d-%H%M%S"))
     moved: list[tuple[Path, Path]] = []
     try:
-        for old in ([db_path] if db_path.exists() else []) + _sidecars(db_path):
-            aside = old.with_name(f"{old.name}.before-restore-{stamp}")
+        for old, aside in zip(olds, asides):
             os.replace(old, aside)
             moved.append((old, aside))
         os.replace(temp, db_path)
