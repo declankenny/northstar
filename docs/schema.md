@@ -83,6 +83,7 @@ A person checks these against the migrations, because the test cannot read them 
 | `account_classes` | Exactly two rows, Asset (1) and Liability (2), inserted by the first migration. |
 | `account_types` | `UNIQUE (id, class_id)`, which is the target of the composite key from `accounts`. The first migration also inserts the 11 starting types. |
 | `accounts` | `FOREIGN KEY (type_id, class_id)` references `account_types (id, class_id)` with `ON UPDATE RESTRICT ON DELETE RESTRICT`, so an account's type always belongs to its class, and a type in use can be neither deleted nor moved to another class. |
+| `accounts` (name) | Unique index `accounts_name_unique` on `name COLLATE NOCASE`: a name is unique ignoring ASCII case, across open and closed accounts. |
 | `balances` | `UNIQUE (account_id, as_of_date)`: one balance per account per date. `as_of_date` must be a valid date. Deleting an account cascades to its balances. |
 | `sessions` | Deleting a user cascades to their sessions. Index `sessions_user_id` on `user_id`. |
 | `login_attempts` | Indexes on `(email_hash, attempted_at)` and `(address_hash, attempted_at)`. |

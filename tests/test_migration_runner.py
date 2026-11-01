@@ -9,6 +9,8 @@ import pytest
 from northstar import backup, db
 from northstar.errors import ValidationError
 
+REAL = sorted(file.stem for file in db.MIGRATIONS_DIR.glob("*.sql"))    # grows with every migration
+
 LEGACY_LEDGER = (
     "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, "
     "applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))")
@@ -30,6 +32,7 @@ INSERT INTO accounts_new (id, name, class_id, type_id, is_open, notes, created_a
     SELECT id, name, class_id, type_id, is_open, notes, created_at FROM accounts;
 DROP TABLE accounts;
 ALTER TABLE accounts_new RENAME TO accounts;
+CREATE UNIQUE INDEX accounts_name_unique ON accounts (name COLLATE NOCASE);
 """
 
 
@@ -105,23 +108,23 @@ def migrated(tmp_path):
 
 def test_a_rebuild_migration_keeps_every_row_and_does_not_cascade_to_the_children(tmp_path, migrated):
     """Dropping accounts with foreign keys on would delete its balances. Rebuilding is only safe with them off."""
-    folder = folder_with(tmp_path, **{"0003_accounts_colour": REBUILD_ACCOUNTS})
-    assert db.migrate(migrated, folder) == ["0003_accounts_colour"]
+    folder = folder_with(tmp_path, **{"0004_accounts_colour": REBUILD_ACCOUNTS})
+    assert db.migrate(migrated, folder) == ["0004_accounts_colour"]
     assert counts(migrated) == [1, 1]
     assert "colour" in {row["name"] for row in migrated.execute("PRAGMA table_info(accounts)")}
     assert foreign_keys(migrated) == 1
-    assert migrated.execute("SELECT COUNT(*) FROM sys_schema_migrations").fetchone()[0] == 3
+    assert migrated.execute("SELECT COUNT(*) FROM sys_schema_migrations").fetchone()[0] == len(REAL) + 1
 
 
 def test_a_migration_without_the_marker_still_runs_with_foreign_keys_on(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0003_probe": "CREATE TABLE probe (flag INTEGER);\n"
+    folder = folder_with(tmp_path, **{"0004_probe": "CREATE TABLE probe (flag INTEGER);\n"
                                                      "INSERT INTO probe SELECT foreign_keys FROM pragma_foreign_keys;"})
     db.migrate(migrated, folder)
     assert migrated.execute("SELECT flag FROM probe").fetchone()[0] == 1
 
 
 def test_a_rebuild_migration_runs_with_foreign_keys_off(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0003_probe": "-- northstar: rebuild\nCREATE TABLE probe (flag INTEGER);\n"
+    folder = folder_with(tmp_path, **{"0004_probe": "-- northstar: rebuild\nCREATE TABLE probe (flag INTEGER);\n"
                                                      "INSERT INTO probe SELECT foreign_keys FROM pragma_foreign_keys;"})
     db.migrate(migrated, folder)
     assert migrated.execute("SELECT flag FROM probe").fetchone()[0] == 0
@@ -131,28 +134,28 @@ def test_a_rebuild_migration_runs_with_foreign_keys_off(tmp_path, migrated):
 def test_a_rebuild_that_fails_while_copying_is_rolled_back_whole(tmp_path, migrated):
     broken = REBUILD_ACCOUNTS.replace("ALTER TABLE accounts_new RENAME TO accounts;",
                                       "INSERT INTO nowhere VALUES (1);")
-    folder = folder_with(tmp_path, **{"0003_broken": broken})
+    folder = folder_with(tmp_path, **{"0004_broken": broken})
     before = objects(migrated)
     with pytest.raises(sqlite3.Error):
         db.migrate(migrated, folder)
     assert counts(migrated) == [1, 1] and objects(migrated) == before     # accounts is back, accounts_new is gone
-    assert migrated.execute("SELECT COUNT(*) FROM sys_schema_migrations").fetchone()[0] == 2
+    assert migrated.execute("SELECT COUNT(*) FROM sys_schema_migrations").fetchone()[0] == len(REAL)
     assert foreign_keys(migrated) == 1 and not migrated.in_transaction
 
 
 def test_a_rebuild_that_loses_rows_other_tables_point_at_is_refused_at_validation(tmp_path, migrated):
     lossy = REBUILD_ACCOUNTS.replace("FROM accounts;", "FROM accounts WHERE 0;")
-    folder = folder_with(tmp_path, **{"0003_lossy": lossy})
+    folder = folder_with(tmp_path, **{"0004_lossy": lossy})
     with pytest.raises(ValidationError, match="foreign key"):
         db.migrate(migrated, folder)
     assert counts(migrated) == [1, 1]
     assert "colour" not in {row["name"] for row in migrated.execute("PRAGMA table_info(accounts)")}
-    assert migrated.execute("SELECT COUNT(*) FROM sys_schema_migrations").fetchone()[0] == 2
+    assert migrated.execute("SELECT COUNT(*) FROM sys_schema_migrations").fetchone()[0] == len(REAL)
     assert foreign_keys(migrated) == 1 and not migrated.in_transaction
 
 
 def test_foreign_keys_stay_off_if_they_were_off_and_on_if_they_were_on(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0003_accounts_colour": REBUILD_ACCOUNTS})
+    folder = folder_with(tmp_path, **{"0004_accounts_colour": REBUILD_ACCOUNTS})
     migrated.execute("PRAGMA foreign_keys = OFF")
     db.migrate(migrated, folder)
     assert foreign_keys(migrated) == 0
@@ -160,7 +163,7 @@ def test_foreign_keys_stay_off_if_they_were_off_and_on_if_they_were_on(tmp_path,
 
 def test_migrations_cannot_start_inside_a_transaction(tmp_path, migrated):
     """PRAGMA foreign_keys does nothing inside one, so a rebuild there would silently run with them on."""
-    folder = folder_with(tmp_path, **{"0003_accounts_colour": REBUILD_ACCOUNTS})
+    folder = folder_with(tmp_path, **{"0004_accounts_colour": REBUILD_ACCOUNTS})
     migrated.execute("BEGIN")
     with pytest.raises(ValidationError, match="transaction"):
         db.migrate(migrated, folder)
@@ -186,16 +189,16 @@ ALTER TABLE balances_new RENAME TO balances;
 
 
 def test_a_rebuild_that_keeps_its_indexes_and_views_is_accepted(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0003_index": INDEX_AND_VIEW,
-                                      "0004_rebuild": REBUILD_BALANCES + INDEX_AND_VIEW})
+    folder = folder_with(tmp_path, **{"0004_index": INDEX_AND_VIEW,
+                                      "0005_rebuild": REBUILD_BALANCES + INDEX_AND_VIEW})
     db.migrate(migrated, folder)
     assert {("index", "balances_note"), ("view", "big_balances")} <= objects(migrated)
 
 
 def test_a_rebuild_that_silently_loses_an_index_or_a_view_is_refused(tmp_path, migrated):
     """Dropping a table takes its indexes with it, and a view over it stops working. Both are easy to forget."""
-    folder = folder_with(tmp_path, **{"0003_index": INDEX_AND_VIEW, "0004_rebuild": REBUILD_BALANCES})
-    db.migrate(migrated, folder_with(tmp_path / "first", **{"0003_index": INDEX_AND_VIEW}))
+    folder = folder_with(tmp_path, **{"0004_index": INDEX_AND_VIEW, "0005_rebuild": REBUILD_BALANCES})
+    db.migrate(migrated, folder_with(tmp_path / "first", **{"0004_index": INDEX_AND_VIEW}))
     before = objects(migrated)
     with pytest.raises(ValidationError, match="balances_note"):
         db.migrate(migrated, folder)
@@ -222,12 +225,12 @@ def test_a_v0_1_database_is_behind_because_its_ledger_must_move(tmp_path):
 def test_upgrading_a_v0_1_database_backs_it_up_first_then_renames_the_ledger_keeping_its_history(tmp_path):
     path = v01_database(tmp_path / "data" / "northstar.db")
     original = sqlite3.connect(path).execute("SELECT version, applied_at FROM schema_migrations").fetchall()
-    assert db.upgrade(path) == []                                  # no migration file ran, the ledger moved
+    assert db.upgrade(path) == REAL[2:]                            # only the migrations after 0002 ran, and the ledger moved
     [saved] = backups_of(path)
     assert list(ledgers(saved)) == ["schema_migrations"]            # the backup is the state before the rename
     assert list(ledgers(path)) == ["sys_schema_migrations"]
     moved = sqlite3.connect(path).execute("SELECT version, applied_at FROM sys_schema_migrations").fetchall()
-    assert sorted(moved) == sorted(original)
+    assert sorted(moved)[:len(original)] == sorted(original)                # the old rows came across unchanged, then the new migration
     conn = db.connect(path)
     assert counts(conn) == [1, 1] and db.schema_state(conn) == "current"
     conn.close()
@@ -253,7 +256,7 @@ def test_a_pre_upgrade_backup_still_validates_and_restores(tmp_path):
     assert backup.check_database(saved)["migrations"] == 2
     target = tmp_path / "restored" / "northstar.db"
     backup.restore_backup(saved, target)
-    assert db.upgrade(target) == [] and list(ledgers(target)) == ["sys_schema_migrations"]
+    assert db.upgrade(target) == REAL[2:] and list(ledgers(target)) == ["sys_schema_migrations"]
 
 
 def test_a_backup_validates_at_each_migration_boundary(tmp_path):
@@ -264,7 +267,7 @@ def test_a_backup_validates_at_each_migration_boundary(tmp_path):
     db.upgrade(path, first_only)
     assert backup.create_backup(path, tmp_path / "at-1.db")["migrations"] == 1
     db.upgrade(path)
-    assert backup.create_backup(path, tmp_path / "at-2.db")["migrations"] == 2
+    assert backup.create_backup(path, tmp_path / "at-2.db")["migrations"] == len(REAL)
 
 
 def test_a_backup_missing_a_required_table_is_still_refused_under_the_new_ledger(tmp_path):

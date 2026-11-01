@@ -146,14 +146,31 @@ def _check_type(conn: sqlite3.Connection, type_id: int | None, class_id: int) ->
     return type_id
 
 
+def _check_name_free(conn: sqlite3.Connection, name: str, own_id: int | None = None) -> None:
+    """Names are unique among all accounts, open or closed, ignoring ASCII case (SQLite NOCASE, the same comparison as
+    the unique index, which enforces it even if this is bypassed). `name` is already trimmed. A closed account keeps its
+    name, so the message says when that is who holds it."""
+    holder = conn.execute(
+        "SELECT name, is_open FROM accounts WHERE name = ? COLLATE NOCASE AND id IS NOT ?", (name, own_id)).fetchone()
+    if holder is None:
+        return
+    if holder["is_open"]:
+        raise ValidationError(f'An account named "{holder["name"]}" already exists. Choose a different name.')
+    raise ValidationError(
+        f'A closed account named "{holder["name"]}" already exists. Choose a different name, '
+        "or rename the closed account first.")
+
+
 def add_account(conn: sqlite3.Connection, name: str | None, class_id: int,
                 type_id: int | None, notes: str | None = None) -> int:
-    name = _clean_name(name)
-    type_id = _check_type(conn, type_id, class_id)
-    return conn.execute(
-        "INSERT INTO accounts (name, class_id, type_id, notes) VALUES (?, ?, ?, ?)",
-        (name, class_id, type_id, _clean_notes(notes)),
-    ).lastrowid
+    with db.write_transaction(conn):
+        name = _clean_name(name)
+        type_id = _check_type(conn, type_id, class_id)
+        _check_name_free(conn, name)
+        return conn.execute(
+            "INSERT INTO accounts (name, class_id, type_id, notes) VALUES (?, ?, ?, ?)",
+            (name, class_id, type_id, _clean_notes(notes)),
+        ).lastrowid
 
 
 def update_account(conn: sqlite3.Connection, account_id: int, name: str | None,
@@ -163,6 +180,7 @@ def update_account(conn: sqlite3.Connection, account_id: int, name: str | None,
         account = get_account(conn, account_id)
         name = _clean_name(name)
         type_id = _check_type(conn, type_id, account["class_id"])
+        _check_name_free(conn, name, account_id)
         conn.execute(
             "UPDATE accounts SET name = ?, type_id = ?, notes = ? WHERE id = ?",
             (name, type_id, _clean_notes(notes), account_id),

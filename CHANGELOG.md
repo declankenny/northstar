@@ -8,10 +8,12 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Breaking
 
+- Migrations: account names are now unique, ignoring case, across open and closed accounts. An existing database with duplicate names keeps the lowest id's name and renames each later duplicate to "Name (2)", "Name (3)" and so on (the smallest number no account uses), so check your account list after upgrading. A checked backup is made first.
 - Migrations: the record of applied migrations is renamed from `schema_migrations` to `sys_schema_migrations` the first time this version starts, after a checked backup in `backups/`. Rolling back to an older image needs that backup restored, as for any migration. No environment variable changes, and backups made before the upgrade still restore.
 
 ### Added
 
+- Account names are unique, and adding or renaming to a taken name says so, including when a closed account holds it (#82).
 - A migration runner that can rebuild tables safely, with foreign keys off and checked before commit, as groundwork for the v0.2 schema changes (#85).
 
 - A roadmap, `docs/roadmap.md`, that sets out where Northstar is going, what 1.0 will promise, and why the planned releases come in their order. The releases themselves are GitHub milestones.

@@ -35,7 +35,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: rebuild migrations with foreign keys off around the transaction, one migration executor shared by real upgrades and by the scratch replay in `backup._tables_for`, the `schema_migrations` to `sys_schema_migrations` rename done after the validated backup, and recovery from a stray empty old ledger. No schema change beyond the ledger name.
 - Tests: rebuild failures while copying and validating; `foreign_keys` restored after success and failure; indexes and views preserved; backup validation of a pre-upgrade backup, after each migration boundary, and a backup missing a required table still rejected; the rollback scenario with the original v0.1 code; a future-version database with a stray empty old ledger refused without mutation; two empty, malformed and two populated ledgers refused without deletion; failure during cleanup leaves no partial recovery.
-- [ ] Merged
+- [x] Merged
 
 ### 2. Migration A: unique account names
 
