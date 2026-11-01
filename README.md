@@ -4,7 +4,7 @@
 
 Self-hosted tracker of household net worth over time. You enter the balance of each account by hand, and Northstar shows net worth and each account's history. It is one container and one SQLite file, with no bank feeds and no transactions. `docs/spec.md` is the source of truth for scope.
 
-> **Pre-release.** Northstar has no published release or Docker image yet, so run it from a checkout, with synthetic data only, and do not expose it to the internet. Once v0.1.0 is published, [docs/operating.md](docs/operating.md) is the guide to installing it from the image, behind HTTPS, and to upgrading and backing it up. All data in the tests and examples is synthetic.
+Northstar is version 0.x, so anything may change between minor versions, and the [changelog](CHANGELOG.md) says what. To run it for your household, [docs/operating.md](docs/operating.md) is the guide to installing the published image, putting it behind HTTPS, and upgrading and backing it up. Everything below is for trying it out and for development, with synthetic data. All data in the tests and examples is synthetic.
 
 Licensed under the [MIT License](LICENSE). To report a vulnerability, see [SECURITY.md](SECURITY.md). To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md), and for what changed in each version, [CHANGELOG.md](CHANGELOG.md).
 

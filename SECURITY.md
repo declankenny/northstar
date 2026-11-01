@@ -6,7 +6,7 @@ Northstar holds a household's financial position, so security reports are taken 
 
 Northstar is pre-1.0. Until 1.0, **only the latest minor version** (once 0.2 exists, that means 0.2.x and not 0.1.x) gets security fixes. A fix lands on `main` first and is then backported to the `release/X.Y` branch and published as a new patch release. If you run an older minor version, the fix is to update.
 
-There is no published release yet. Until v0.1.0, run Northstar only with synthetic data and do not expose it to the internet.
+Run Northstar behind HTTPS, as described in [docs/operating.md](docs/operating.md), and do not expose its plain HTTP port to the internet.
 
 ## Reporting a vulnerability
 
