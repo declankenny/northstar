@@ -6,7 +6,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-## [0.1.1] - TODO release date
+## [0.1.1] - 2026-11-01
 
 Fixes to backup, restore and the sign-in page.
 
