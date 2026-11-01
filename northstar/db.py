@@ -3,6 +3,7 @@
 import re
 import sqlite3
 from contextlib import closing, contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from northstar import backup, clock
@@ -16,6 +17,13 @@ KEEP_BACKUPS = 5
 # Recorded by databases made before the migrations were squashed into one. Their numbers are higher than this
 # version's own second migration, so without this list such a database would look like it came from a newer version.
 LEGACY_MIGRATIONS = frozenset({"0002_users", "0003_user_theme"})
+# The record of applied migrations. Releases before 0.2 called it schema_migrations. The runner moves it (see
+# _prepare_ledger) because every table the app owns apart from the data itself carries the sys_ prefix.
+LEDGER = "sys_schema_migrations"
+OLD_LEDGER = "schema_migrations"
+LEDGER_COLUMNS = [("version", 1), ("applied_at", 0)]    # name and primary key position, in order
+# A migration whose first line is this is run with foreign keys off, so it can drop and recreate a table.
+REBUILD_MARK = "-- northstar: rebuild"
 BACKUP_NAME = re.compile(r"^pre-migration-.+-(\d{8}-\d{6})\.db$")
 
 
@@ -59,44 +67,128 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
-def migrate(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS_DIR) -> list[str]:
+@dataclass(frozen=True)
+class Ledger:
+    """What the database's record of applied migrations looks like, read without changing anything."""
+    recorded: set[str]
+    rename: bool = False      # the history is in the old ledger, which must be renamed
+    drop_old: bool = False    # an empty old ledger is left over (see _inspect_ledgers) and must be dropped
+
+
+def _refuse_ledger(reason: str) -> ValidationError:
+    return ValidationError(
+        f"The database has a migration ledger that this version cannot use: {reason}. Nothing was changed or deleted. "
+        "Restore a backup made before the problem, or ask for help before editing the database by hand.")
+
+
+def _inspect_ledgers(conn: sqlite3.Connection) -> Ledger:
+    """Classify the migration record, read-only. Two ledgers exist when an older app was started on a database the
+    newer one had already migrated: it creates an empty schema_migrations, fails to migrate, and leaves that behind.
+    That empty old ledger beside a valid populated new one is the only combination that is cleaned up. Everything else
+    that is not one valid ledger is refused, because guessing which history is true could lose data."""
+    present = [name for name in (LEDGER, OLD_LEDGER) if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone()]
+    versions = {}
+    for name in present:
+        columns = [(row[1], row[5]) for row in conn.execute(f"PRAGMA table_info({name})")]
+        if columns != LEDGER_COLUMNS:
+            raise _refuse_ledger(f"{name} does not have the columns {', '.join(c for c, _ in LEDGER_COLUMNS)}")
+        versions[name] = {row[0] for row in conn.execute(f"SELECT version FROM {name}")}
+    if len(present) == 2:
+        if versions[OLD_LEDGER]:
+            raise _refuse_ledger(f"both {OLD_LEDGER} and {LEDGER} hold history")
+        if not versions[LEDGER]:
+            raise _refuse_ledger(f"both {OLD_LEDGER} and {LEDGER} are empty")
+        return Ledger(versions[LEDGER], drop_old=True)
+    if present == [LEDGER]:
+        return Ledger(versions[LEDGER])
+    if present == [OLD_LEDGER]:
+        return Ledger(versions[OLD_LEDGER], rename=bool(versions[OLD_LEDGER]), drop_old=not versions[OLD_LEDGER])
+    return Ledger(set())
+
+
+def _prepare_ledger(conn: sqlite3.Connection, ledger: Ledger) -> None:
+    """Make the ledger exist under its current name, in one transaction. The renamed table keeps its rows and their
+    times. Callers that migrate a real database have already made the backup."""
+    with write_transaction(conn):
+        if ledger.rename:
+            conn.execute(f"ALTER TABLE {OLD_LEDGER} RENAME TO {LEDGER}")
+        elif ledger.drop_old:
+            conn.execute(f"DROP TABLE {OLD_LEDGER}")
+        conn.execute(
+            f"CREATE TABLE IF NOT EXISTS {LEDGER} ("
+            "version TEXT PRIMARY KEY, "
+            "applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))"
+        )
+
+
+def _kept_objects(conn: sqlite3.Connection) -> set[tuple[str, str]]:
+    """The indexes, views and triggers. Dropping a table silently takes its indexes and triggers with it."""
+    return {(row[0], row[1]) for row in conn.execute(
+        "SELECT type, name FROM sqlite_master WHERE type IN ('index', 'view', 'trigger') AND name NOT LIKE 'sqlite_%'")}
+
+
+def _check_rebuild(conn: sqlite3.Connection, name: str, kept: set[tuple[str, str]]) -> None:
+    """Run before a rebuild commits. Any failure here rolls the migration back."""
+    if conn.execute("PRAGMA foreign_key_check").fetchall():
+        raise ValidationError(f"Migration {name} left rows that break the foreign key rules, so it was rolled back.")
+    if [tuple(row) for row in conn.execute("PRAGMA integrity_check")] != [("ok",)]:
+        raise ValidationError(f"Migration {name} failed SQLite's integrity check, so it was rolled back.")
+    lost = sorted(object_name for _, object_name in kept - _kept_objects(conn))
+    if lost:
+        raise ValidationError(
+            f"Migration {name} lost {', '.join(lost)}: recreate every index, view and trigger it dropped. It was rolled back.")
+
+
+def _apply(conn: sqlite3.Connection, file: Path) -> None:
+    """Run one migration file and record it, in one transaction. A file marked as a rebuild runs with foreign keys
+    off, because dropping a table with them on would delete rows in the tables that point at it. The pragma does
+    nothing inside a transaction, so it is set first, and put back and verified whatever happens."""
+    sql = file.read_text(encoding="utf-8")
+    script = f"BEGIN;\n{sql}\nINSERT INTO {LEDGER} (version) VALUES ('{file.stem}');"
+    rebuild = sql.startswith(REBUILD_MARK)
+    keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+    kept = _kept_objects(conn) if rebuild else set()
+    if rebuild:
+        conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.executescript(script)
+        if rebuild:
+            _check_rebuild(conn, file.stem, kept)
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    finally:
+        if rebuild:
+            conn.execute(f"PRAGMA foreign_keys = {'ON' if keys else 'OFF'}")
+            if conn.execute("PRAGMA foreign_keys").fetchone()[0] != keys:
+                raise RuntimeError("Foreign key enforcement could not be restored after a rebuild migration.")
+
+
+def migrate(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS_DIR, only: set[str] | None = None) -> list[str]:
     """Apply any migration files not yet recorded. Returns the versions applied.
 
-    Each file runs in its own transaction, together with the row that records it.
+    This is the one executor: real upgrades and the scratch replay in backup._tables_for both use it. Each file runs
+    in its own transaction, together with the row that records it. The ledger is brought to its current name first.
+    `only` limits it to the named migrations, which is how a backup's recorded history is replayed.
     """
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS schema_migrations ("
-        "version TEXT PRIMARY KEY, "
-        "applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))"
-    )
-    done = {row["version"] for row in conn.execute("SELECT version FROM schema_migrations")}
+    if conn.in_transaction:
+        raise ValidationError("Migrations cannot run inside a transaction: the caller must finish it first.")
+    ledger = _inspect_ledgers(conn)
+    _prepare_ledger(conn, ledger)
     applied = []
     for file in sorted(migrations_dir.glob("*.sql")):
-        if file.stem in done:
+        if file.stem in ledger.recorded or (only is not None and file.stem not in only):
             continue
-        script = (
-            "BEGIN;\n"
-            + file.read_text(encoding="utf-8")
-            + f"\nINSERT INTO schema_migrations (version) VALUES ('{file.stem}');\nCOMMIT;"
-        )
-        try:
-            conn.executescript(script)
-        except Exception:
-            if conn.in_transaction:
-                conn.execute("ROLLBACK")
-            raise
+        _apply(conn, file)
         applied.append(file.stem)
     return applied
 
 
 def _known(migrations_dir: Path) -> set[str]:
     return {file.stem for file in migrations_dir.glob("*.sql")}
-
-
-def _recorded(conn: sqlite3.Connection) -> set[str]:
-    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'").fetchone():
-        return set()
-    return {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
 
 
 def _number(version: str) -> int:
@@ -113,12 +205,12 @@ def _newer_than_known(recorded: set[str], known: set[str]) -> list[str]:
 
 def schema_state(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS_DIR) -> str:
     """"empty" (a new database), "behind" (a migration is pending), "current", or "ahead" (migrated by a newer version)."""
-    known, recorded = _known(migrations_dir), _recorded(conn)
-    if not recorded:
+    known, ledger = _known(migrations_dir), _inspect_ledgers(conn)
+    if not ledger.recorded:
         return "empty"
-    if _newer_than_known(recorded, known):
+    if _newer_than_known(ledger.recorded, known):
         return "ahead"
-    return "behind" if known - recorded else "current"
+    return "behind" if known - ledger.recorded or ledger.rename else "current"
 
 
 def _backup_folder(path: Path) -> Path:
@@ -126,7 +218,7 @@ def _backup_folder(path: Path) -> Path:
 
 
 def _too_new(path: Path, conn: sqlite3.Connection, migrations_dir: Path) -> ValidationError:
-    newer = ", ".join(_newer_than_known(_recorded(conn), _known(migrations_dir)))
+    newer = ", ".join(_newer_than_known(_inspect_ledgers(conn).recorded, _known(migrations_dir)))
     return ValidationError(
         f"This database was last used by a newer version of Northstar: it has {newer}, which this version "
         f"({VERSION}) does not know. Run the newer version again, or restore a backup made before the upgrade. "
@@ -167,8 +259,9 @@ def prune_backups(folder: Path, keep: int = KEEP_BACKUPS) -> None:
 def upgrade(path: str | Path, migrations_dir: Path = MIGRATIONS_DIR) -> list[str]:
     """Bring the database up to date, safely. Returns the migrations applied.
 
-    A new database is just migrated. A database from a newer version is refused. When a migration is pending, a
-    checked backup of the database as it is goes to backups/ beside it first, and if that fails nothing is migrated.
+    A new database is just migrated. A database from a newer version is refused. When a migration is pending, or the
+    ledger still has its old name, a checked backup of the database as it is goes to backups/ beside it first, and if
+    that fails nothing is changed.
     Old backups are removed only once the migration has worked.
     """
     path = Path(path)

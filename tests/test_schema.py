@@ -29,7 +29,7 @@ def test_seed_classes_and_types(conn):
 
 
 def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn):
-    assert [r["version"] for r in conn.execute("SELECT version FROM schema_migrations ORDER BY version")] == [
+    assert [r["version"] for r in conn.execute("SELECT version FROM sys_schema_migrations ORDER BY version")] == [
         "0001_initial", "0002_login_attempts"]
     assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'login_attempts'").fetchone()[0] == 1
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
@@ -42,7 +42,7 @@ def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn
 def test_a_database_that_recorded_the_old_split_migrations_still_opens(conn):
     """The initial migration used to be three files. A database that applied all three has their names
     recorded, and the one remaining file must be treated as applied, with nothing run again."""
-    conn.executemany("INSERT INTO schema_migrations (version) VALUES (?)", [("0002_users",), ("0003_user_theme",)])
+    conn.executemany("INSERT INTO sys_schema_migrations (version) VALUES (?)", [("0002_users",), ("0003_user_theme",)])
     assert db.migrate(conn) == []
     assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
 
@@ -140,4 +140,4 @@ def test_failed_migration_rolls_back(tmp_path):
         db.migrate(connection, folder)
     tables = {r["name"] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "ok" not in tables
-    assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 0
+    assert connection.execute("SELECT COUNT(*) FROM sys_schema_migrations").fetchone()[0] == 0

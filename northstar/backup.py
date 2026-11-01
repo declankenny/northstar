@@ -35,16 +35,15 @@ def _tables_for(recorded: set[str]) -> set[str]:
     them means a new migration needs no list updated here, and a backup made before a migration (which
     records fewer) is still valid, so upgrades and rollbacks keep working. Migrations this version does
     not know are skipped: the app refuses those databases itself (see db.upgrade)."""
-    from northstar.db import MIGRATIONS_DIR    # db imports this module, so it is imported here
-    files = [file for file in sorted(MIGRATIONS_DIR.glob("*.sql")) if file.stem in recorded]
-    if not files:
+    from northstar import db    # db imports this module, so it is imported here
+    recorded = {version for version in recorded if (db.MIGRATIONS_DIR / f"{version}.sql").is_file()}
+    if not recorded:
         raise sqlite3.DatabaseError("no known migration is recorded")
-    scratch = sqlite3.connect(":memory:")
+    scratch = db.connect(":memory:")
     try:
-        for file in files:
-            scratch.executescript(file.read_text(encoding="utf-8"))
+        db.migrate(scratch, db.MIGRATIONS_DIR, only=recorded)    # the executor upgrades use, so the two cannot differ
         return {row[0] for row in scratch.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")}
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")} - {db.LEDGER}
     finally:
         scratch.close()
 
@@ -54,6 +53,7 @@ def check_database(path: str | Path) -> dict:
 
     Returns counts only: accounts, balances and applied migrations.
     """
+    from northstar import db    # db imports this module, so it is imported here
     path = Path(path)
     if not path.is_file():
         raise ValidationError(f"There is no file at {path}.")
@@ -64,9 +64,10 @@ def check_database(path: str | Path) -> dict:
         raise not_valid from None
     try:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-        if "schema_migrations" not in tables:
+        ledgers = [name for name in (db.LEDGER, db.OLD_LEDGER) if name in tables]    # a backup from before 0.2 has the old one
+        if not ledgers:
             raise not_valid
-        recorded = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
+        recorded = {row[0] for name in ledgers for row in conn.execute(f"SELECT version FROM {name}")}
         if not _tables_for(recorded) <= tables:
             raise not_valid
         if conn.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
@@ -76,7 +77,7 @@ def check_database(path: str | Path) -> dict:
         return {
             "accounts": conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0],
             "balances": conn.execute("SELECT COUNT(*) FROM balances").fetchone()[0],
-            "migrations": conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0],
+            "migrations": len(recorded),
         }
     except sqlite3.Error:
         raise not_valid from None
