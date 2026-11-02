@@ -8,6 +8,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Added
 
+- A register of past imports for admins (#81): Imports under Admin in the sidebar lists each import's date, who made it, the account, the file name and how many balances it added and replaced. Nothing can be undone from it yet.
 - Export one account's balances as a CSV file (#80): Export CSV on an account's page and in its ⋯ menu on the Accounts list. The file has the columns Account ID, Account Name, Balance Date and Balance Amount, oldest first, and importing it back into the same account finds every balance unchanged. Importing also recognises "Balance Amount" as a balance column.
 - Import dated balance history from a CSV file into one account (#79): Import CSV… on an account's page and in its ⋯ menu on the Accounts list. Choose the file, map its columns, review exactly what will be added, replaced or skipped, then import. Semicolon and tab files, European number and date styles, and amounts in parentheses are understood, the date format is chosen when a file could be read two ways, and nothing is written until the final step. Importing cannot be undone yet.
 

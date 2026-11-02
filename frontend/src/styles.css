@@ -98,6 +98,8 @@ button.btn:disabled { opacity: .45; cursor: default; }
 .tablepanel th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 10px; }
 .tablepanel td { padding: 10px; border-top: 1px solid var(--border); vertical-align: middle; }
 .tablepanel td.num { white-space: nowrap; }
+.tablepanel th.r, .tablepanel td.r { text-align: right; }
+.reverted { color: var(--muted); }
 .actions { text-align: right; white-space: nowrap; }
 .inline { display: inline-flex; gap: 10px; align-items: center; margin: 0; }
 .inline input { font: inherit; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--border);

@@ -6,7 +6,7 @@ from northstar.web.app import create_app
 
 from conftest import sign_in, with_db, op
 
-PAGES = ["/dashboard", "/accounts", "/accounts/12", "/balance-update", "/types", "/users", "/profile", "/nope"]
+PAGES = ["/dashboard", "/accounts", "/accounts/12", "/balance-update", "/types", "/users", "/imports", "/profile", "/nope"]
 
 
 @pytest.fixture
