@@ -21,7 +21,12 @@ function AddUserForm({ onAdded }: { onAdded: (user: UserRow) => void }) {
         setName("");
         setPassword("");
         setAdminFlag(false);
-        setNotice({ ok: true, text: `Added ${user.email}.` });
+        setNotice({
+          ok: true,
+          text: user.reactivated
+            ? `Restored ${user.email}. Their earlier history is kept, and the name, password and admin setting you just entered apply.`
+            : `Added ${user.email}.`,
+        });
       },
       (e: Error) => setNotice({ ok: false, text: e.message }),
     );
@@ -200,7 +205,7 @@ export function Users({ me, onMe }: { me: Me; onMe: (me: Me) => void }) {
       )}
       {dialog?.kind === "delete" && (
         <ConfirmDialog title={`Delete ${dialog.user.display_name}?`} confirmLabel="Delete user" danger onClose={() => setDialog(null)}
-          text={`${dialog.user.email} is removed and signed out at once. This can't be undone.`}
+          text={`${dialog.user.email} is signed out at once and can no longer sign in. You can add them again later with the same email.`}
           onConfirm={async () => {
             await deleteUser(dialog.user.id);
             setUsers((list) => list && list.filter((u) => u.id !== dialog.user.id));

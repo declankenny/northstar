@@ -235,7 +235,7 @@ def upgraded(tmp_path):
 
 def test_a_v0_1_database_is_backed_up_then_upgraded_with_every_row_kept(upgraded):
     path, before, ids, applied = upgraded
-    assert applied[-2:] == ["0004_audit_columns_and_system_user", "0005_sys_table_names"]
+    assert applied[:3] == ["0003_unique_account_names", "0004_audit_columns_and_system_user", "0005_sys_table_names"]
     assert len(backups_of(path)) == 1
     conn = db.connect(path)
     after = {table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in before}

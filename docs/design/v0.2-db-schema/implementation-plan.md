@@ -53,7 +53,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: the system user; the four audit columns on `accounts`, `account_types`, `balances`, `users` and `account_classes`, backfilled to the system user; `AUTOINCREMENT` on every application-owned table; `sessions` and `login_attempts` renamed to `sys_` names. The chokepoint fills the audit columns.
 - Tests: the schema tests for audit columns, `AUTOINCREMENT` and the `sys_` rule (SQLite's own tables excluded); the system user is refused at sign-in with the same message and timing as an unknown email, hidden from the interface and refused by the command line tools; the upgrade of a v0.1 copy.
-- [ ] Merged
+- [x] Merged
 
 ### 5. Migration B2: user soft delete
 
