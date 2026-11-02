@@ -13,6 +13,7 @@ from northstar.version import VERSION
 from northstar.web.app import create_app
 
 FIRST_ONLY = ["0001_initial"]
+REST = sorted(file.stem for file in db.MIGRATIONS_DIR.glob("*.sql"))[1:]    # what an upgrade from FIRST_ONLY applies
 
 
 @pytest.fixture
@@ -62,12 +63,12 @@ def database_at_an_older_version(tmp_path, older_migrations):
 
 def test_a_pending_migration_is_preceded_by_a_checked_backup_of_the_old_state(tmp_path, older_migrations, fixed_time):
     path = database_at_an_older_version(tmp_path, older_migrations)
-    assert db.upgrade(path) == ["0002_login_attempts"]
+    assert db.upgrade(path) == REST
     [saved] = backups_of(path)
     assert saved.name == f"pre-migration-{VERSION}-20261101-100000.db"
     assert recorded(saved) == FIRST_ONLY and "login_attempts" not in tables(saved)    # the state before
     assert backup.check_database(saved)["migrations"] == 1                           # and it is a valid database
-    assert recorded(path) == ["0001_initial", "0002_login_attempts"]                 # while the real one moved on
+    assert recorded(path) == FIRST_ONLY + REST                                         # while the real one moved on
 
 
 def test_no_backup_when_nothing_is_pending(tmp_path, fixed_time):
@@ -79,7 +80,7 @@ def test_no_backup_when_nothing_is_pending(tmp_path, fixed_time):
 
 def test_no_backup_for_a_new_database_because_there_is_nothing_to_save(tmp_path, fixed_time):
     path = tmp_path / "data" / "northstar.db"
-    assert db.upgrade(path) == ["0001_initial", "0002_login_attempts"]
+    assert db.upgrade(path) == FIRST_ONLY + REST
     assert backups_of(path) == [] and not (path.parent / "backups").exists()
 
 
@@ -174,14 +175,14 @@ def test_a_newer_database_is_refused_unchanged_and_without_a_backup(tmp_path):
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0003_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0099_from_the_future')")
     conn.commit()
     conn.close()
     before = path.read_bytes()
     with pytest.raises(ValidationError) as refused:
         db.upgrade(path)
     message = str(refused.value)
-    assert "newer version" in message and "0003_from_the_future" in message
+    assert "newer version" in message and "0099_from_the_future" in message
     assert "restore" in message and "backups" in message
     assert path.read_bytes() == before and backups_of(path) == []
 
@@ -205,7 +206,7 @@ def test_a_database_from_before_the_squash_still_opens_and_is_backed_up(tmp_path
     conn.executemany("INSERT INTO sys_schema_migrations (version) VALUES (?)", [("0002_users",), ("0003_user_theme",)])
     conn.commit()
     conn.close()
-    assert db.upgrade(path) == ["0002_login_attempts"]
+    assert db.upgrade(path) == REST
     assert len(backups_of(path)) == 1
     assert db.upgrade(path) == []                                  # and it opens again afterwards
 

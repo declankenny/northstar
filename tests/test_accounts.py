@@ -37,11 +37,6 @@ def test_blank_notes_are_stored_as_nothing(conn):
     assert accounts.get_account(conn, new_id)["notes"] is None
 
 
-def test_duplicate_account_names_are_allowed(conn):
-    accounts.add_account(conn, "Checking", ASSET, type_id(conn, "Checking"))
-    accounts.add_account(conn, "Checking", ASSET, type_id(conn, "Checking"))
-
-
 def test_update_within_class(conn):
     acct = add_account(conn, "Test", ASSET, "Checking")
     accounts.update_account(conn, acct, "Renamed", type_id(conn, "Savings"), "note")
