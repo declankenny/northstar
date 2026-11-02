@@ -81,8 +81,9 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 ### 9. Export
 
-- Scope: as in #80. Enables the round-trip test.
-- [ ] Merged
+- Scope: as agreed on #80: one account's balances, four columns (Account ID, Account Name, Balance Date, Balance Amount), from the account page and the list menu. Enables the round-trip test.
+- Tests: the file's rows and order, the download headers, closed and missing accounts, and importing the export back into the same account (all unchanged) and into another (all added).
+- [x] Merged
 
 ### 10. Undo
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   type AccountPage as Account, addBalance, type BalanceRow, changeClass, closeAccount, deleteAccount,
-  deleteBalance, editAccount, editBalance, fetchAccount, fetchNetWorth, reopenAccount,
+  deleteBalance, downloadExport, editAccount, editBalance, fetchAccount, fetchNetWorth, reopenAccount,
 } from "./api";
 import { BalanceDialog, ChangeClassDialog, EditAccountDialog } from "./AccountDialogs";
 import { formatDate } from "./dates";
@@ -115,6 +115,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
         <div className="actions-bar">
           <button className="btn" disabled={!open} onClick={() => setDialog({ kind: "balance", editing: null })}>Add balance</button>
           {open && <button className="btn ghost" onClick={() => { navigate(importPath(id)); }}>Import CSV…</button>}
+          <button className="btn ghost" onClick={() => { downloadExport(id); }}>Export CSV</button>
           <button className="btn ghost" aria-label="More actions" aria-haspopup="menu" aria-expanded={menu}
             onClick={(e) => { e.stopPropagation(); setMenu(!menu); }}>⋯</button>
           {menu && (

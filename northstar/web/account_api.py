@@ -8,7 +8,7 @@ exactly what the server now holds. A broken rule is a 422 and an unknown account
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
-from northstar import accounts, balances, clock, networth
+from northstar import accounts, balance_export, balances, clock, networth
 from northstar.web.auth_routes import operation, run
 
 router = APIRouter(prefix="/api")
@@ -140,6 +140,17 @@ def add_account(body: NewAccount, request: Request):
 @router.get("/accounts/{account_id}", response_model=AccountOut)
 def read_account(account_id: int, request: Request):
     return run(request, lambda conn: _page(conn, account_id))
+
+
+@router.get("/accounts/{account_id}/export")
+def export_balances(account_id: int, request: Request):
+    """The account's balances as a CSV download, which the browser saves without asking."""
+    def action(conn):
+        text = balance_export.export_csv(conn, account_id)
+        name = balance_export.file_name(accounts.get_account(conn, account_id)["name"], clock.today())
+        return Response(text, media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+    return run(request, action)
 
 
 @router.patch("/accounts/{account_id}", response_model=AccountOut)

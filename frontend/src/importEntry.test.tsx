@@ -5,9 +5,9 @@ import type { AccountList, AccountPage as Account, ListedAccount } from "./api";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
 
-vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchAccount: vi.fn(), fetchAccounts: vi.fn(), fetchNetWorth: vi.fn() }));
+vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchAccount: vi.fn(), fetchAccounts: vi.fn(), fetchNetWorth: vi.fn(), downloadExport: vi.fn() }));
 
-import { fetchAccount, fetchAccounts } from "./api";
+import { downloadExport, fetchAccount, fetchAccounts } from "./api";
 
 const page = (over: Partial<Account> = {}): Account => ({
   id: 7, name: "Demo Savings", class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
@@ -64,5 +64,22 @@ describe("Import CSV on the accounts list", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Actions for Demo Savings" }));
     expect(await screen.findByRole("menuitem", { name: "Edit" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: "Import CSV…" })).toBeNull();
+  });
+});
+
+describe("Export CSV", () => {
+  it("is on the account page, for an open or a closed account, and downloads that account", async () => {
+    vi.mocked(fetchAccount).mockResolvedValue(page({ is_open: false }));
+    render(<AccountPage id={7} isAdmin={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Export CSV" }));
+    expect(downloadExport).toHaveBeenCalledWith(7);
+  });
+
+  it("is in the menu of every account in the list, closed ones too, and downloads that account", async () => {
+    vi.mocked(fetchAccounts).mockResolvedValue(list(true));
+    render(<AccountsList isAdmin={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Actions for Demo Savings" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export CSV" }));
+    expect(downloadExport).toHaveBeenCalledWith(7);
   });
 });
