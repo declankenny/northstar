@@ -17,7 +17,7 @@ Every step follows the working rules: the spec and `docs/decisions.md` change in
 | 7 | Migration C: the change log, registry and `balances.version` | 4 | to create |
 | 8 | Import commit | 7, and the import dry run | [#79](https://github.com/declankenny/northstar/issues/79) |
 | 9 | Export | none from the schema work | [#80](https://github.com/declankenny/northstar/issues/80) |
-| 10 | Undo | 7, 8 | [#81](https://github.com/declankenny/northstar/issues/81) |
+| 10 | Undo of imports, planned in [../undo](../undo/implementation-plan.md) | 7, 8 | [#81](https://github.com/declankenny/northstar/issues/81) |
 | 11 | Epic closing | all | [#55](https://github.com/declankenny/northstar/issues/55) |
 
 Beside the schema work, with no dependency on it: #72, #78, the format parser, the import dry run, and then #11, #12 and #13 landing just before the import wizard. Conflicting-edit detection ([#10](https://github.com/declankenny/northstar/issues/10)) rides on step 7, because `balances.version` is the id of the operation that wrote the balance.
@@ -87,8 +87,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 ### 10. Undo
 
-- Scope: undo of balance changes. One evaluator for preview and commit; the confirmation bound to the previewed plan; a savepoint around each inverse; closed and deleted accounts skipped; an undo that reverts nothing does not count; a partial undo is final.
-- Tests: the undo preview and confirmation, partial and failure cases, and account-state cases listed under "Test coverage the design requires" in the design.
+- Moved: the import register and the all-or-nothing undo of imports are steps 1 and 2 of [../undo/implementation-plan.md](../undo/implementation-plan.md), and the fuller undo design is deferred there. This step is done when those two are merged.
 - [ ] Merged
 
 ### 11. Epic closing
