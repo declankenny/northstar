@@ -26,6 +26,9 @@ from northstar.writer import Operation
 MIN_PASSWORD_LENGTH = 12
 MAX_NAME_LENGTH = 100
 THEMES = ("light", "dark")
+DEFAULT_THEME = "dark"              # also the schema's default, and what a reactivated user goes back to
+# What a deleted user's password hash is replaced with. It is not a well-formed hash, so no password verifies against it.
+UNUSABLE_HASH = "!"
 # The cost of one hash: OWASP's first-listed scrypt setting, N=2^17 (128 MiB of memory), r=8, p=1. It takes
 # about as long as N=2^16 with p=2 and makes an attacker pay twice the memory. See docs/decisions.md.
 PRODUCTION_SCRYPT = {"n": 2**17, "r": 8, "p": 1}
@@ -128,23 +131,41 @@ def _check_password(password: str) -> None:
 
 def create_user(op: Operation, email: str, display_name: str, password: str,
                 is_admin: bool = False) -> int:
+    """Add a user and return their id. If the email belonged to a deleted user, that person is reactivated."""
+    return add_user(op, email, display_name, password, is_admin)[0]
+
+
+def add_user(op: Operation, email: str, display_name: str, password: str,
+             is_admin: bool = False) -> tuple[int, bool]:
+    """Add a user, or reactivate a deleted one with the same email. Returns (id, reactivated).
+
+    Reactivation is an explicit update of the deleted row, not an insert: the id and the creation metadata are kept, and
+    the display name, password and admin flag come from this request (an admin flag left out is a regular user, whatever
+    they were before). The theme goes back to the default. Their old password and sessions stay dead: the password is
+    replaced and a session exists only once they sign in. The system user is never deleted, so it never comes back.
+    """
     email = _clean_email(email)
     display_name = display_name.strip()
     if not display_name:
         raise ValidationError("Enter a name.")
     _check_password(password)
-    try:
-        return writer.insert(op, "users", {
-            "email": email, "display_name": display_name, "password_hash": hash_password(password),
-            "is_admin": 1 if is_admin else 0})
-    except sqlite3.IntegrityError:
-        raise ValidationError("A user with that email already exists.")
+    new_hash = hash_password(password)           # slow, so before the write lock is taken
+    values = {"display_name": display_name, "password_hash": new_hash, "is_admin": 1 if is_admin else 0}
+    with db.write_transaction(op.conn):
+        old = op.conn.execute("SELECT id FROM users WHERE email = ? AND deleted = 1 AND is_system = 0", (email,)).fetchone()
+        if old is not None:
+            writer.update(op, "users", old["id"], {**values, "theme": DEFAULT_THEME, "deleted": 0})
+            return old["id"], True
+        try:
+            return writer.insert(op, "users", {"email": email, **values}), False
+        except sqlite3.IntegrityError:
+            raise ValidationError("A user with that email already exists.")
 
 
 def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3.Row | None:
     """The user if the email and password match, otherwise None. Never says which part was wrong."""
     row = conn.execute("SELECT * FROM users WHERE email = ?", (email.strip(),)).fetchone()
-    if row is None or row["is_system"]:         # the system user is refused exactly like an unknown email
+    if row is None or row["is_system"] or row["deleted"]:       # these are refused exactly like an unknown email
         verify_password(password, _dummy_hash())
         return None
     if not verify_password(password, row["password_hash"]):
@@ -162,7 +183,8 @@ def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3
 
 def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT id, email, display_name, is_admin, theme FROM users WHERE id = ? AND is_system = 0", (user_id,)
+        "SELECT id, email, display_name, is_admin, theme FROM users WHERE id = ? AND is_system = 0 AND deleted = 0",
+        (user_id,)
     ).fetchone()
     if row is None:
         raise ValidationError("That user no longer exists.")
@@ -171,7 +193,7 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
 
 def set_password(op: Operation, email: str, password: str) -> None:
     """Change a password by email (the command line) and sign that user out everywhere."""
-    row = op.conn.execute("SELECT id FROM users WHERE email = ? AND is_system = 0", (email.strip(),)).fetchone()
+    row = op.conn.execute("SELECT id FROM users WHERE email = ? AND is_system = 0 AND deleted = 0", (email.strip(),)).fetchone()
     if row is None:
         raise ValidationError("There is no user with that email.")
     set_user_password(op, row["id"], password)
@@ -225,7 +247,7 @@ def set_theme(op: Operation, user_id: int, theme: str) -> None:
 
 def _is_last_admin(conn: sqlite3.Connection, user: sqlite3.Row) -> bool:
     return bool(user["is_admin"]) and conn.execute(
-        "SELECT COUNT(*) FROM users WHERE is_admin = 1").fetchone()[0] == 1
+        "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND deleted = 0").fetchone()[0] == 1
 
 
 def update_user(op: Operation, user_id: int, acting_user_id: int, email: str | None = None,
@@ -255,7 +277,10 @@ def update_user(op: Operation, user_id: int, acting_user_id: int, email: str | N
 
 
 def delete_user(op: Operation, user_id: int, acting_user_id: int) -> None:
-    """Delete a user and their sessions. Not yourself, and never the last admin."""
+    """Delete a user: they can no longer sign in and their sessions end at once. Not yourself, and never the last admin.
+
+    The row stays, as does everything that names them as its author, and adding their email again brings them back
+    (see add_user). Their password hash is replaced so it cannot be used if they are ever restored."""
     conn = op.conn
     with db.write_transaction(conn):
         user = get_user(conn, user_id)
@@ -263,12 +288,13 @@ def delete_user(op: Operation, user_id: int, acting_user_id: int) -> None:
             raise ValidationError("You can't delete your own account.")
         if _is_last_admin(conn, user):
             raise ValidationError("There must be at least one admin.")
-        writer.delete(op, "users", user_id)
+        writer.update(op, "users", user_id, {"deleted": 1, "password_hash": UNUSABLE_HASH})
+        sessions.end_sessions(conn, user_id)
 
 
 def list_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, email, display_name, is_admin, created_at FROM users WHERE is_system = 0 "
+        "SELECT id, email, display_name, is_admin, created_at FROM users WHERE is_system = 0 AND deleted = 0 "
         "ORDER BY email COLLATE NOCASE"
     ).fetchall()
 
@@ -301,8 +327,8 @@ def main(argv: list[str] | None = None) -> int:
             db.require_current(conn, path)
             op = Operation(conn, None)      # the command line has no signed-in user
             if args.command == "create":
-                create_user(op, args.email, args.name, _ask_password(), args.admin)
-                print(f"Created {args.email.strip().lower()}{' (admin)' if args.admin else ''}.")
+                _, restored = add_user(op, args.email, args.name, _ask_password(), args.admin)
+                print(f"{'Restored' if restored else 'Created'} {args.email.strip().lower()}{' (admin)' if args.admin else ''}.")
             elif args.command == "set-password":
                 set_password(op, args.email, _ask_password())
                 print(f"Password changed for {args.email.strip().lower()}. They are signed out everywhere.")

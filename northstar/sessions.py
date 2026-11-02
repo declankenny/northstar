@@ -43,7 +43,7 @@ def user_for_token(conn: sqlite3.Connection, token: str | None, now: datetime | 
         return None
     return conn.execute(
         "SELECT u.id, u.email, u.display_name, u.is_admin FROM sys_sessions s "
-        "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?",
+        "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.deleted = 0",
         (_hash(token), _stamp(now or _now())),
     ).fetchone()
 

@@ -69,6 +69,7 @@ erDiagram
         integer created_by FK "who created it"
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
+        integer deleted "0 or 1"
     }
     sys_sessions {
         text token_hash PK "SHA-256 of the cookie token"
@@ -108,6 +109,6 @@ A person checks these against the migrations, because the test cannot read them 
 | `accounts` | `FOREIGN KEY (type_id, class_id)` references `account_types (id, class_id)` with `ON UPDATE RESTRICT ON DELETE RESTRICT`, so an account's type always belongs to its class, and a type in use can be neither deleted nor moved to another class. |
 | `accounts` (name) | Unique index `accounts_name_unique` on `name COLLATE NOCASE`: a name is unique ignoring ASCII case, across open and closed accounts. |
 | `balances` | `UNIQUE (account_id, as_of_date)`: one balance per account per date. `as_of_date` must be a valid date. Deleting an account cascades to its balances. |
-| `users` | `is_system` is 1 for exactly one row, enforced by the partial unique index `users_one_system`. The `created_by` and `updated_by` columns of every household table reference it. |
+| `users` | `deleted` is 1 for a user who was deleted: the row stays, so the author columns that name them keep working, and adding their email again reactivates it. `is_system` is 1 for exactly one row, enforced by the partial unique index `users_one_system`. The `created_by` and `updated_by` columns of every household table reference it. |
 | `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. |
 | `sys_login_attempts` | Indexes on `(email_hash, attempted_at)` and `(address_hash, attempted_at)`. |

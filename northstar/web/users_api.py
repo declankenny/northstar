@@ -22,6 +22,7 @@ class UserOut(BaseModel):
     display_name: str
     is_admin: bool
     created_at: str      # UTC
+    reactivated: bool = False     # only on a response to adding a user: the email belonged to a deleted user, now restored
 
 
 class NewUser(BaseModel):
@@ -69,8 +70,9 @@ def list_users(request: Request):
 @router.post("", response_model=UserOut, status_code=201)
 def add_user(body: NewUser, request: Request):
     def action(conn):
-        user_id = users.create_user(operation(request, conn), body.email, body.display_name, body.password, body.is_admin)
-        return _listed(conn, user_id)
+        user_id, reactivated = users.add_user(operation(request, conn), body.email, body.display_name, body.password,
+                                              body.is_admin)
+        return {**_listed(conn, user_id), "reactivated": reactivated}
     return _run(request, action)
 
 

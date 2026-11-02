@@ -81,8 +81,11 @@ export async function changePassword(currentPassword: string, newPassword: strin
   await send("POST", "/api/me/password", { current_password: currentPassword, new_password: newPassword });
 }
 
-/** One row of the admin Users page. created_at is UTC text. */
-export type UserRow = { id: number; email: string; display_name: string; is_admin: boolean; created_at: string };
+/** One row of the admin Users page. created_at is UTC text. `reactivated` is true only on the answer to adding a user whose
+ * email belonged to a deleted user, who is now restored. */
+export type UserRow = {
+  id: number; email: string; display_name: string; is_admin: boolean; created_at: string; reactivated?: boolean;
+};
 
 export async function fetchUsers(): Promise<UserRow[]> {
   return (await send<UserRow[]>("GET", "/api/users", undefined))!;
