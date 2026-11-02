@@ -8,10 +8,11 @@ from northstar.writer import Operation
 
 
 def list_types(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """All account types with their class and the number of accounts using each."""
+    """All account types with their class and the number of accounts using each, and how many deleted accounts still do."""
     return conn.execute(
         "SELECT t.id, t.name, t.class_id, c.name AS class_name, t.stale_after_days, "
-        "       (SELECT COUNT(*) FROM accounts a WHERE a.type_id = t.id) AS account_count "
+        "       (SELECT COUNT(*) FROM live_accounts a WHERE a.type_id = t.id) AS account_count, "
+        "       (SELECT COUNT(*) FROM accounts a WHERE a.type_id = t.id AND a.deleted = 1) AS deleted_account_count "
         "FROM account_types t JOIN account_classes c ON c.id = t.class_id "
         "ORDER BY t.class_id, t.id"
     ).fetchall()
@@ -32,7 +33,24 @@ def get_type(conn: sqlite3.Connection, type_id: int) -> sqlite3.Row:
 
 
 def count_accounts(conn: sqlite3.Connection, type_id: int) -> int:
-    return conn.execute("SELECT COUNT(*) FROM accounts WHERE type_id = ?", (type_id,)).fetchone()[0]
+    return conn.execute("SELECT COUNT(*) FROM live_accounts WHERE type_id = ?", (type_id,)).fetchone()[0]
+
+
+def count_deleted_accounts(conn: sqlite3.Connection, type_id: int) -> int:
+    """Deleted accounts keep their type until they can be restored, and the database refuses to delete a type any account
+    row uses, so they count as using it."""
+    return conn.execute("SELECT COUNT(*) FROM accounts WHERE type_id = ? AND deleted = 1", (type_id,)).fetchone()[0]
+
+
+def _in_use_message(live: int, deleted: int) -> str:
+    """Why a type in use cannot be deleted, saying so when only deleted accounts are holding it."""
+    if not deleted:
+        return f"{live} {'account uses' if live == 1 else 'accounts use'} this type. Change their type first."
+    if not live:
+        return (f"{deleted} deleted {'account uses' if deleted == 1 else 'accounts use'} this type. "
+                "Restoring deleted accounts isn't possible yet.")
+    return (f"{live + deleted} accounts use this type, {deleted} of them deleted. "
+            "Restoring deleted accounts isn't possible yet.")
 
 
 def _clean_name(conn: sqlite3.Connection, name: str | None, exclude_id: int | None = None) -> str:
@@ -82,7 +100,7 @@ def update_type(op: Operation, type_id: int, name: str | None,
     name = _clean_name(conn, name, exclude_id=type_id)
     days = _clean_days(stale_after_days)
     new_class = current["class_id"] if class_id is None else _check_class(conn, class_id)
-    if new_class != current["class_id"] and count_accounts(conn, type_id):
+    if new_class != current["class_id"] and (count_accounts(conn, type_id) or count_deleted_accounts(conn, type_id)):
         raise ValidationError("The class can't change while accounts use this type.")
     writer.update(op, "account_types", type_id, {"name": name, "class_id": new_class, "stale_after_days": days})
 
@@ -91,8 +109,7 @@ def delete_type(op: Operation, type_id: int) -> None:
     """Delete a type that no account uses."""
     conn = op.conn
     get_type(conn, type_id)
-    in_use = count_accounts(conn, type_id)
-    if in_use:
-        noun = "account uses" if in_use == 1 else "accounts use"
-        raise ValidationError(f"{in_use} {noun} this type. Change their type first.")
+    live, deleted = count_accounts(conn, type_id), count_deleted_accounts(conn, type_id)
+    if live or deleted:
+        raise ValidationError(_in_use_message(live, deleted))
     writer.delete(op, "account_types", type_id)

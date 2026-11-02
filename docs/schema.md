@@ -44,6 +44,7 @@ erDiagram
         integer created_by FK "who created it"
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
+        integer deleted "0 or 1"
     }
     balances {
         integer id PK
@@ -95,6 +96,7 @@ erDiagram
 - `is_open` and `is_admin` are 0 or 1, because SQLite has no boolean type.
 - `sys_schema_migrations` is created by the migration runner in `northstar/db.py`, not by a migration file. Releases before 0.2 called it `schema_migrations`, and the runner renames it (keeping its rows) the first time a newer version starts, after a backup.
 - A table that starts with `sys_` is written by the application for itself: it has no audit columns and is never logged. Every other table has the four audit columns, and `created_by` and `updated_by` point at `users`. Rows that existed before the audit columns were added, and rows made by the command line, are authored by the system user: the one `users` row with `is_system = 1`, which nobody can sign in as.
+- `live_accounts` and `live_balances` are views: the accounts that are not deleted, and the balances of those accounts. All reads go through them, and a test fails on a direct read of `accounts` or `balances`. Anything that rebuilds either table must drop both views first and create them again afterwards, because SQLite cannot rename a table while a view refers to it.
 - Every household table uses `AUTOINCREMENT`, so the id of a deleted row is never given to another row.
 - `sys_login_attempts` has no relationships on purpose: it keeps only hashes of the email and the address, never the typed values.
 
@@ -107,7 +109,7 @@ A person checks these against the migrations, because the test cannot read them 
 | `account_classes` | Exactly two rows, Asset (1) and Liability (2), inserted by the first migration. |
 | `account_types` | `UNIQUE (id, class_id)`, which is the target of the composite key from `accounts`. The first migration also inserts the 11 starting types. |
 | `accounts` | `FOREIGN KEY (type_id, class_id)` references `account_types (id, class_id)` with `ON UPDATE RESTRICT ON DELETE RESTRICT`, so an account's type always belongs to its class, and a type in use can be neither deleted nor moved to another class. |
-| `accounts` (name) | Unique index `accounts_name_unique` on `name COLLATE NOCASE`: a name is unique ignoring ASCII case, across open and closed accounts. |
+| `accounts` (name) | Unique index `accounts_name_unique` on `name COLLATE NOCASE`, only `WHERE deleted = 0`: a name is unique ignoring ASCII case among accounts that are not deleted, open or closed. A deleted account frees its name. |
 | `balances` | `UNIQUE (account_id, as_of_date)`: one balance per account per date. `as_of_date` must be a valid date. Deleting an account cascades to its balances. |
 | `users` | `deleted` is 1 for a user who was deleted: the row stays, so the author columns that name them keep working, and adding their email again reactivates it. `is_system` is 1 for exactly one row, enforced by the partial unique index `users_one_system`. The `created_by` and `updated_by` columns of every household table reference it. |
 | `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. |

@@ -65,7 +65,7 @@ def record_balance(op: Operation, account_id: int, as_of: date, cents: int,
     with db.write_transaction(conn):       # the open check and the write are one step (see db.write_transaction)
         _require_open(accounts.get_account(conn, account_id))
         existing = conn.execute(
-            "SELECT id, amount_cents, note FROM balances WHERE account_id = ? AND as_of_date = ?",
+            "SELECT id, amount_cents, note FROM live_balances WHERE account_id = ? AND as_of_date = ?",
             (account_id, as_of.isoformat()),
         ).fetchone()
         if existing is None:
@@ -112,7 +112,7 @@ def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
     row = conn.execute(
         "SELECT b.id, b.account_id, b.as_of_date, b.amount_cents, b.note, b.source, "
         "       a.name AS account_name, a.is_open "
-        "FROM balances b JOIN accounts a ON a.id = b.account_id WHERE b.id = ?",
+        "FROM live_balances b JOIN live_accounts a ON a.id = b.account_id WHERE b.id = ?",
         (balance_id,),
     ).fetchone()
     if row is None:
@@ -131,7 +131,7 @@ def update_balance(op: Operation, balance_id: int, date_text: str | None,
         balance = get_balance(conn, balance_id)
         _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
         if conn.execute(
-            "SELECT 1 FROM balances WHERE account_id = ? AND as_of_date = ? AND id != ?",
+            "SELECT 1 FROM live_balances WHERE account_id = ? AND as_of_date = ? AND id != ?",
             (balance["account_id"], as_of.isoformat(), balance_id),
         ).fetchone():
             raise ValidationError(
@@ -157,13 +157,13 @@ def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict
     is, whether that is stale for its type, and any balance already saved on the chosen date."""
     rows = conn.execute(
         "SELECT a.id, a.name, c.name AS class_name, t.name AS type_name, t.stale_after_days, "
-        "  (SELECT b.as_of_date FROM balances b WHERE b.account_id = a.id "
+        "  (SELECT b.as_of_date FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_date, "
-        "  (SELECT b.amount_cents FROM balances b WHERE b.account_id = a.id "
+        "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_cents, "
-        "  (SELECT b.amount_cents FROM balances b WHERE b.account_id = a.id "
+        "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
         "     AND b.as_of_date = ?) AS existing_cents "
-        "FROM accounts a "
+        "FROM live_accounts a "
         "JOIN account_classes c ON c.id = a.class_id "
         "JOIN account_types t ON t.id = a.type_id "
         "WHERE a.is_open = 1 "
