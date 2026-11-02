@@ -77,7 +77,7 @@ def test_backup_includes_committed_changes_and_leaves_out_uncommitted_ones(conn,
     add_balance(conn, household["checking"], "2026-07-01", 111111)           # committed
     other = db.connect(db_file)
     other.execute("BEGIN")
-    other.execute("INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, '2026-08-01', 222222)",
+    other.execute("INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, '2026-08-01', 222222, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",
                   (household["checking"],))                                   # not committed yet
     try:
         counts = backup.create_backup(db_file, tmp_path / "live.bak")
@@ -178,7 +178,7 @@ def _database_missing(tables, conn, tmp_path, name):
     return broken
 
 
-@pytest.mark.parametrize("tables", [("sessions",), ("users",), ("sessions", "users")])
+@pytest.mark.parametrize("tables", [("sys_sessions",), ("users",), ("sys_sessions", "users")])
 def test_restore_refuses_a_backup_that_cannot_run_the_app(conn, household, tmp_path, tables):
     """Without users and sessions the app fails on its first sign-in, and the migrations apply nothing
     because the initial migration is already recorded, so such a file must never be accepted."""
@@ -189,7 +189,7 @@ def test_restore_refuses_a_backup_that_cannot_run_the_app(conn, household, tmp_p
     assert not target.exists()
 
 
-@pytest.mark.parametrize("tables", [("sessions",), ("users",), ("sessions", "users")])
+@pytest.mark.parametrize("tables", [("sys_sessions",), ("users",), ("sys_sessions", "users")])
 def test_backup_refuses_a_database_that_cannot_run_the_app(conn, household, tmp_path, tables):
     broken = _database_missing(tables, conn, tmp_path, "broken.db")
     out = tmp_path / "out.bak"
@@ -201,7 +201,7 @@ def test_backup_refuses_a_database_that_cannot_run_the_app(conn, household, tmp_
 
 def test_restore_refuses_a_backup_that_records_a_migration_but_lacks_its_table(conn, household, tmp_path):
     """login_attempts comes from migration 0002. A file that records 0002 without it fails on the first sign-in."""
-    broken = _database_missing(("login_attempts",), conn, tmp_path, "broken.bak")
+    broken = _database_missing(("sys_login_attempts",), conn, tmp_path, "broken.bak")
     live = tmp_path / "live.db"
     live.write_bytes(b"existing")
     with pytest.raises(ValidationError, match="not a valid Northstar database"):

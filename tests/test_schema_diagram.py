@@ -98,8 +98,8 @@ def test_the_comparison_notices_a_drifted_diagram(conn):
         ("        text note \"optional\"\n", ""),                              # a column left out
         ("        text email UK \"case-insensitive\"", "        text email"),  # a key lost
         ("        integer amount_cents", "        text amount_cents"),         # a wrong type
-        ("    users ||--o{ sessions : \"user_id\"\n", ""),                     # a relationship left out
-        ("    login_attempts {", "    login_attempt_log {"),                   # a table renamed
+        ("    users ||--o{ sys_sessions : \"user_id\"\n", ""),                     # a relationship left out
+        ("    sys_login_attempts {", "    sys_login_attempt_log {"),                   # a table renamed
     ):
         assert old in DOC, f"the drift example {old!r} no longer matches docs/schema.md"
         assert differences(read_diagram(DOC.replace(old, new)), built), f"drift not noticed: {old!r}"

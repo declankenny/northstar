@@ -29,9 +29,9 @@ def _now() -> datetime:
 def create_session(conn: sqlite3.Connection, user_id: int, now: datetime | None = None) -> str:
     """Start a session and return its token, which is shown to the browser once."""
     now = now or _now()
-    writer.sys_delete(conn, "sessions", [("expires_at", "<=", _stamp(now))])
+    writer.sys_delete(conn, "sys_sessions", [("expires_at", "<=", _stamp(now))])
     token = secrets.token_urlsafe(32)
-    writer.sys_insert(conn, "sessions", {
+    writer.sys_insert(conn, "sys_sessions", {
         "token_hash": _hash(token), "user_id": user_id, "created_at": _stamp(now),
         "expires_at": _stamp(now + timedelta(days=SESSION_DAYS))})
     return token
@@ -42,7 +42,7 @@ def user_for_token(conn: sqlite3.Connection, token: str | None, now: datetime | 
     if not token:
         return None
     return conn.execute(
-        "SELECT u.id, u.email, u.display_name, u.is_admin FROM sessions s "
+        "SELECT u.id, u.email, u.display_name, u.is_admin FROM sys_sessions s "
         "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?",
         (_hash(token), _stamp(now or _now())),
     ).fetchone()
@@ -50,12 +50,12 @@ def user_for_token(conn: sqlite3.Connection, token: str | None, now: datetime | 
 
 def end_session(conn: sqlite3.Connection, token: str | None) -> None:
     if token:
-        writer.sys_delete(conn, "sessions", [("token_hash", "=", _hash(token))])
+        writer.sys_delete(conn, "sys_sessions", [("token_hash", "=", _hash(token))])
 
 
 def end_sessions(conn: sqlite3.Connection, user_id: int, except_token: str | None = None) -> None:
     """Sign a user out everywhere, optionally keeping the browser that holds except_token."""
     if except_token:
-        writer.sys_delete(conn, "sessions", [("user_id", "=", user_id), ("token_hash", "!=", _hash(except_token))])
+        writer.sys_delete(conn, "sys_sessions", [("user_id", "=", user_id), ("token_hash", "!=", _hash(except_token))])
     else:
-        writer.sys_delete(conn, "sessions", [("user_id", "=", user_id)])
+        writer.sys_delete(conn, "sys_sessions", [("user_id", "=", user_id)])

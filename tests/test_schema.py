@@ -30,11 +30,12 @@ def test_seed_classes_and_types(conn):
 
 def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn):
     assert [r["version"] for r in conn.execute("SELECT version FROM sys_schema_migrations ORDER BY version")] == [
-        "0001_initial", "0002_login_attempts", "0003_unique_account_names"]
-    assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'login_attempts'").fetchone()[0] == 1
+        "0001_initial", "0002_login_attempts", "0003_unique_account_names", "0004_audit_columns_and_system_user",
+        "0005_sys_table_names"]
+    assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sys_login_attempts'").fetchone()[0] == 1
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     assert {"email", "password_hash", "is_admin", "theme"} <= columns
-    assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sessions'").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sys_sessions'").fetchone()[0] == 1
     users.create_user(op(conn), "a@example.com", "Test A", "synthetic-pass-123")
     assert conn.execute("SELECT theme FROM users").fetchone()[0] == "dark"       # the default
 
@@ -44,7 +45,7 @@ def test_a_database_that_recorded_the_old_split_migrations_still_opens(conn):
     recorded, and the one remaining file must be treated as applied, with nothing run again."""
     conn.executemany("INSERT INTO sys_schema_migrations (version) VALUES (?)", [("0002_users",), ("0003_user_theme",)])
     assert db.migrate(conn) == []
-    assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM users WHERE is_system = 0").fetchone()[0] == 0
 
 
 def test_account_with_type_from_the_other_class_is_rejected(conn):
@@ -90,36 +91,36 @@ def test_type_class_cannot_change_while_in_use(conn):
 
 def test_stale_after_days_must_be_at_least_one(conn):
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO account_types (name, class_id, stale_after_days) VALUES ('Zero', 1, 0)")
+        conn.execute("INSERT INTO account_types (name, class_id, stale_after_days, created_by, updated_by) VALUES ('Zero', 1, 0, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))")
 
 
 def test_type_names_are_unique_ignoring_case(conn):
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO account_types (name, class_id, stale_after_days) VALUES ('checking', 1, 35)")
+        conn.execute("INSERT INTO account_types (name, class_id, stale_after_days, created_by, updated_by) VALUES ('checking', 1, 35, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))")
 
 
 def test_one_balance_per_account_per_date(conn):
     acct = add_account(conn, "Test account", ASSET, "Checking")
-    conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, '2026-01-31', 100000)", (acct,))
+    conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, '2026-01-31', 100000, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))", (acct,))
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, '2026-01-31', 5)", (acct,))
+        conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, '2026-01-31', 5, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))", (acct,))
 
 
 def test_balance_dates_must_be_valid_iso_dates(conn):
     acct = add_account(conn, "Test account", ASSET, "Checking")
     for bad in ("2026-02-30", "01/31/2026", "2026-1-5"):
         with pytest.raises(sqlite3.IntegrityError):
-            conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, ?, 1)", (acct, bad))
+            conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, ?, 1, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))", (acct, bad))
 
 
 def test_balances_may_be_negative(conn):
     acct = add_account(conn, "Overdrawn", ASSET, "Checking")
-    conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, '2026-01-31', -2500)", (acct,))
+    conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, '2026-01-31', -2500, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))", (acct,))
 
 
 def test_deleting_an_account_deletes_its_balances(conn):
     acct = add_account(conn, "Test account", ASSET, "Checking")
-    conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, '2026-01-31', 100)", (acct,))
+    conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, '2026-01-31', 100, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))", (acct,))
     conn.execute("DELETE FROM accounts WHERE id = ?", (acct,))
     assert conn.execute("SELECT COUNT(*) FROM balances").fetchone()[0] == 0
 

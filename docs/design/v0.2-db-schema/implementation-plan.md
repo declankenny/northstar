@@ -47,7 +47,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: every write to every table goes through a few database-layer functions that take an actor. No schema change, so the actor is passed but nothing uses it yet. Writes to a table with no logged fields behave exactly as today.
 - Tests: no SQL writes to any table outside the chokepoint (migrations excepted); every existing write path still behaves as before.
-- [ ] Merged
+- [x] Merged
 
 ### 4. Migration B1: system user, audit columns, `AUTOINCREMENT`, `sys_` renames
 

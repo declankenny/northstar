@@ -7,7 +7,7 @@ from datetime import date
 from northstar import accounts, db, staleness, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.money import parse_cents
-from northstar.writer import NOW, Operation
+from northstar.writer import Operation
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 
@@ -75,7 +75,7 @@ def record_balance(op: Operation, account_id: int, as_of: date, cents: int,
         target_note = existing["note"] if note is KEEP_NOTE else new_note
         if existing["amount_cents"] == cents and existing["note"] == target_note:
             return "unchanged"
-        writer.update(op, "balances", existing["id"], {"amount_cents": cents, "note": target_note, "updated_at": NOW})
+        writer.update(op, "balances", existing["id"], {"amount_cents": cents, "note": target_note})
         return "updated"
 
 
@@ -140,7 +140,7 @@ def update_balance(op: Operation, balance_id: int, date_text: str | None,
                 as_of.isoformat(), cents, new_note):
             return "unchanged"
         writer.update(op, "balances", balance_id, {
-            "as_of_date": as_of.isoformat(), "amount_cents": cents, "note": new_note, "updated_at": NOW})
+            "as_of_date": as_of.isoformat(), "amount_cents": cents, "note": new_note})
         return "updated"
 
 
