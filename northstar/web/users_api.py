@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from northstar import db, users
 from northstar.errors import ValidationError
-from northstar.web.auth_routes import current_user, require_admin
+from northstar.web.auth_routes import current_user, operation, require_admin
 
 router = APIRouter(prefix="/api/users", dependencies=[Depends(require_admin)])
 
@@ -69,7 +69,7 @@ def list_users(request: Request):
 @router.post("", response_model=UserOut, status_code=201)
 def add_user(body: NewUser, request: Request):
     def action(conn):
-        user_id = users.create_user(conn, body.email, body.display_name, body.password, body.is_admin)
+        user_id = users.create_user(operation(request, conn), body.email, body.display_name, body.password, body.is_admin)
         return _listed(conn, user_id)
     return _run(request, action)
 
@@ -79,7 +79,7 @@ def change_user(user_id: int, body: UserChange, request: Request):
     acting_id = current_user(request)["id"]
 
     def action(conn):
-        users.update_user(conn, user_id, acting_id, body.email, body.display_name, body.is_admin)
+        users.update_user(operation(request, conn), user_id, acting_id, body.email, body.display_name, body.is_admin)
         return _listed(conn, user_id)
     return _run(request, action)
 
@@ -88,12 +88,12 @@ def change_user(user_id: int, body: UserChange, request: Request):
 def reset_password(user_id: int, body: NewPassword, request: Request):
     if user_id == current_user(request)["id"]:
         raise HTTPException(status_code=422, detail="Use Change password on your Profile for your own account.")
-    _run(request, lambda conn: users.set_user_password(conn, user_id, body.password))
+    _run(request, lambda conn: users.set_user_password(operation(request, conn), user_id, body.password))
     return Response(status_code=204)
 
 
 @router.delete("/{user_id}", status_code=204)
 def delete_user(user_id: int, request: Request):
     acting_id = current_user(request)["id"]
-    _run(request, lambda conn: users.delete_user(conn, user_id, acting_id))
+    _run(request, lambda conn: users.delete_user(operation(request, conn), user_id, acting_id))
     return Response(status_code=204)

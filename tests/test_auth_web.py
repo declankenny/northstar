@@ -1,6 +1,6 @@
 import pytest
 from northstar import users
-from conftest import with_db
+from conftest import with_db, op
 
 PASSWORD = "synthetic-pass-123"
 
@@ -8,7 +8,7 @@ PASSWORD = "synthetic-pass-123"
 @pytest.fixture
 def anon(anon_client):
     with with_db(anon_client) as conn:
-        users.create_user(conn, "a@example.com", "Test A", PASSWORD)
+        users.create_user(op(conn), "a@example.com", "Test A", PASSWORD)
     return anon_client
 
 

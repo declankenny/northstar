@@ -11,14 +11,14 @@ import pytest
 from northstar import accounts, db
 from northstar.errors import ValidationError
 
-from conftest import type_id
+from conftest import type_id, op
 
 ASSET, LIABILITY = 1, 2
 MIGRATION = "0003_unique_account_names"
 
 
 def add(conn, name, class_id=ASSET, type_name="Checking"):
-    return accounts.add_account(conn, name, class_id, type_id(conn, type_name))
+    return accounts.add_account(op(conn), name, class_id, type_id(conn, type_name))
 
 
 # -- the application --
@@ -46,24 +46,24 @@ def test_renaming_to_a_taken_name_is_refused_and_changes_nothing(conn):
     add(conn, "Test one")
     other = add(conn, "Test two")
     with pytest.raises(ValidationError, match='"Test one" already exists'):
-        accounts.update_account(conn, other, "test ONE", type_id(conn, "Checking"))
+        accounts.update_account(op(conn), other, "test ONE", type_id(conn, "Checking"))
     assert accounts.get_account(conn, other)["name"] == "Test two"
 
 
 def test_an_account_can_be_renamed_to_a_different_case_of_its_own_name(conn):
     account = add(conn, "test savings")
-    accounts.update_account(conn, account, "Test Savings", type_id(conn, "Checking"))
+    accounts.update_account(op(conn), account, "Test Savings", type_id(conn, "Checking"))
     assert accounts.get_account(conn, account)["name"] == "Test Savings"
 
 
 def test_saving_an_account_without_changing_its_name_is_not_a_clash(conn):
     account = add(conn, "Test savings")
-    accounts.update_account(conn, account, "Test savings", type_id(conn, "Savings"), "a note")
+    accounts.update_account(op(conn), account, "Test savings", type_id(conn, "Savings"), "a note")
 
 
 def test_a_closed_account_keeps_its_name_and_the_message_says_so(conn):
     old = add(conn, "Test old card", LIABILITY, "Credit card")
-    accounts.close_account(conn, old)
+    accounts.close_account(op(conn), old)
     with pytest.raises(ValidationError, match="closed account named .Test old card. already exists") as refused:
         add(conn, "test old card", LIABILITY, "Credit card")
     assert "rename" in str(refused.value).lower()
@@ -78,8 +78,8 @@ def test_the_message_for_an_open_account_does_not_call_it_closed(conn):
 
 def test_a_closed_name_is_free_once_the_closed_account_is_renamed(conn):
     old = add(conn, "Test card", LIABILITY, "Credit card")
-    accounts.close_account(conn, old)
-    accounts.update_account(conn, old, "Test card (old)", type_id(conn, "Credit card"))
+    accounts.close_account(op(conn), old)
+    accounts.update_account(op(conn), old, "Test card (old)", type_id(conn, "Credit card"))
     add(conn, "Test card", LIABILITY, "Credit card")
 
 

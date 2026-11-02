@@ -5,7 +5,7 @@ import pytest
 from northstar import accounts, balances
 from northstar.errors import ValidationError
 
-from conftest import add_account, add_balance
+from conftest import add_account, add_balance, op
 
 ASSET, LIABILITY = 1, 2
 TODAY = date(2026, 10, 30)
@@ -40,39 +40,39 @@ def test_parse_date_rejects_the_future():
 def test_record_balance_adds_then_updates_then_reports_unchanged(conn):
     acct = add_account(conn, "Test", ASSET, "Checking")
     d = date(2026, 10, 1)
-    assert balances.record_balance(conn, acct, d, 1000) == "added"
-    assert balances.record_balance(conn, acct, d, 1000) == "unchanged"
-    assert balances.record_balance(conn, acct, d, 1500) == "updated"
+    assert balances.record_balance(op(conn), acct, d, 1000) == "added"
+    assert balances.record_balance(op(conn), acct, d, 1000) == "unchanged"
+    assert balances.record_balance(op(conn), acct, d, 1500) == "updated"
     assert stored(conn, acct) == {"2026-10-01": 1500}
 
 
 def test_unchanged_does_not_touch_updated_at(conn):
     acct = add_account(conn, "Test", ASSET, "Checking")
-    balances.record_balance(conn, acct, date(2026, 10, 1), 1000)
+    balances.record_balance(op(conn), acct, date(2026, 10, 1), 1000)
     conn.execute("UPDATE balances SET updated_at = '2000-01-01T00:00:00Z'")
-    balances.record_balance(conn, acct, date(2026, 10, 1), 1000)
+    balances.record_balance(op(conn), acct, date(2026, 10, 1), 1000)
     assert conn.execute("SELECT updated_at FROM balances").fetchone()[0] == "2000-01-01T00:00:00Z"
-    balances.record_balance(conn, acct, date(2026, 10, 1), 2000)
+    balances.record_balance(op(conn), acct, date(2026, 10, 1), 2000)
     assert conn.execute("SELECT updated_at FROM balances").fetchone()[0] != "2000-01-01T00:00:00Z"
 
 
 def test_record_balance_refuses_closed_accounts(conn):
     acct = add_account(conn, "Test", ASSET, "Checking")
-    accounts.close_account(conn, acct)
+    accounts.close_account(op(conn), acct)
     with pytest.raises(ValidationError, match="is closed"):
-        balances.record_balance(conn, acct, date(2026, 10, 1), 1000)
+        balances.record_balance(op(conn), acct, date(2026, 10, 1), 1000)
     assert stored(conn, acct) == {}
 
 
 def test_record_balance_refuses_missing_accounts(conn):
     with pytest.raises(ValidationError, match="no longer exists"):
-        balances.record_balance(conn, 9999, date(2026, 10, 1), 1000)
+        balances.record_balance(op(conn), 9999, date(2026, 10, 1), 1000)
 
 
 def test_negative_and_zero_balances_are_fine(conn):
     acct = add_account(conn, "Test", ASSET, "Checking")
-    balances.record_balance(conn, acct, date(2026, 10, 1), -2500)
-    balances.record_balance(conn, acct, date(2026, 10, 2), 0)
+    balances.record_balance(op(conn), acct, date(2026, 10, 1), -2500)
+    balances.record_balance(op(conn), acct, date(2026, 10, 2), 0)
     assert stored(conn, acct) == {"2026-10-01": -2500, "2026-10-02": 0}
 
 
@@ -97,7 +97,7 @@ def test_update_rows_show_latest_balance_staleness_and_existing_amount(conn):
 def test_update_rows_leave_out_closed_accounts(conn):
     open_one = add_account(conn, "Open", ASSET, "Checking")
     closed = add_account(conn, "Closed", ASSET, "Savings")
-    accounts.close_account(conn, closed)
+    accounts.close_account(op(conn), closed)
     assert [r["id"] for r in balances.update_rows(conn, TODAY, TODAY)] == [open_one]
 
 
@@ -114,7 +114,7 @@ def test_save_update_skips_blank_rows_and_counts_results(conn):
     b = add_account(conn, "B", ASSET, "Savings")
     c = add_account(conn, "C", LIABILITY, "Loan")
     add_balance(conn, b, "2026-10-30", 500)
-    counts = balances.save_update(conn, "2026-10-30", {a: "1,000.50", b: "5.00", c: "   "}, TODAY)
+    counts = balances.save_update(op(conn), "2026-10-30", {a: "1,000.50", b: "5.00", c: "   "}, TODAY)
     assert counts == {"added": 1, "updated": 0, "unchanged": 1}
     assert stored(conn, a) == {"2026-10-30": 100050}
     assert stored(conn, c) == {}
@@ -123,7 +123,7 @@ def test_save_update_skips_blank_rows_and_counts_results(conn):
 def test_save_update_edits_an_existing_date(conn):
     a = add_account(conn, "A", ASSET, "Checking")
     add_balance(conn, a, "2026-10-30", 100)
-    assert balances.save_update(conn, "2026-10-30", {a: "2.50"}, TODAY) == {"added": 0, "updated": 1, "unchanged": 0}
+    assert balances.save_update(op(conn), "2026-10-30", {a: "2.50"}, TODAY) == {"added": 0, "updated": 1, "unchanged": 0}
     assert stored(conn, a) == {"2026-10-30": 250}
 
 
@@ -132,7 +132,7 @@ def test_save_update_is_all_or_nothing_and_reports_each_bad_row(conn):
     b = add_account(conn, "B", ASSET, "Savings")
     c = add_account(conn, "C", ASSET, "Brokerage")
     with pytest.raises(balances.EntryErrors) as caught:
-        balances.save_update(conn, "2026-10-30", {a: "100", b: "abc", c: "1.234"}, TODAY)
+        balances.save_update(op(conn), "2026-10-30", {a: "100", b: "abc", c: "1.234"}, TODAY)
     assert set(caught.value.by_account) == {b, c}
     assert stored(conn, a) == {}      # the good row was not saved either
 
@@ -141,22 +141,22 @@ def test_save_update_rejects_bad_or_future_date_before_looking_at_amounts(conn):
     a = add_account(conn, "A", ASSET, "Checking")
     for bad in ("2026-11-01", "nonsense", ""):
         with pytest.raises(ValidationError) as caught:
-            balances.save_update(conn, bad, {a: "abc"}, TODAY)
+            balances.save_update(op(conn), bad, {a: "abc"}, TODAY)
         assert not isinstance(caught.value, balances.EntryErrors)
 
 
 def test_save_update_ignores_closed_and_unknown_account_ids(conn):
     a = add_account(conn, "A", ASSET, "Checking")
     closed = add_account(conn, "Closed", ASSET, "Savings")
-    accounts.close_account(conn, closed)
-    counts = balances.save_update(conn, "2026-10-30", {a: "10", closed: "99", 9999: "5"}, TODAY)
+    accounts.close_account(op(conn), closed)
+    counts = balances.save_update(op(conn), "2026-10-30", {a: "10", closed: "99", 9999: "5"}, TODAY)
     assert counts["added"] == 1
     assert stored(conn, closed) == {}
 
 
 def test_save_update_with_nothing_entered_is_not_an_error(conn):
     a = add_account(conn, "A", ASSET, "Checking")
-    assert balances.save_update(conn, "2026-10-30", {a: ""}, TODAY) == {"added": 0, "updated": 0, "unchanged": 0}
+    assert balances.save_update(op(conn), "2026-10-30", {a: ""}, TODAY) == {"added": 0, "updated": 0, "unchanged": 0}
 
 
 def test_failure_midway_rolls_back_the_whole_batch(conn, monkeypatch):
@@ -173,6 +173,6 @@ def test_failure_midway_rolls_back_the_whole_batch(conn, monkeypatch):
 
     monkeypatch.setattr(balances, "record_balance", flaky)
     with pytest.raises(RuntimeError):
-        balances.save_update(conn, "2026-10-30", {a: "1", b: "2"}, TODAY)
+        balances.save_update(op(conn), "2026-10-30", {a: "1", b: "2"}, TODAY)
     assert conn.execute("SELECT COUNT(*) FROM balances").fetchone()[0] == 0
     assert not conn.in_transaction

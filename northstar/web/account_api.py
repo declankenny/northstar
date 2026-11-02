@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from northstar import accounts, balances, clock, db, networth
 from northstar.errors import NotFoundError, ValidationError
+from northstar.web.auth_routes import operation
 
 router = APIRouter(prefix="/api")
 
@@ -144,8 +145,8 @@ def list_accounts(request: Request, closed: bool = False):
 def add_account(body: NewAccount, request: Request):
     """Adds the account (and its first balance, if an amount is typed) and answers with the open list."""
     def action(conn):
-        balances.add_account_with_balance(conn, body.account_class, body.name, body.type_id, body.notes,
-                                          body.amount, body.date, clock.today())
+        balances.add_account_with_balance(operation(request, conn), body.account_class, body.name, body.type_id,
+                                          body.notes, body.amount, body.date, clock.today())
         return _list(conn, closed=False)
     return _run(request, action)
 
@@ -158,7 +159,7 @@ def read_account(account_id: int, request: Request):
 @router.patch("/accounts/{account_id}", response_model=AccountOut)
 def edit_account(account_id: int, body: AccountChange, request: Request):
     def action(conn):
-        accounts.update_account(conn, account_id, body.name, body.type_id, body.notes)
+        accounts.update_account(operation(request, conn), account_id, body.name, body.type_id, body.notes)
         return _page(conn, account_id)
     return _run(request, action)
 
@@ -166,7 +167,7 @@ def edit_account(account_id: int, body: AccountChange, request: Request):
 @router.post("/accounts/{account_id}/change-class", response_model=AccountOut)
 def change_class(account_id: int, body: ClassChange, request: Request):
     def action(conn):
-        accounts.change_class(conn, account_id, body.type_id)
+        accounts.change_class(operation(request, conn), account_id, body.type_id)
         return _page(conn, account_id)
     return _run(request, action)
 
@@ -174,7 +175,7 @@ def change_class(account_id: int, body: ClassChange, request: Request):
 @router.post("/accounts/{account_id}/close", response_model=AccountOut)
 def close_account(account_id: int, request: Request):
     def action(conn):
-        accounts.close_account(conn, account_id)
+        accounts.close_account(operation(request, conn), account_id)
         return _page(conn, account_id)
     return _run(request, action)
 
@@ -182,14 +183,14 @@ def close_account(account_id: int, request: Request):
 @router.post("/accounts/{account_id}/reopen", response_model=AccountOut)
 def reopen_account(account_id: int, request: Request):
     def action(conn):
-        accounts.reopen_account(conn, account_id)
+        accounts.reopen_account(operation(request, conn), account_id)
         return _page(conn, account_id)
     return _run(request, action)
 
 
 @router.delete("/accounts/{account_id}", status_code=204)
 def delete_account(account_id: int, request: Request):
-    _run(request, lambda conn: accounts.delete_account(conn, account_id))
+    _run(request, lambda conn: accounts.delete_account(operation(request, conn), account_id))
     return Response(status_code=204)
 
 
@@ -197,7 +198,7 @@ def delete_account(account_id: int, request: Request):
 def add_balance(account_id: int, body: BalanceEntry, request: Request):
     """A date that already has a balance is edited."""
     def action(conn):
-        balances.add_balance(conn, account_id, body.date, body.amount, body.note, clock.today())
+        balances.add_balance(operation(request, conn), account_id, body.date, body.amount, body.note, clock.today())
         return _page(conn, account_id)
     return _run(request, action)
 
@@ -206,7 +207,7 @@ def add_balance(account_id: int, body: BalanceEntry, request: Request):
 def edit_balance(balance_id: int, body: BalanceEntry, request: Request):
     def action(conn):
         account_id = balances.get_balance(conn, balance_id)["account_id"]
-        balances.update_balance(conn, balance_id, body.date, body.amount, body.note, clock.today())
+        balances.update_balance(operation(request, conn), balance_id, body.date, body.amount, body.note, clock.today())
         return _page(conn, account_id)
     return _run(request, action)
 
@@ -215,6 +216,6 @@ def edit_balance(balance_id: int, body: BalanceEntry, request: Request):
 def delete_balance(balance_id: int, request: Request):
     def action(conn):
         account_id = balances.get_balance(conn, balance_id)["account_id"]
-        balances.delete_balance(conn, balance_id)
+        balances.delete_balance(operation(request, conn), balance_id)
         return _page(conn, account_id)
     return _run(request, action)

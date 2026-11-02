@@ -3,8 +3,9 @@
 import sqlite3
 from datetime import date
 
-from northstar import db, staleness
+from northstar import db, staleness, writer
 from northstar.errors import NotFoundError, ValidationError
+from northstar.writer import Operation
 
 _SELECT = (
     "SELECT a.id, a.name, a.class_id, c.name AS class_name, a.type_id, t.name AS type_name, "
@@ -161,34 +162,32 @@ def _check_name_free(conn: sqlite3.Connection, name: str, own_id: int | None = N
         "or rename the closed account first.")
 
 
-def add_account(conn: sqlite3.Connection, name: str | None, class_id: int,
+def add_account(op: Operation, name: str | None, class_id: int,
                 type_id: int | None, notes: str | None = None) -> int:
+    conn = op.conn
     with db.write_transaction(conn):
         name = _clean_name(name)
         type_id = _check_type(conn, type_id, class_id)
         _check_name_free(conn, name)
-        return conn.execute(
-            "INSERT INTO accounts (name, class_id, type_id, notes) VALUES (?, ?, ?, ?)",
-            (name, class_id, type_id, _clean_notes(notes)),
-        ).lastrowid
+        return writer.insert(op, "accounts", {
+            "name": name, "class_id": class_id, "type_id": type_id, "notes": _clean_notes(notes)})
 
 
-def update_account(conn: sqlite3.Connection, account_id: int, name: str | None,
+def update_account(op: Operation, account_id: int, name: str | None,
                    type_id: int | None, notes: str | None = None) -> None:
     """Rename, re-type within the account's own class, and edit notes."""
+    conn = op.conn
     with db.write_transaction(conn):
         account = get_account(conn, account_id)
         name = _clean_name(name)
         type_id = _check_type(conn, type_id, account["class_id"])
         _check_name_free(conn, name, account_id)
-        conn.execute(
-            "UPDATE accounts SET name = ?, type_id = ?, notes = ? WHERE id = ?",
-            (name, type_id, _clean_notes(notes), account_id),
-        )
+        writer.update(op, "accounts", account_id, {"name": name, "type_id": type_id, "notes": _clean_notes(notes)})
 
 
-def change_class(conn: sqlite3.Connection, account_id: int, new_type_id: int | None) -> None:
+def change_class(op: Operation, account_id: int, new_type_id: int | None) -> None:
     """Move the account to the class of the chosen type. Class and type change together."""
+    conn = op.conn
     with db.write_transaction(conn):
         account = get_account(conn, account_id)
         row = conn.execute(
@@ -198,18 +197,16 @@ def change_class(conn: sqlite3.Connection, account_id: int, new_type_id: int | N
             raise ValidationError("Choose a type from the list.")
         if row["class_id"] == account["class_id"]:
             raise ValidationError("Choose a type in the other class.")
-        conn.execute(
-            "UPDATE accounts SET class_id = ?, type_id = ? WHERE id = ?",
-            (row["class_id"], new_type_id, account_id),
-        )
+        writer.update(op, "accounts", account_id, {"class_id": row["class_id"], "type_id": new_type_id})
 
 
-def close_account(conn: sqlite3.Connection, account_id: int) -> None:
+def close_account(op: Operation, account_id: int) -> None:
     """Close an account whose latest balance is zero, or that has no balances.
 
     The check and the close are one transaction, so a balance entered at the same moment cannot slip in
     between and leave a closed account with a nonzero balance.
     """
+    conn = op.conn
     with db.write_transaction(conn):
         account = get_account(conn, account_id)
         if not account["is_open"]:
@@ -223,20 +220,22 @@ def close_account(conn: sqlite3.Connection, account_id: int) -> None:
                 f"The latest balance for {account['name']} is not zero. "
                 "Enter a final zero balance first, then close the account."
             )
-        conn.execute("UPDATE accounts SET is_open = 0 WHERE id = ?", (account_id,))
+        writer.update(op, "accounts", account_id, {"is_open": 0})
 
 
-def reopen_account(conn: sqlite3.Connection, account_id: int) -> None:
+def reopen_account(op: Operation, account_id: int) -> None:
+    conn = op.conn
     with db.write_transaction(conn):
         account = get_account(conn, account_id)
         if account["is_open"]:
             raise ValidationError("That account is already open.")
-        conn.execute("UPDATE accounts SET is_open = 1 WHERE id = ?", (account_id,))
+        writer.update(op, "accounts", account_id, {"is_open": 1})
 
 
-def delete_account(conn: sqlite3.Connection, account_id: int) -> int:
+def delete_account(op: Operation, account_id: int) -> int:
     """Delete the account and all its balances. Returns how many balances went with it."""
+    conn = op.conn
     with db.write_transaction(conn):
         count = get_account(conn, account_id)["balance_count"]
-        conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        writer.delete(op, "accounts", account_id)
     return count

@@ -5,12 +5,13 @@ import pytest
 
 from northstar import db, sessions, users
 from northstar.errors import ValidationError
+from conftest import op
 
 PASSWORD = "synthetic-pass-123"
 
 
 def make_user(conn, email="a@example.com", admin=False):
-    return users.create_user(conn, email, "Test A", PASSWORD, is_admin=admin)
+    return users.create_user(op(conn), email, "Test A", PASSWORD, is_admin=admin)
 
 
 def test_password_round_trip_and_wrong_password():
@@ -46,7 +47,7 @@ def test_bad_email_is_refused(conn, email):
 
 def test_short_password_is_refused(conn):
     with pytest.raises(ValidationError, match="at least 12"):
-        users.create_user(conn, "a@example.com", "A", "short")
+        users.create_user(op(conn), "a@example.com", "A", "short")
 
 
 def test_is_admin_must_be_zero_or_one(conn):
@@ -64,7 +65,7 @@ def test_authenticate(conn):
 def test_set_password_changes_it_and_signs_the_user_out(conn):
     uid = make_user(conn)
     token = sessions.create_session(conn, uid)
-    users.set_password(conn, "a@example.com", "another-password-456")
+    users.set_password(op(conn), "a@example.com", "another-password-456")
     assert users.authenticate(conn, "a@example.com", PASSWORD) is None
     assert users.authenticate(conn, "a@example.com", "another-password-456")
     assert sessions.user_for_token(conn, token) is None

@@ -16,7 +16,7 @@ import pytest
 from northstar import accounts, balances, db, users
 from northstar.errors import ValidationError
 
-from conftest import add_account, add_balance
+from conftest import add_account, add_balance, op
 
 PASSWORD = "synthetic-pass-123"
 TODAY = date(2026, 10, 30)
@@ -120,9 +120,9 @@ def zero_account(conn):
 
 def test_a_balance_entered_between_the_close_check_and_the_close_cannot_leave_a_closed_nonzero_account(conn, zero_account):
     path = path_of(conn)
-    other = Other(path, lambda c: balances.record_balance(c, zero_account, TODAY, 12345))
+    other = Other(path, lambda c: balances.record_balance(op(c), zero_account, TODAY, 12345))
     closer = Paused(db.connect(path), "SELECT amount_cents FROM balances", other.start_and_wait_a_moment)
-    accounts.close_account(closer, zero_account)
+    accounts.close_account(op(closer), zero_account)
     other.join()
     assert not closed_account_with_nonzero_balance(conn, zero_account)
     # The close won the race, so the balance was refused because the account is closed.
@@ -133,14 +133,14 @@ def test_a_balance_entered_between_the_close_check_and_the_close_cannot_leave_a_
 def test_a_close_between_the_open_check_and_the_balance_write_cannot_leave_a_closed_nonzero_account(conn, zero_account, change):
     path = path_of(conn)
     zero_id = conn.execute("SELECT id FROM balances WHERE account_id = ? AND amount_cents = 0", (zero_account,)).fetchone()["id"]
-    other = Other(path, lambda c: accounts.close_account(c, zero_account))
+    other = Other(path, lambda c: accounts.close_account(op(c), zero_account))
     mine = db.connect(path)
     if change == "record":
         paused = Paused(mine, "SELECT id, amount_cents, note FROM balances WHERE account_id", other.start_and_wait_a_moment)
-        balances.record_balance(paused, zero_account, TODAY, 12345)
+        balances.record_balance(op(paused), zero_account, TODAY, 12345)
     else:
         paused = Paused(mine, "SELECT 1 FROM balances WHERE account_id", other.start_and_wait_a_moment)
-        balances.update_balance(paused, zero_id, "2026-10-20", "123.45", None, TODAY)
+        balances.update_balance(op(paused), zero_id, "2026-10-20", "123.45", None, TODAY)
     other.join()
     assert not closed_account_with_nonzero_balance(conn, zero_account)
     # The balance won the race, so the close was refused: the latest balance is not zero.
@@ -151,8 +151,8 @@ def test_a_close_between_the_open_check_and_the_balance_write_cannot_leave_a_clo
 
 @pytest.fixture
 def two_admins(conn):
-    first = users.create_user(conn, "first@example.com", "First", PASSWORD, is_admin=True)
-    second = users.create_user(conn, "second@example.com", "Second", PASSWORD, is_admin=True)
+    first = users.create_user(op(conn), "first@example.com", "First", PASSWORD, is_admin=True)
+    second = users.create_user(op(conn), "second@example.com", "Second", PASSWORD, is_admin=True)
     return first, second
 
 
@@ -166,9 +166,9 @@ ADMIN_COUNT = "SELECT COUNT(*) FROM users WHERE is_admin = 1"
 def test_two_admins_demoting_each_other_at_the_same_moment_cannot_leave_no_admin(conn, two_admins):
     first, second = two_admins
     path = path_of(conn)
-    other = Other(path, lambda c: users.update_user(c, first, second, is_admin=False))
+    other = Other(path, lambda c: users.update_user(op(c), first, second, is_admin=False))
     paused = Paused(db.connect(path), ADMIN_COUNT, other.start_and_wait_a_moment)
-    users.update_user(paused, second, first, is_admin=False)
+    users.update_user(op(paused), second, first, is_admin=False)
     other.join()
     assert admin_count(conn) >= 1
     assert other.error is not None and "at least one admin" in str(other.error)
@@ -177,9 +177,9 @@ def test_two_admins_demoting_each_other_at_the_same_moment_cannot_leave_no_admin
 def test_two_admins_deleting_each_other_at_the_same_moment_cannot_leave_no_admin(conn, two_admins):
     first, second = two_admins
     path = path_of(conn)
-    other = Other(path, lambda c: users.delete_user(c, first, second))
+    other = Other(path, lambda c: users.delete_user(op(c), first, second))
     paused = Paused(db.connect(path), ADMIN_COUNT, other.start_and_wait_a_moment)
-    users.delete_user(paused, second, first)
+    users.delete_user(op(paused), second, first)
     other.join()
     assert admin_count(conn) >= 1
     assert other.error is not None and "at least one admin" in str(other.error)

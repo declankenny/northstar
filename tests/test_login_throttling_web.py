@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from northstar import throttle, users
 
-from conftest import with_db
+from conftest import with_db, op
 
 PASSWORD = "synthetic-pass-123"
 NOW = datetime(2026, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
@@ -30,7 +30,7 @@ def fresh_proxy_warning():
 @pytest.fixture
 def app_client(anon_client):
     with with_db(anon_client) as conn:
-        users.create_user(conn, "owner@example.com", "Owner", PASSWORD, is_admin=True)
+        users.create_user(op(conn), "owner@example.com", "Owner", PASSWORD, is_admin=True)
     return anon_client
 
 

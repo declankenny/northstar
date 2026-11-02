@@ -77,7 +77,7 @@ import pytest
 from northstar import accounts, balances, networth
 from northstar.errors import ValidationError
 
-from conftest import add_account, add_balance
+from conftest import add_account, add_balance, op
 
 ASSET, LIABILITY = 1, 2
 TODAY = date(2026, 10, 30)
@@ -127,7 +127,7 @@ def household(conn):
     ]
     for when, name, cents in data:
         add_balance(conn, ids[name], when, cents)
-    accounts.close_account(conn, ids["old"])      # its final balance is zero, so this is allowed
+    accounts.close_account(op(conn), ids["old"])      # its final balance is zero, so this is allowed
     return ids
 
 
@@ -320,7 +320,7 @@ def test_closing_an_account_does_not_change_any_number(conn, household):
     """The 'Old account' was closed in the fixture. Its final zero simply carries forward."""
     assert accounts.get_account(conn, household["old"])["is_open"] == 0
     assert month_rows(conn) == MONTH_ENDS
-    accounts.reopen_account(conn, household["old"])
+    accounts.reopen_account(op(conn), household["old"])
     assert month_rows(conn) == MONTH_ENDS
 
 
@@ -344,7 +344,7 @@ def test_mid_month_entries_are_folded_into_the_month_end(conn, household):
 def test_changing_an_accounts_class_changes_past_net_worth(conn, household):
     """The spec's rule: editing a class rewrites history. Card becomes an asset."""
     other_asset = conn.execute("SELECT id FROM account_types WHERE name = 'Other asset'").fetchone()["id"]
-    accounts.change_class(conn, household["card"], other_asset)
+    accounts.change_class(op(conn), household["card"], other_asset)
     got = networth.net_worth_on(conn, date(2026, 2, 28))
     # assets 406,650.50 + card 400.00 = 407,050.50 ; liabilities 250,000.00 ; net 157,050.50
     assert (got["assets"], got["liabilities"], got["net_worth"]) == (40705050, 25000000, 15705050)
@@ -356,10 +356,10 @@ def test_editing_and_deleting_balances_changes_the_numbers(conn, household):
     # Move the March mortgage balance to the 15th: from the 15th the mortgage is 249,000.
     row = conn.execute("SELECT id FROM balances WHERE account_id = ? AND as_of_date = '2026-03-31'",
                        (household["mortgage"],)).fetchone()["id"]
-    balances.update_balance(conn, row, "2026-03-15", "249,000.00", None, TODAY)
+    balances.update_balance(op(conn), row, "2026-03-15", "249,000.00", None, TODAY)
     assert networth.net_worth_on(conn, date(2026, 3, 14))["liabilities"] == 25000000 + 40000
     assert networth.net_worth_on(conn, date(2026, 3, 15))["liabilities"] == 24900000 + 40000
-    balances.delete_balance(conn, row)
+    balances.delete_balance(op(conn), row)
     assert networth.net_worth_on(conn, date(2026, 3, 31))["liabilities"] == 25000000 + 40000
 
 

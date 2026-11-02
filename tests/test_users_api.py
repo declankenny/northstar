@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from northstar import sessions, users
 from northstar.web.app import create_app
-from conftest import with_db
+from conftest import with_db, op
 
 NEW = {"email": "new@example.com", "display_name": "New Person", "password": "a-fine-password-1"}
 
@@ -206,7 +206,7 @@ def test_you_cannot_delete_yourself(client):
 def test_the_last_admin_cannot_be_deleted(member_client):
     # Rule check on the plain function: a member is signed in, so the only admin is not the actor.
     with with_db(member_client) as conn:
-        admin = users.create_user(conn, "only@example.com", "Only Admin", "a-fine-password-1", is_admin=True)
+        admin = users.create_user(op(conn), "only@example.com", "Only Admin", "a-fine-password-1", is_admin=True)
         member = conn.execute("SELECT id FROM users WHERE email = 'member@example.com'").fetchone()["id"]
         with pytest.raises(users.ValidationError, match="at least one admin"):
-            users.delete_user(conn, admin, acting_user_id=member)
+            users.delete_user(op(conn), admin, acting_user_id=member)

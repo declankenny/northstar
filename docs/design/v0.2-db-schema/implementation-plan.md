@@ -41,7 +41,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: a full unique index on `name COLLATE NOCASE`, the deterministic duplicate rename, application validation that compares the same way, and the clear message that names a closed holder.
 - Tests: add and rename to a taken name, case and whitespace variants, a closed account holding the name, non-ASCII names; a copy of a database with `Name`, `name` and an existing "Name (2)" together; the migration's collision detection and the final index agree.
-- [ ] Merged
+- [x] Merged
 
 ### 3. Write chokepoint refactor
 

@@ -23,7 +23,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 
-from northstar import db
+from northstar import db, writer
 
 PAIR_LIMIT, PAIR_WINDOW = 5, timedelta(minutes=15)
 ACCOUNT_LIMIT, ACCOUNT_WINDOW = 30, timedelta(hours=1)
@@ -71,7 +71,7 @@ def begin(conn: sqlite3.Connection, email: str, address: str | None, now: dateti
     email_hash = hash_value("email", email.strip().lower())
     address_hash = hash_value("address", address) if address else None
     with db.write_transaction(conn):
-        conn.execute("DELETE FROM login_attempts WHERE attempted_at <= ?", (_stamp(now - KEEP),))
+        writer.sys_delete(conn, "login_attempts", [("attempted_at", "<=", _stamp(now - KEEP))])
         waits = [
             _wait(conn, "email_hash = ? AND address_hash IS ?", (email_hash, address_hash), PAIR_LIMIT, PAIR_WINDOW, now),
             _wait(conn, "email_hash = ?", (email_hash,), ACCOUNT_LIMIT, ACCOUNT_WINDOW, now),
@@ -81,17 +81,15 @@ def begin(conn: sqlite3.Connection, email: str, address: str | None, now: dateti
         blocked = [wait for wait in waits if wait is not None]
         if blocked:
             return None, max(blocked)
-        cursor = conn.execute(
-            "INSERT INTO login_attempts (email_hash, address_hash, attempted_at) VALUES (?, ?, ?)",
-            (email_hash, address_hash, _stamp(now)))
-        return cursor.lastrowid, None
+        return writer.sys_insert(conn, "login_attempts", {
+            "email_hash": email_hash, "address_hash": address_hash, "attempted_at": _stamp(now)}), None
 
 
 def clear(conn: sqlite3.Connection, email: str, address: str | None) -> None:
     """After a success: forget this email's attempts from this address, and nobody else's."""
-    conn.execute(
-        "DELETE FROM login_attempts WHERE email_hash = ? AND address_hash IS ?",
-        (hash_value("email", email.strip().lower()), hash_value("address", address) if address else None))
+    writer.sys_delete(conn, "login_attempts", [
+        ("email_hash", "=", hash_value("email", email.strip().lower())),
+        ("address_hash", "IS", hash_value("address", address) if address else None)])
 
 
 def describe(seconds: int) -> str:

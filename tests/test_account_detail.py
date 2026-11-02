@@ -5,7 +5,7 @@ import pytest
 from northstar import accounts
 from northstar.errors import ValidationError
 
-from conftest import add_account, add_balance
+from conftest import add_account, add_balance, op
 
 ASSET, LIABILITY = 1, 2
 TODAY = date(2026, 10, 30)
@@ -41,7 +41,7 @@ def test_summary_stale_follows_the_types_limit(conn):
 def test_summary_of_a_closed_account_and_a_liability(conn):
     acct = add_account(conn, "Old card", LIABILITY, "Credit card")
     add_balance(conn, acct, "2025-05-01", 0)      # far older than the 35-day limit
-    accounts.close_account(conn, acct)
+    accounts.close_account(op(conn), acct)
     s = accounts.account_summary(conn, acct, TODAY)
     assert (s["class_name"], s["is_open"], s["last_cents"]) == ("Liability", 0, 0)
     assert s["days_since"] > 35 and not s["stale"]   # closed accounts are never flagged
@@ -49,7 +49,7 @@ def test_summary_of_a_closed_account_and_a_liability(conn):
 
 def test_closed_account_with_no_balances_is_not_flagged(conn):
     acct = add_account(conn, "Never used", ASSET, "Checking")
-    accounts.close_account(conn, acct)
+    accounts.close_account(op(conn), acct)
     assert not accounts.account_summary(conn, acct, TODAY)["stale"]
 
 
