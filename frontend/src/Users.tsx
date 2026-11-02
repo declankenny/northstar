@@ -1,7 +1,8 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { addUser, deleteUser, fetchUsers, type Me, resetPassword, type UserRow, updateUser } from "./api";
 import { ConfirmDialog, Modal, useAction } from "./Dialogs";
 import { RowMenu } from "./RowMenu";
+import { useRequest } from "./useRequest";
 
 type Notice = { ok: boolean; text: string } | null;
 
@@ -132,14 +133,9 @@ function EditUserDialog(props: {
 type Dialog = { kind: "edit"; user: UserRow } | { kind: "reset"; user: UserRow } | { kind: "delete"; user: UserRow };
 
 export function Users({ me, onMe }: { me: Me; onMe: (me: Me) => void }) {
-  const [users, setUsers] = useState<UserRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: users, error, setData: setUsers } = useRequest(fetchUsers, []);
   const [notice, setNotice] = useState<Notice>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
-
-  useEffect(() => {
-    fetchUsers().then(setUsers, (e: Error) => setError(e.message));
-  }, []);
 
   const sorted = (list: UserRow[]) => [...list].sort((a, b) => a.email.localeCompare(b.email));
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   type AccountPage as Account, addBalance, type BalanceRow, changeClass, closeAccount, deleteAccount,
-  deleteBalance, editAccount, editBalance, fetchAccount, fetchNetWorth, type NetWorthSeries, reopenAccount,
+  deleteBalance, editAccount, editBalance, fetchAccount, fetchNetWorth, reopenAccount,
 } from "./api";
 import { BalanceDialog, ChangeClassDialog, EditAccountDialog } from "./AccountDialogs";
 import { formatDate } from "./dates";
@@ -12,6 +12,7 @@ import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
 import { Link, navigate } from "./router";
 import { PATHS } from "./routes";
 import { WHEN } from "./Tile";
+import { useRequest } from "./useRequest";
 
 type Dialog =
   | { kind: "balance"; editing: BalanceRow | null }
@@ -44,38 +45,27 @@ function deleteConsequence(balances: BalanceRow[], index: number): string {
 }
 
 export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
-  const [account, setAccount] = useState<Account | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<Range>("1Y");
-  const [view, setView] = useState<{ range: Range; data: NetWorthSeries } | null>(null);
-  const [version, setVersion] = useState(0); // bumped on every change, so the chart is asked again
+  const [failure, setFailure] = useState<string | null>(null); // a change that was refused (reopening)
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [menu, setMenu] = useState(false);
 
-  useEffect(() => {
-    let current = true; // an answer for an account that is no longer the one in the address is ignored
-    setAccount(null);
-    setView(null);
-    setError(null);
-    fetchAccount(id).then(
-      (loaded) => { if (current) setAccount(loaded); },
-      (e: Error) => { if (current) setError(e.message); },
-    );
-    return () => { current = false; };
-  }, [id]);
+  // An answer for an account that is no longer the one in the address is ignored, and the old account is not shown meanwhile.
+  const loaded = useRequest((signal) => fetchAccount(id, signal), [id], { reset: true });
+  const account = loaded.data;
 
-  // The chart is the same series endpoint as the Dashboard, limited to this account.
+  // The chart is the same series endpoint as the Dashboard, limited to this account. The answer says which range it is for.
   const today = account?.today;
   const hasBalances = (account?.balance_count ?? 0) > 0;
-  useEffect(() => {
-    if (!today || !hasBalances) return;
-    let current = true;
-    fetchNetWorth({ accountId: id, start: rangeStart(range, today), period: PERIOD[range] }).then(
-      (data) => { if (current) setView({ range, data }); },
-      (e: Error) => { if (current) setError(e.message); },
-    );
-    return () => { current = false; };
-  }, [id, today, hasBalances, range, version]);
+  const chart = useRequest(
+    async (signal) => ({
+      range, data: await fetchNetWorth({ accountId: id, start: rangeStart(range, today!), period: PERIOD[range] }, signal),
+    }),
+    [id, today, hasBalances, range],
+    { skip: !today || !hasBalances, reset: true },
+  );
+  const view = chart.data;
+  const error = loaded.error ?? chart.error ?? failure;
 
   useEffect(() => {
     if (!menu) return;
@@ -89,8 +79,9 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
 
   /** Every change answers with the account as it now is. */
   const apply = (page: Account) => {
-    setAccount(page);
-    setVersion((v) => v + 1);
+    loaded.setData(page);
+    chart.reload();    // every change is asked of the chart again
+    setFailure(null);
     setDialog(null);
   };
   const liability = account.class_name === "Liability";
@@ -131,7 +122,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
               <button role="menuitem" onClick={() => setDialog({ kind: "class" })}>Change class…</button>
               {open
                 ? <button role="menuitem" onClick={() => setDialog({ kind: "close" })}>Close account…</button>
-                : <button role="menuitem" onClick={() => reopenAccount(id).then(apply, (e: Error) => setError(e.message))}>Reopen account</button>}
+                : <button role="menuitem" onClick={() => reopenAccount(id).then(apply, (e: Error) => setFailure(e.message))}>Reopen account</button>}
               <hr />
               <button role="menuitem" className="bad" onClick={() => setDialog({ kind: "delete-account" })}>Delete account…</button>
             </div>

@@ -1,34 +1,29 @@
-import { useEffect, useState } from "react";
-import { fetchNetWorth, type NetWorthSeries } from "./api";
+import { useState } from "react";
+import { fetchNetWorth } from "./api";
 import { formatDate } from "./dates";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
 import { Link } from "./router";
 import { PATHS } from "./routes";
 import { Tile, WHEN } from "./Tile";
+import { useRequest } from "./useRequest";
 
 export function Dashboard() {
-  const [today, setToday] = useState<string | null>(null);
   const [range, setRange] = useState<Range>("1Y");
-  const [view, setView] = useState<{ range: Range; data: NetWorthSeries } | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   // The first request, with no dates, only learns the server's today. Ranges are worked out from it.
-  useEffect(() => {
-    fetchNetWorth().then((data) => setToday(data.today), (e: Error) => setError(e.message));
-  }, []);
+  const learnedToday = useRequest((signal) => fetchNetWorth(undefined, signal), []);
+  const today = learnedToday.data?.today ?? null;
 
-  // Every range is a request for that window. The server does all the arithmetic.
-  useEffect(() => {
-    if (today === null) return;
-    let current = true; // ignore an answer that arrives after another range was chosen
-    fetchNetWorth({ start: rangeStart(range, today), period: PERIOD[range] }).then(
-      (data) => { if (current) setView({ range, data }); },
-      (e: Error) => { if (current) setError(e.message); },
-    );
-    return () => { current = false; };
-  }, [today, range]);
+  // Every range is a request for that window. The server does all the arithmetic. The answer says which range it is for.
+  const windowed = useRequest(
+    async (signal) => ({ range, data: await fetchNetWorth({ start: rangeStart(range, today!), period: PERIOD[range] }, signal) }),
+    [today, range],
+    { skip: today === null },
+  );
 
+  const error = learnedToday.error ?? windowed.error;
+  const view = windowed.data;
   if (error) return <p className="empty">Could not load net worth. {error}.</p>;
   if (!view) return <p className="empty">Loading…</p>;
 

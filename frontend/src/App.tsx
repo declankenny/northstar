@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { fetchMe, fetchVersion, type Me, type Theme, updateMe } from "./api";
+import { useEffect } from "react";
+import { fetchMe, fetchVersion, type Theme, updateMe } from "./api";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
@@ -8,6 +8,7 @@ import { Profile } from "./Profile";
 import { Link, usePath } from "./router";
 import { accountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
+import { useRequest } from "./useRequest";
 import { Users } from "./Users";
 import { versionLabel } from "./version";
 
@@ -35,20 +36,14 @@ export function App() {
   const path = usePath();
   const route = routeFromPath(path);
   const accountId = accountIdFromPath(path);
-  const [me, setMe] = useState<Me | null>(null);
-  const [version, setVersion] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchVersion().then(setVersion, () => {}); // a footer only: the app works without it
-  }, []);
+  const { data: version } = useRequest(fetchVersion, []);      // a footer only: the app works without it, so a failure is ignored
+  const { data: me, setData: setMe } = useRequest(fetchMe, []);
 
   // The account's theme wins over whatever this browser remembered.
+  const theme = me?.theme;
   useEffect(() => {
-    fetchMe().then((loaded) => {
-      setMe(loaded);
-      applyTheme(loaded.theme);
-    }, () => {});
-  }, []);
+    if (theme) applyTheme(theme);
+  }, [theme]);
 
   const chooseTheme = async (theme: Theme) => {
     const before = me;
