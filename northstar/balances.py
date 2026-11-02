@@ -1,5 +1,6 @@
 """Entering balances. Plain functions, no web code."""
 
+import json
 import re
 import sqlite3
 from datetime import date
@@ -22,6 +23,89 @@ class EntryErrors(ValidationError):
     @property
     def details(self) -> dict:
         return {"errors": self.by_account}
+
+
+# What a caller loaded a balance as: the `version` it carried (the id of the operation that last wrote it), or None for a date
+# that had no balance. A caller with nothing loaded (a script, a test) passes UNCHECKED; the web routes always say.
+UNCHECKED = object()
+
+
+class ConflictingEdit(ValidationError):
+    """A balance is no longer what the person saw when they opened it, so nothing was saved. `conflicts` says, for each: its
+    kind (`changed`, `deleted`, or `added` for a date that had no balance), the account and date, the balance as it is now
+    (None for the amount when it is gone), and who changed it and on what UTC date."""
+
+    def __init__(self, conflicts: list[dict]):
+        many = len(conflicts) > 1
+        super().__init__(f"{len(conflicts)} balances changed since you opened this date. Nothing was saved." if many
+                         else "That balance changed since you opened it. Nothing was saved.")
+        self.conflicts = conflicts
+
+    @property
+    def details(self) -> dict:
+        return {"reason": "conflict", "conflicts": self.conflicts}
+
+
+def _who(conn: sqlite3.Connection, operation_id: int | None) -> tuple[str | None, str | None]:
+    """The name of the user who made an operation and its UTC date. A deleted user still has a name."""
+    row = conn.execute("SELECT o.created_at, u.display_name FROM sys_operations o JOIN users u ON u.id = o.user_id "
+                       "WHERE o.id = ?", (operation_id,)).fetchone()
+    return (None, None) if row is None else (row["display_name"], row["created_at"][:10])
+
+
+def _conflict(conn: sqlite3.Connection, kind: str, account_id: int, row) -> dict:
+    """A conflict over a balance that exists (`row` is its live row) or, for `deleted`, one that is gone (`row` is its log entry)."""
+    if kind == "deleted":
+        old = json.loads(row["old_json"])
+        by, on = _who(conn, row["operation_id"])
+        found = {"balance_id": row["record_id"], "date": old.get("as_of_date"), "amount_cents": None, "note": None, "version": None}
+    else:
+        by, on = _who(conn, row["version"])
+        found = {"balance_id": row["id"], "date": row["as_of_date"], "amount_cents": row["amount_cents"], "note": row["note"],
+                 "version": row["version"]}
+    return {"kind": kind, "account_id": account_id, "account_name": accounts.get_account(conn, account_id)["name"],
+            "by": by, "on": on, **found}
+
+
+def _deleted(conn: sqlite3.Connection, where: str, args: tuple):
+    return conn.execute("SELECT operation_id, record_id, old_json FROM sys_record_changes WHERE tablename = 'balances' "
+                        f"AND change = 'DELETE' AND {where} ORDER BY id DESC LIMIT 1", args).fetchone()
+
+
+def require_version(conn: sqlite3.Connection, balance_id: int, expected: int | None) -> None:
+    """Refuse, with ConflictingEdit, unless the balance is still at the version the caller loaded. A balance that never
+    existed is left for the caller's own NotFoundError."""
+    row = conn.execute("SELECT id, account_id, as_of_date, amount_cents, note, version FROM live_balances WHERE id = ?",
+                       (balance_id,)).fetchone()
+    if row is None:
+        gone = _deleted(conn, "record_id = ?", (balance_id,))
+        if gone is not None:
+            raise ConflictingEdit([_conflict(conn, "deleted", json.loads(gone["old_json"])["account_id"], gone)])
+        return
+    if row["version"] != expected:
+        raise ConflictingEdit([_conflict(conn, "changed", row["account_id"], row)])
+
+
+def require_versions(conn: sqlite3.Connection, as_of: date, expected: dict[int, int | None]) -> None:
+    """The same for one date across accounts, where an account whose date had no balance expects None. Names every conflict."""
+    conflicts = []
+    for account_id, want in expected.items():
+        row = conn.execute("SELECT id, as_of_date, amount_cents, note, version FROM live_balances "
+                           "WHERE account_id = ? AND as_of_date = ?", (account_id, as_of.isoformat())).fetchone()
+        if row is None:
+            if want is not None:
+                gone = _deleted(conn, "json_extract(old_json, '$.account_id') = ? AND json_extract(old_json, '$.as_of_date') = ?",
+                                (account_id, as_of.isoformat()))
+                conflicts.append(_conflict(conn, "deleted", account_id, gone) if gone is not None else {
+                    "kind": "deleted", "account_id": account_id, "account_name": accounts.get_account(conn, account_id)["name"],
+                    "balance_id": None, "date": as_of.isoformat(), "amount_cents": None, "note": None, "version": None,
+                    "by": None, "on": None})
+        elif want is None:
+            conflicts.append(_conflict(conn, "added", account_id, row))
+        elif row["version"] != want:
+            conflicts.append(_conflict(conn, "changed", account_id, row))
+    if conflicts:
+        raise ConflictingEdit(conflicts)
 
 
 def parse_date(text: str | None, today: date) -> date:
@@ -125,13 +209,16 @@ def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
 
 
 def update_balance(op: Operation, balance_id: int, date_text: str | None,
-                   amount_text: str | None, note: str | None, today: date) -> str:
-    """Change a balance's date, amount and note. Returns 'updated' or 'unchanged'."""
+                   amount_text: str | None, note: str | None, today: date, expected_version=UNCHECKED) -> str:
+    """Change a balance's date, amount and note. Returns 'updated' or 'unchanged'. Given the version the caller loaded, it
+    refuses with ConflictingEdit, before anything else, if the balance has been written since (or deleted)."""
     conn = op.conn
     as_of = parse_date(date_text, today)
     cents = parse_cents(amount_text)
     new_note = clean_note(note)
     with db.write_transaction(conn):
+        if expected_version is not UNCHECKED:
+            require_version(conn, balance_id, expected_version)
         balance = get_balance(conn, balance_id)
         require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
         if conn.execute(
@@ -148,12 +235,17 @@ def update_balance(op: Operation, balance_id: int, date_text: str | None,
         return "updated"
 
 
-def delete_balance(op: Operation, balance_id: int) -> None:
+def delete_balance(op: Operation, balance_id: int, expected_version=UNCHECKED) -> int:
+    """Delete a balance and return its account's id. Given the version the caller loaded, it refuses with ConflictingEdit if
+    the balance has changed since."""
     conn = op.conn
     with db.write_transaction(conn):
+        if expected_version is not UNCHECKED:
+            require_version(conn, balance_id, expected_version)
         balance = get_balance(conn, balance_id)
         require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
         writer.delete(op, "balances", balance_id)
+        return balance["account_id"]
 
 
 def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict]:
@@ -166,13 +258,15 @@ def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict
         "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_cents, "
         "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
-        "     AND b.as_of_date = ?) AS existing_cents "
+        "     AND b.as_of_date = ?) AS existing_cents, "
+        "  (SELECT b.version FROM live_balances b WHERE b.account_id = a.id "
+        "     AND b.as_of_date = ?) AS existing_version "
         "FROM live_accounts a "
         "JOIN account_classes c ON c.id = a.class_id "
         "JOIN account_types t ON t.id = a.type_id "
         "WHERE a.is_open = 1 "
         "ORDER BY a.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
-        (as_of.isoformat(),),
+        (as_of.isoformat(), as_of.isoformat()),
     ).fetchall()
     result = []
     for row in rows:
@@ -184,11 +278,13 @@ def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict
 
 
 def save_update(op: Operation, date_text: str | None,
-                amounts: dict[int, str | None], today: date) -> dict[str, int]:
+                amounts: dict[int, str | None], today: date, expected_versions=UNCHECKED) -> dict[str, int]:
     """Save one date's amounts for the open accounts, all or nothing.
 
-    Blank amounts are skipped. If any amount is bad, nothing is saved and EntryErrors says which.
-    Returns how many balances were added, updated and left unchanged.
+    Blank amounts are skipped. If any amount is bad, nothing is saved and EntryErrors says which. Given the version of the
+    balance each account had on the date when the caller loaded it (None for none), it refuses with ConflictingEdit, naming
+    every account whose balance has since changed, been deleted or been added. Returns how many balances were added,
+    updated and left unchanged.
     """
     conn = op.conn
     as_of = parse_date(date_text, today)
@@ -208,6 +304,8 @@ def save_update(op: Operation, date_text: str | None,
 
     counts = {"added": 0, "updated": 0, "unchanged": 0}
     with db.write_transaction(conn):
+        if expected_versions is not UNCHECKED:
+            require_versions(conn, as_of, {account_id: expected_versions.get(account_id) for account_id in entered})
         for account_id, cents in entered.items():
             counts[record_balance(op, account_id, as_of, cents)] += 1
     return counts

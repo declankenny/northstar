@@ -5,6 +5,7 @@ import { Modal } from "./Dialogs";
 import { formatCents } from "./money";
 import { useLeaveGuard } from "./router";
 import { useLatest } from "./useRequest";
+import { conflictBanner, rowConflictNote } from "./conflicts";
 import { baselineText, changedAmounts, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
 
 type Banner = { kind: "ok" | "bad"; text: string };
@@ -60,8 +61,9 @@ export function UpdateBalances() {
   // While a request runs the form cannot be edited, so an answer can never replace what was just typed.
   const busy = saving || loading;
 
-  /** Read a date and show it. Nothing is written. With `keep`, rows the user typed in keep their text. */
-  const show = async (date: string | undefined, keep: boolean) => {
+  /** Read a date and show it. Nothing is written. With `keep`, rows the user typed in keep their text. `marks` are notes to
+   *  leave on rows, by id, which a plain read clears. */
+  const show = async (date: string | undefined, keep: boolean, marks: Record<number, string> = {}) => {
     const mine = begin();
     setLoading(true);
     try {
@@ -69,7 +71,7 @@ export function UpdateBalances() {
       if (!mine.current()) return; // a newer read has started: this answer is out of date
       setValues(valuesForDate(rows, values, next.rows, keep));
       setPage(next);
-      setErrors({});
+      setErrors(marks);
     } catch (e) {
       if (!mine.current()) return;
       const message = (e as Error).message;
@@ -134,7 +136,9 @@ export function UpdateBalances() {
   const save = async () => {
     setSaving(true);
     try {
-      const saved = await saveUpdate(page.date, toSend);
+      // Each row sends the version of the balance it loaded (none for a date that had no balance), so a change made since is refused.
+      const versions = Object.fromEntries(Object.keys(toSend).map((id) => [id, rows.find((row) => row.id === Number(id))?.existing_version ?? null]));
+      const saved = await saveUpdate(page.date, toSend, versions);
       setPage(saved);
       setValues(Object.fromEntries(saved.rows.map((row) => [row.id, baselineText(row)])));
       setErrors({});
@@ -143,6 +147,13 @@ export function UpdateBalances() {
       body.current?.scrollTo({ top: 0 });
     } catch (e) {
       const refused = e as RequestError;
+      if (refused.conflicts?.length) {
+        // Nothing was saved. Show the balances as they are now, keep what was typed, and mark the rows that moved on.
+        setBanner({ kind: "bad", text: conflictBanner(refused.conflicts.length) });
+        await show(page.date, true, Object.fromEntries(refused.conflicts.map((c) => [c.account_id, rowConflictNote(c)])));
+        focusAfter.current = refused.conflicts[0].account_id;
+        return;
+      }
       const byRow = Object.fromEntries(Object.entries(refused.errors ?? {}).map(([id, message]) => [Number(id), message]));
       setErrors(byRow);
       setBanner({ kind: "bad", text: refused.message });

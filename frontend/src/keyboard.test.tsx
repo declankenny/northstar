@@ -11,7 +11,7 @@ import { fetchUpdate } from "./api";
 
 const row = (id: number, name: string, class_name: UpdateRow["class_name"]): UpdateRow => ({
   id, name, class_name, type_name: "Savings", stale_after_days: 30, last_date: null, last_cents: null,
-  days_since: null, stale: false, existing_cents: null,
+  days_since: null, stale: false, existing_cents: null, existing_version: null,
 });
 const page: UpdatePage = {
   date: "2026-10-30", today: "2026-10-30", saved: null,

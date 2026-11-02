@@ -51,7 +51,7 @@ def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> d
 def balance_history(conn: sqlite3.Connection, account_id: int) -> list[sqlite3.Row]:
     """Every balance of the account, newest date first."""
     return conn.execute(
-        "SELECT id, as_of_date, amount_cents, note, source FROM live_balances "
+        "SELECT id, as_of_date, amount_cents, note, source, version FROM live_balances "
         "WHERE account_id = ? ORDER BY as_of_date DESC",
         (account_id,),
     ).fetchall()

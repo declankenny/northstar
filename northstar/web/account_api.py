@@ -19,6 +19,7 @@ class BalanceOut(BaseModel):
     as_of_date: str          # YYYY-MM-DD, a calendar date with no timezone
     amount_cents: int
     note: str | None
+    version: int             # the id of the operation that last wrote it; sent back with an edit or delete
 
 
 class TypeOut(BaseModel):
@@ -108,6 +109,10 @@ class BalanceEntry(BaseModel):
     date: str                # typed text, checked by the server
     amount: str
     note: str | None = None
+
+
+class BalanceEdit(BalanceEntry):
+    version: int             # the balance's version when the page loaded it; the edit is refused if it has changed since
 
 
 def _page(conn, account_id: int) -> dict:
@@ -201,18 +206,15 @@ def add_balance(account_id: int, body: BalanceEntry, request: Request):
 
 
 @router.patch("/balances/{balance_id}", response_model=AccountOut)
-def edit_balance(balance_id: int, body: BalanceEntry, request: Request):
+def edit_balance(balance_id: int, body: BalanceEdit, request: Request):
     def action(conn):
-        account_id = balances.get_balance(conn, balance_id)["account_id"]
-        balances.update_balance(operation(request, conn), balance_id, body.date, body.amount, body.note, clock.today())
-        return _page(conn, account_id)
+        balances.update_balance(operation(request, conn), balance_id, body.date, body.amount, body.note, clock.today(), body.version)
+        return _page(conn, balances.get_balance(conn, balance_id)["account_id"])
     return run(request, action)
 
 
 @router.delete("/balances/{balance_id}", response_model=AccountOut)
-def delete_balance(balance_id: int, request: Request):
+def delete_balance(balance_id: int, version: int, request: Request):
     def action(conn):
-        account_id = balances.get_balance(conn, balance_id)["account_id"]
-        balances.delete_balance(operation(request, conn), balance_id)
-        return _page(conn, account_id)
+        return _page(conn, balances.delete_balance(operation(request, conn), balance_id, version))
     return run(request, action)

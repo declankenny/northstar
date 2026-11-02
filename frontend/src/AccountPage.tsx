@@ -5,6 +5,7 @@ import {
 } from "./api";
 import { BalanceDialog, ChangeClassDialog, EditAccountDialog } from "./AccountDialogs";
 import { formatDate } from "./dates";
+import { conflictText } from "./conflicts";
 import { ConfirmDialog } from "./Dialogs";
 import { formatCents, percentChange } from "./money";
 import { NetWorthChart } from "./NetWorthChart";
@@ -76,6 +77,12 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
 
   if (error) return <p className="empty">Could not load this account. {error} <Link to={PATHS.accounts}>Back to Accounts</Link></p>;
   if (!account) return <p className="empty">Loading…</p>;
+
+  /** After a balance was found to have changed since the page loaded it, show the account as it now is behind the dialog. A reload
+   *  would blank the page and close the dialog, so the answer is put in place instead; if it fails the page stays as it was. */
+  const refresh = () => {
+    void fetchAccount(id).then((page) => loaded.setData(page), () => undefined);
+  };
 
   /** Every change answers with the account as it now is. */
   const apply = (page: Account) => {
@@ -238,8 +245,8 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
       </div>
 
       {dialog?.kind === "balance" && (
-        <BalanceDialog account={account} editing={dialog.editing} onClose={() => setDialog(null)}
-          onSave={async (entry) => apply(dialog.editing ? await editBalance(dialog.editing.id, entry) : await addBalance(id, entry))} />
+        <BalanceDialog account={account} editing={dialog.editing} onClose={() => setDialog(null)} onConflict={refresh}
+          onSave={async (entry, version) => apply(dialog.editing ? await editBalance(dialog.editing.id, entry, version!) : await addBalance(id, entry))} />
       )}
       {dialog?.kind === "edit" && (
         <EditAccountDialog account={account} onClose={() => setDialog(null)}
@@ -256,8 +263,9 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
       )}
       {dialog?.kind === "delete-balance" && (
         <ConfirmDialog title="Delete this balance?" confirmLabel="Delete" danger onClose={() => setDialog(null)}
-          text={deleteConsequence(account.balances, dialog.index)}
-          onConfirm={async () => apply(await deleteBalance(account.balances[dialog.index].id))} />
+          text={deleteConsequence(account.balances, dialog.index)} onConflict={refresh}
+          conflict={{ lead: "Nothing was deleted.", text: (c) => conflictText(c, account.balances[dialog.index]?.amount_cents) }}
+          onConfirm={async () => apply(await deleteBalance(account.balances[dialog.index].id, account.balances[dialog.index].version))} />
       )}
       {dialog?.kind === "delete-account" && (
         <ConfirmDialog title={`Delete ${account.name}?`} confirmLabel="Delete account" danger onClose={() => setDialog(null)}
