@@ -6,6 +6,8 @@ This merges the earlier working notes, the change tracking proposal and the find
 
 ## Status
 
+Nov 2, 2026: the undo parts of this design moved to [../undo/design.md](../undo/design.md). The change log itself is unchanged.
+
 The v0.2 schema direction is agreed in discussion, including change tracking. This is a work-in-progress design. It is not the spec or the decisions log, which change only with the code, and no code has changed. The order of the work is in [implementation-plan.md](implementation-plan.md).
 
 - Agreed earlier: soft deletes for users and accounts, audit columns on every user-facing table, a system user, a rebuild-capable migration runner, a unique account name, the integer balance id and a version column.
@@ -70,12 +72,7 @@ These are agreed in discussion. None is written into the spec or the decisions l
 | Preview checks | A preview captures the expected state of each relevant `(account_id, as_of_date)` as absent, or the balance's id and version. The commit compares these inside `BEGIN IMMEDIATE` before any write, rechecks account eligibility, and rejects the whole import or move if anything differs, asking for a fresh preview. A previewed insert is never silently turned into a replacement. Expectations come from server state and are bound to the submitted import or move. | A version identifies an operation, not a record, and it cannot detect a date that was empty at preview and filled before commit. |
 | No triggers for the log | A trigger cannot know the signed-in user or the operation without hidden connection state, and a static trigger would have to be regenerated whenever an audited column is added. | Separate from the existing decision that rejects triggers for invariants. |
 | Baseline | Not written. Existing balances get version 0. | Undo restores from the old values on the later change rows. The creator and creation time come from the backfilled audit columns. |
-| Undo | Ships in v0.2 for balance changes only. It runs through the normal write functions, so their rules apply. An undo operation cannot itself be undone. An operation is undone at most once, and the skipped list says what to fix by hand. Account changes are recorded, and restore is v0.5. | The scope valve is not used. Undo and restore are different features on different timelines. |
-| Undo is atomic per record | Each inverse, with its data and change-log writes, runs inside a savepoint. An expected failure (a failed precondition or a business rule) rolls back to the savepoint and records a skip. An unexpected database or programming failure aborts the whole undo. | A caught exception in the middle of a multi-write inverse could otherwise leave part of it committed. |
-| Undo outcome | The `undo` header is created inside the write transaction, outside the per-record savepoints, before the first inverse. If no row was reverted, the transaction rolls back, nothing persists and the attempt does not count, so the user can fix the cause and retry. If at least one row was reverted, the undo commits and is final. The detail JSON holds the reverted count and the skipped record ids with stable reason codes. | A header with no effect would use up the only undo for nothing. A partial undo is final, so the preview shows what would be skipped before the user confirms. |
-| Undo preview | Preview and commit use one evaluator that processes the inverses in reverse order, each evaluated against the state left by the preceding successful inverse. Preview runs the real inverse logic in a write transaction and always rolls it back, so it leaves no rows, header or marker, and the transaction is not held open while the user decides. | A preview that checked each row against the starting state would wrongly skip the replaced balance in a date move, whose old date is only free after the moving balance goes back. |
-| Undo confirmation | The confirmation is bound to the target operation and a server-derived plan: record identities, versions or absence, account eligibility and the predicted reverted and skipped sets. The commit recomputes the plan inside `BEGIN IMMEDIATE` and rejects any difference, whether more or fewer rows became eligible, and asks for a fresh confirmation. A partial undo commits only if the user confirmed that partial plan. | Rechecking each inverse protects later work, but could turn a previewed full undo into a final partial one the user never confirmed. |
-| Closed and deleted accounts | The balance functions reject every change on a closed account, so undo skips every inverse on a closed or deleted account. Reason codes differ, and the preview tells the user to reopen a closed account before confirming. | Preserves today's rule. Restoring a deleted account is v0.5. |
+| Undo | Not designed here any more. The register and the all-or-nothing undo of imports are in [../undo/design.md](../undo/design.md), Part 1, and the fuller design that was written here is kept in its Part 2. | Undo and restore are different features on different timelines, and undo of other operations waits for the history screens. |
 | Retention | Waits for #58 (v0.5), with the System Properties table. Operation header rows are kept when change rows are purged. | v0.2 only needs to record. The design must not block a later purge. |
 
 ## Migration runner
@@ -128,7 +125,7 @@ Because neither accounts nor users is ever hard-deleted, the audit columns and t
 | Feature | What it needs |
 | --- | --- |
 | Import, #79 | An import recorded as one batch, with the value of every balance it replaced. |
-| Provenance and batch undo, #81 | Who, when, which operation, what was replaced. Undo of a whole batch that never overwrites later work. |
+| Provenance and batch undo, #81 | Who, when, which operation, what was replaced. Undo of an import is in [../undo/design.md](../undo/design.md). |
 | Conflicting edits, #10 | `balances.version`, the id of the operation that last wrote the balance. |
 | History and recovery, #58 (v0.5) | History screens, restore of earlier values and deleted accounts, and retention, all built on this record. |
 
@@ -232,21 +229,7 @@ Enforcement is by test, because SQLite cannot intercept writes globally: a test 
 
 **Deleting an account with 200 balances.** One operation and one `UPDATE` row on `accounts` (`deleted` 0 to 1). The balances stay in place and drop out of every view with the account. Restore is the reverse, in v0.5.
 
-**Undo of a balance operation.** The user first sees a preview of which rows would be reverted and which would be skipped, with the reasons, and is told that a partial undo is final. The preview comes from the same evaluator the commit uses: inside a write transaction it runs the real inverses in reverse order, each against the state the earlier ones left, collects the result and always rolls back, so it leaves no rows, header or marker. The confirmation is bound to the target operation and that plan. On confirm, inside `BEGIN IMMEDIATE`, the app recomputes the plan and rejects any difference (more or fewer rows eligible, a changed version, an account closed or reopened), asking for a fresh confirmation. Then, in the same transaction, the app validates that the target is a non-undo operation that has not been undone, creates the `undo` header outside the per-record savepoints, and walks the operation's balance rows in reverse. Each inverse runs inside its own savepoint. A row is reverted only if the balance still matches what the operation left:
-
-| Original change | Precondition | Inverse |
-| --- | --- | --- |
-| `INSERT` | The balance exists and its version is this operation's id | Delete it |
-| `UPDATE` | The balance exists and its version is this operation's id, and for a date change the old date is still empty | Restore the old values |
-| `DELETE` | No balance exists at that id or at that account and date | Reinsert it with its original id, `created_at` and `created_by` |
-
-A restored balance takes the undo operation's id as its version, which is higher than anything before it. So undoing the original import afterwards finds a version that no longer matches and leaves it alone.
-
-Undo runs through the normal write functions, so their rules apply. An inverse is skipped, with a stable reason code, if its precondition fails, if its account is closed or deleted, or if the write would break a rule. Expected failures roll back to the savepoint and record the skip. An unexpected database or programming failure aborts the whole undo. Later work is never overwritten silently.
-
-Outcome. If no row was reverted, the transaction rolls back, nothing persists and the attempt does not count: the user is told why and can fix the cause (for example, reopen a closed account) and retry. If at least one row was reverted, the undo commits with its detail JSON and is final: an operation is undone at most once, skipped rows cannot be retried, and an `undo` operation cannot itself be undone, so redoing means entering the data again.
-
-Reversing the order matters for a date move: the moving balance goes back first, which empties the new date, and then the replaced balance is reinserted. v0.2 undoes balance changes only. If an operation holds both account and balance changes, the balance rows are undone and the account rows are listed as not reverted. Account changes are recorded, and restore is v0.5.
+**Undo of a balance operation.** Moved to [../undo/design.md](../undo/design.md): Part 1 is what v0.2 builds, and Part 2 is the fuller design as it was written here.
 
 ### Prerequisites in the schema
 
@@ -269,8 +252,7 @@ Reversing the order matters for a date move: the moving balance goes back first,
 - Duplicate import dates fail before any write. A repeated mutation through the writer rolls the whole operation back. A date move with replacement still produces two changes for distinct record ids and undoes correctly.
 - The first changed balance receives the allocated operation id and later ones share it. A no-op save creates no operation and changes neither version nor timestamps. A theme-only update changes audit metadata without a header. A logged edit followed by a theme change leaves history with only the edit and the audit columns showing the later update.
 - Preview checks: an empty date becoming occupied, an expected record deleted or replaced, a version changing, and several records sharing an operation id. Each mismatch causes no writes and asks for a fresh preview.
-- Undo: all-skipped (nothing persists, retry allowed), partly successful and fully successful (each blocks a second attempt), and an unexpected failure rolling back the header and every inverse. An expected failure injected after an inverse's first write leaves no part of that inverse while other eligible inverses commit. All inverse kinds against open, closed and deleted accounts.
-- Undo preview and confirmation: a date move with replacement previews and commits both inverses when nothing intervenes; if moving the first balance back is blocked, the replaced balance's restore is evaluated against the resulting state; preview leaves no rows, headers or logs; preview and commit classify the same when state is unchanged; an intervening edit that turns a full undo into a partial one commits nothing; closing or reopening an account after preview requests a fresh confirmation; an unchanged, explicitly confirmed partial plan commits and becomes final; two concurrent confirmations cannot both commit.
+- Undo: see [../undo/design.md](../undo/design.md).
 - Backup validation: a pre-upgrade backup validates and restores with the new app; backups validate after each migration boundary (B and C); a rename done through the executor is exercised; a backup missing a table required by its recorded migrations is still rejected.
 - User reactivation: a formerly admin user re-added without an admin request is a regular user; old passwords and sessions stay unusable; the system user cannot be reactivated or modified this way; creation metadata is unchanged.
 - Rebuilds: foreign-key enforcement is restored after success and failure; failures while copying and validating roll back cleanly.
@@ -282,7 +264,6 @@ Reversing the order matters for a date move: the moving balance goes back first,
 - **A snapshot of the whole row on each change.** Wasteful, awkward for diffs, and risks copying secrets from `users`.
 - **`updated_at` as the conflict token.** One-second resolution can miss two edits in the same second.
 - **A per-balance version counter.** A restored balance would need a version above every earlier one, so the counter would need its own home that survives deletion and retention. Using the operation id removes the problem.
-- **Persisting an undo header even when every row is skipped.** It would use up the only undo for an attempt that did nothing. An all-skipped attempt commits nothing instead.
 - **Keeping `schema_migrations` as an exception to the `sys_` rule.** It would avoid the rollback case entirely, but leaves a permanent exception. Renaming is cheap before 1.0.0, and the stray empty ledger is handled.
 - **Triggers to write the log.** See the decision table above.
 - **Connection-scoped actor.** Hidden state, and a write without it is logged with no author.
@@ -298,15 +279,14 @@ Reversing the order matters for a date move: the moving balance goes back first,
 - The `sys_` prefix marks tables written by the app for itself.
 - Database columns are not renamed from 1.0.0 onwards. Display names come from a Labels table, to be designed later.
 - Baseline rows are not written.
-- Undo is atomic per record, an undo that reverts nothing does not count, a partial undo is final, an undo cannot be undone, and v0.2 undoes balance changes only. Restore is v0.5.
-- Undo preview and commit use one evaluator, and the undo confirmation is bound to the previewed plan.
+- Undo is designed in [../undo/design.md](../undo/design.md). v0.2 undoes imports only, all or nothing. Restore is v0.5.
 - Account names compare with SQLite `NOCASE` and are trimmed as the application trims them.
 - Reactivating a user is an explicit update: the request sets the password, name and admin flag, and the theme resets.
 
 ## What changes elsewhere
 
 - The issues link to this folder instead of carrying copies of the design.
-- #81 covers provenance and batch undo of balance changes, with no baseline.
+- #81 covers provenance, which this design delivers. Undo moved to [../undo/design.md](../undo/design.md).
 - #82 (unique account names) stays migration A, with a full unique index, the name contract and the deterministic rename. B3 makes the index partial.
 - #79 gains the duplicate-date rejection and the preview expectations as acceptance criteria. Preview storage, expiry, transport and conflict presentation stay with #79.
 - The user soft-delete issue gets the reactivation rules as acceptance criteria.

@@ -221,7 +221,7 @@ def commit_import(conn: sqlite3.Connection, actor_id: int | None, account_id: in
         written = [row for row in plan.rows if row.outcome in ("add", "replace")]
         if written:
             operation = Operation(conn, actor_id, "import", {
-                "file": _file_name(file_name), "policy": policy, "date_format": date_format,
+                "account_id": account_id, "file": _file_name(file_name), "policy": policy, "date_format": date_format,
                 "mapping": None if mapping is None else mapping.used(),
                 "counts": {"added": result.added, "updated": result.updated, "unchanged": result.unchanged,
                            "skipped": result.skipped}})

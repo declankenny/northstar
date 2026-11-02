@@ -2,7 +2,7 @@
 
 Status: design agreed in discussion, not implemented. Nothing in this folder is the spec or the decisions log. Those change only with the code, in the pull request that implements each step.
 
-This folder holds the design for the database work behind v0.2's balance CSV import and export: soft deletes, audit columns, a system user, a rebuild-capable migration runner, and a record-level change log with undo of balance changes.
+This folder holds the design for the database work behind v0.2's balance CSV import and export: soft deletes, audit columns, a system user, a rebuild-capable migration runner, and a record-level change log. Undo moved to [../undo](../undo/README.md).
 
 | File | What it holds |
 | --- | --- |
@@ -17,4 +17,4 @@ See "Deferred and open" at the end of the design, and "Decide first" in the plan
 
 ## Lifecycle
 
-Small design topics are discussed on their issue. A large one gets a folder like this one in `docs/design`, and the issues link to it. When the last step of the plan is merged, what lasts goes into `docs/decisions.md` and `docs/spec.md` and this folder is deleted. Git history keeps it.
+Small design topics are discussed on their issue. A large one gets a folder like this one in `docs/design`, and the issues link to it. What lasts from each step goes into `docs/decisions.md` and `docs/spec.md` in that step's pull request. This folder is deleted only when Declan says so. Git history keeps it.

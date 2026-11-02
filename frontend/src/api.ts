@@ -98,6 +98,17 @@ export async function fetchUsers(signal?: AbortSignal): Promise<UserRow[]> {
   return (await send<UserRow[]>("GET", "/api/users", undefined, signal))!;
 }
 
+/** One past import on the admin Imports page. `date` and `reverted_on` are UTC dates; the file is the base name only. */
+export type ImportEntry = {
+  id: number; date: string; by: string; account_id: number | null; account_name: string | null;
+  account_deleted: boolean; account_open: boolean; file: string | null; added: number; replaced: number; reverted_on: string | null;
+};
+export type ImportRegister = { imports: ImportEntry[]; more: boolean; limit: number };
+
+export async function fetchImports(signal?: AbortSignal): Promise<ImportRegister> {
+  return (await send<ImportRegister>("GET", "/api/imports", undefined, signal))!;
+}
+
 export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean }): Promise<UserRow> {
   return (await send<UserRow>("POST", "/api/users", user))!;
 }

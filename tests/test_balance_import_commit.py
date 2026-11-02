@@ -118,7 +118,7 @@ def test_the_header_records_the_file_the_settings_and_the_counts_and_nothing_fro
        date_format="YYYY-MM-DD")
     header, _ = header_and_changes(conn)
     assert json.loads(header["detail"]) == {
-        "file": "2026 q1.csv", "policy": "replace", "date_format": "YYYY-MM-DD", "mapping": {"date": 0, "balance": 2, "note": 1},
+        "account_id": account, "file": "2026 q1.csv", "policy": "replace", "date_format": "YYYY-MM-DD", "mapping": {"date": 0, "balance": 2, "note": 1},
         "counts": {"added": 1, "updated": 1, "unchanged": 1, "skipped": 0}}
     assert "new note" not in header["detail"]
 
