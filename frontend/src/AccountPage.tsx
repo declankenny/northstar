@@ -268,7 +268,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
       )}
       {dialog?.kind === "delete-account" && (
         <ConfirmDialog title={`Delete ${account.name}?`} confirmLabel="Delete account" danger onClose={() => setDialog(null)}
-          text={`This permanently deletes the account${account.balance_count ? ` and its ${plural(account.balance_count, "balance")}` : ""}. Net worth history changes to match. This can't be undone. To hide an account but keep its history, close it instead.`}
+          text={`This removes the account${account.balance_count ? ` and its ${plural(account.balance_count, "balance")}` : ""} from Northstar, and net worth history changes to match. There is no way to restore it yet. To hide an account but keep its history, close it instead.`}
           onConfirm={async () => { await deleteAccount(id); navigate(PATHS.accounts); }} />
       )}
     </div>

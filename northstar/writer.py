@@ -22,6 +22,9 @@ AUTHOR_COLUMNS = ("created_by", "updated_by")
 # All four audit columns, which belong to the writer and which a caller cannot set. The two dates are filled by SQLite:
 # an insert takes the column default, and an update sets updated_at in its own statement.
 AUDIT_COLUMNS = (*AUTHOR_COLUMNS, "created_at", "updated_at")
+# Tables whose rows are never removed: they are marked deleted instead. Their balances and history are kept, and the
+# cascade from a balance to its account would otherwise erase them quietly.
+SOFT_DELETED = frozenset({"accounts", "users"})
 # A table the application writes for itself (sign-in sessions, failed-login tracking) is prefixed sys_. It holds no
 # household data, has no audit columns, and a write to it needs no operation.
 
@@ -108,8 +111,10 @@ def update(op: Operation, table: str, record_id: int, changes: dict, *, only_if:
 
 
 def delete(op: Operation, table: str, record_id: int) -> None:
-    """Remove a row from a household table."""
+    """Remove a row from a household table, if it is one that is ever removed."""
     _columns(op.conn, table, system=False)
+    if table in SOFT_DELETED:
+        raise ValueError(f"{table} are marked deleted, never removed.")
     op.conn.execute(f"DELETE FROM {table} WHERE id = ?", (record_id,))
 
 

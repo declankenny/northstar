@@ -5,6 +5,15 @@ import { RowMenu } from "./RowMenu";
 
 type Dialog = { kind: "edit"; type: TypeRow | null } | { kind: "delete"; type: TypeRow };
 
+/** Why a type in use can't be deleted, or nothing when it can. Deleted accounts keep their type until they can be restored. */
+function inUseNote(t: TypeRow): string | undefined {
+  const { account_count: live, deleted_account_count: deleted } = t;
+  if (live + deleted === 0) return undefined;
+  if (deleted === 0) return `${live} ${live === 1 ? "account uses" : "accounts use"} this type. Change ${live === 1 ? "its" : "their"} type first.`;
+  if (live === 0) return `${deleted} deleted ${deleted === 1 ? "account uses" : "accounts use"} this type. Restoring deleted accounts isn't possible yet.`;
+  return `${live + deleted} accounts use this type, ${deleted} of them deleted. Restoring deleted accounts isn't possible yet.`;
+}
+
 /** Add a type, or edit one. The class can change only while no account uses the type. */
 function TypeDialog(props: { list: TypeList; editing: TypeRow | null; onSave: (t: { name: string; class_id: number; stale_after_days: number }) => Promise<void>; onClose: () => void }) {
   const { editing } = props;
@@ -12,7 +21,7 @@ function TypeDialog(props: { list: TypeList; editing: TypeRow | null; onSave: (t
   const [classId, setClassId] = useState(editing?.class_id ?? props.list.classes[0].id);
   const [days, setDays] = useState(String(editing?.stale_after_days ?? 35));
   const { busy, error, run } = useAction();
-  const locked = editing !== null && editing.account_count > 0;
+  const locked = editing !== null && editing.account_count + editing.deleted_account_count > 0;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -99,10 +108,9 @@ export function AccountTypes() {
                             { label: "Edit", onClick: () => setDialog({ kind: "edit", type: t }) },
                             // A type in use can't be deleted, so the reason sits right after the word.
                             {
-                              label: "Delete", danger: true, disabled: t.account_count > 0, onClick: () => setDialog({ kind: "delete", type: t }),
-                              note: t.account_count > 0
-                                ? `${t.account_count} ${t.account_count === 1 ? "account uses" : "accounts use"} this type. Change ${t.account_count === 1 ? "its" : "their"} type first.`
-                                : undefined,
+                              label: "Delete", danger: true, disabled: t.account_count + t.deleted_account_count > 0,
+                              onClick: () => setDialog({ kind: "delete", type: t }),
+                              note: inUseNote(t),
                             },
                           ]} />
                         </td>

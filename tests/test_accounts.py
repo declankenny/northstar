@@ -119,12 +119,15 @@ def test_close_twice_and_reopen(conn):
         accounts.reopen_account(op(conn), acct)
 
 
-def test_delete_account_returns_balance_count_and_removes_balances(conn):
+def test_delete_account_returns_balance_count_and_hides_the_account_and_its_balances(conn):
     acct = add_account(conn, "Test", ASSET, "Checking")
     add_balance(conn, acct, "2026-01-31", 100)
     add_balance(conn, acct, "2026-02-28", 200)
     assert accounts.delete_account(op(conn), acct) == 2
-    assert conn.execute("SELECT COUNT(*) FROM balances").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM live_balances").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM live_accounts").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM balances").fetchone()[0] == 2         # kept, for a later restore
+    assert conn.execute("SELECT deleted FROM accounts WHERE id = ?", (acct,)).fetchone()[0] == 1
     with pytest.raises(ValidationError):
         accounts.get_account(conn, acct)
 

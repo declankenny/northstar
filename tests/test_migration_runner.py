@@ -15,7 +15,14 @@ LEGACY_LEDGER = (
     "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, "
     "applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))")
 
+# A rebuild of accounts or balances has to drop the live views first (SQLite cannot rename a table under a view) and
+# recreate them, and the partial name index, afterwards. The runner's guard checks that everything came back.
+LIVE_BALANCES = ("CREATE VIEW live_balances AS SELECT balances.* FROM balances "
+                 "JOIN accounts ON accounts.id = balances.account_id WHERE accounts.deleted = 0;\n")
+VIEWS = "CREATE VIEW live_accounts AS SELECT * FROM accounts WHERE deleted = 0;\n" + LIVE_BALANCES
 REBUILD_ACCOUNTS = """-- northstar: rebuild
+DROP VIEW live_accounts;
+DROP VIEW live_balances;
 CREATE TABLE accounts_new (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
@@ -24,16 +31,20 @@ CREATE TABLE accounts_new (
     is_open    INTEGER NOT NULL DEFAULT 1 CHECK (is_open IN (0, 1)),
     notes      TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    created_by INTEGER NOT NULL REFERENCES users (id),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_by INTEGER NOT NULL REFERENCES users (id),
+    deleted    INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
     colour     TEXT,
     FOREIGN KEY (type_id, class_id) REFERENCES account_types (id, class_id)
         ON UPDATE RESTRICT ON DELETE RESTRICT
 );
-INSERT INTO accounts_new (id, name, class_id, type_id, is_open, notes, created_at)
-    SELECT id, name, class_id, type_id, is_open, notes, created_at FROM accounts;
+INSERT INTO accounts_new (id, name, class_id, type_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted)
+    SELECT id, name, class_id, type_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted FROM accounts;
 DROP TABLE accounts;
 ALTER TABLE accounts_new RENAME TO accounts;
-CREATE UNIQUE INDEX accounts_name_unique ON accounts (name COLLATE NOCASE);
-"""
+CREATE UNIQUE INDEX accounts_name_unique ON accounts (name COLLATE NOCASE) WHERE deleted = 0;
+""" + VIEWS
 
 
 def folder_with(tmp_path, **extra):
@@ -111,8 +122,8 @@ def migrated(tmp_path):
 
 def test_a_rebuild_migration_keeps_every_row_and_does_not_cascade_to_the_children(tmp_path, migrated):
     """Dropping accounts with foreign keys on would delete its balances. Rebuilding is only safe with them off."""
-    folder = folder_with(tmp_path, **{"0004_accounts_colour": REBUILD_ACCOUNTS})
-    assert db.migrate(migrated, folder) == ["0004_accounts_colour"]
+    folder = folder_with(tmp_path, **{"0100_accounts_colour": REBUILD_ACCOUNTS})
+    assert db.migrate(migrated, folder) == ["0100_accounts_colour"]
     assert counts(migrated) == [1, 1]
     assert "colour" in {row["name"] for row in migrated.execute("PRAGMA table_info(accounts)")}
     assert foreign_keys(migrated) == 1
@@ -120,14 +131,14 @@ def test_a_rebuild_migration_keeps_every_row_and_does_not_cascade_to_the_childre
 
 
 def test_a_migration_without_the_marker_still_runs_with_foreign_keys_on(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0004_probe": "CREATE TABLE probe (flag INTEGER);\n"
+    folder = folder_with(tmp_path, **{"0100_probe": "CREATE TABLE probe (flag INTEGER);\n"
                                                      "INSERT INTO probe SELECT foreign_keys FROM pragma_foreign_keys;"})
     db.migrate(migrated, folder)
     assert migrated.execute("SELECT flag FROM probe").fetchone()[0] == 1
 
 
 def test_a_rebuild_migration_runs_with_foreign_keys_off(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0004_probe": "-- northstar: rebuild\nCREATE TABLE probe (flag INTEGER);\n"
+    folder = folder_with(tmp_path, **{"0100_probe": "-- northstar: rebuild\nCREATE TABLE probe (flag INTEGER);\n"
                                                      "INSERT INTO probe SELECT foreign_keys FROM pragma_foreign_keys;"})
     db.migrate(migrated, folder)
     assert migrated.execute("SELECT flag FROM probe").fetchone()[0] == 0
@@ -137,7 +148,7 @@ def test_a_rebuild_migration_runs_with_foreign_keys_off(tmp_path, migrated):
 def test_a_rebuild_that_fails_while_copying_is_rolled_back_whole(tmp_path, migrated):
     broken = REBUILD_ACCOUNTS.replace("ALTER TABLE accounts_new RENAME TO accounts;",
                                       "INSERT INTO nowhere VALUES (1);")
-    folder = folder_with(tmp_path, **{"0004_broken": broken})
+    folder = folder_with(tmp_path, **{"0100_broken": broken})
     before = objects(migrated)
     with pytest.raises(sqlite3.Error):
         db.migrate(migrated, folder)
@@ -148,7 +159,7 @@ def test_a_rebuild_that_fails_while_copying_is_rolled_back_whole(tmp_path, migra
 
 def test_a_rebuild_that_loses_rows_other_tables_point_at_is_refused_at_validation(tmp_path, migrated):
     lossy = REBUILD_ACCOUNTS.replace("FROM accounts;", "FROM accounts WHERE 0;")
-    folder = folder_with(tmp_path, **{"0004_lossy": lossy})
+    folder = folder_with(tmp_path, **{"0100_lossy": lossy})
     with pytest.raises(ValidationError, match="foreign key"):
         db.migrate(migrated, folder)
     assert counts(migrated) == [1, 1]
@@ -158,7 +169,7 @@ def test_a_rebuild_that_loses_rows_other_tables_point_at_is_refused_at_validatio
 
 
 def test_foreign_keys_stay_off_if_they_were_off_and_on_if_they_were_on(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0004_accounts_colour": REBUILD_ACCOUNTS})
+    folder = folder_with(tmp_path, **{"0100_accounts_colour": REBUILD_ACCOUNTS})
     migrated.execute("PRAGMA foreign_keys = OFF")
     db.migrate(migrated, folder)
     assert foreign_keys(migrated) == 0
@@ -166,7 +177,7 @@ def test_foreign_keys_stay_off_if_they_were_off_and_on_if_they_were_on(tmp_path,
 
 def test_migrations_cannot_start_inside_a_transaction(tmp_path, migrated):
     """PRAGMA foreign_keys does nothing inside one, so a rebuild there would silently run with them on."""
-    folder = folder_with(tmp_path, **{"0004_accounts_colour": REBUILD_ACCOUNTS})
+    folder = folder_with(tmp_path, **{"0100_accounts_colour": REBUILD_ACCOUNTS})
     migrated.execute("BEGIN")
     with pytest.raises(ValidationError, match="transaction"):
         db.migrate(migrated, folder)
@@ -178,6 +189,7 @@ INDEX_AND_VIEW = ("CREATE INDEX balances_note ON balances (note);\n"
                   "CREATE VIEW big_balances AS SELECT id FROM balances WHERE amount_cents > 100;")
 REBUILD_BALANCES = """-- northstar: rebuild
 DROP VIEW big_balances;
+DROP VIEW live_balances;
 CREATE TABLE balances_new (
     id INTEGER PRIMARY KEY,
     account_id INTEGER NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
@@ -189,20 +201,20 @@ CREATE TABLE balances_new (
 INSERT INTO balances_new SELECT * FROM balances;
 DROP TABLE balances;
 ALTER TABLE balances_new RENAME TO balances;
-"""
+""" + LIVE_BALANCES
 
 
 def test_a_rebuild_that_keeps_its_indexes_and_views_is_accepted(tmp_path, migrated):
-    folder = folder_with(tmp_path, **{"0004_index": INDEX_AND_VIEW,
-                                      "0005_rebuild": REBUILD_BALANCES + INDEX_AND_VIEW})
+    folder = folder_with(tmp_path, **{"0100_index": INDEX_AND_VIEW,
+                                      "0101_rebuild": REBUILD_BALANCES + INDEX_AND_VIEW})
     db.migrate(migrated, folder)
     assert {("index", "balances_note"), ("view", "big_balances")} <= objects(migrated)
 
 
 def test_a_rebuild_that_silently_loses_an_index_or_a_view_is_refused(tmp_path, migrated):
     """Dropping a table takes its indexes with it, and a view over it stops working. Both are easy to forget."""
-    folder = folder_with(tmp_path, **{"0004_index": INDEX_AND_VIEW, "0005_rebuild": REBUILD_BALANCES})
-    db.migrate(migrated, folder_with(tmp_path / "first", **{"0004_index": INDEX_AND_VIEW}))
+    folder = folder_with(tmp_path, **{"0100_index": INDEX_AND_VIEW, "0101_rebuild": REBUILD_BALANCES})
+    db.migrate(migrated, folder_with(tmp_path / "first", **{"0100_index": INDEX_AND_VIEW}))
     before = objects(migrated)
     with pytest.raises(ValidationError, match="balances_note"):
         db.migrate(migrated, folder)

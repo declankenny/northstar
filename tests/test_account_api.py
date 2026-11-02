@@ -153,12 +153,16 @@ def test_a_closed_account_refuses_balance_changes(client, household):
     assert client.delete(f"/api/balances/{entry['id']}").status_code == 422
 
 
-def test_delete_removes_the_account_and_its_balances(client, household):
+def test_delete_removes_the_account_and_its_balances_from_view_but_keeps_them(client, household):
     url = f"/api/accounts/{household['checking']}"
+    with with_db(client) as conn:
+        kept = conn.execute("SELECT COUNT(*) FROM balances WHERE account_id = ?", (household["checking"],)).fetchone()[0]
+    assert kept > 0
     assert client.delete(url).status_code == 204
     assert client.get(url).status_code == 404
     with with_db(client) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM balances WHERE account_id = ?", (household["checking"],)).fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM balances WHERE account_id = ?", (household["checking"],)).fetchone()[0] == kept
+        assert conn.execute("SELECT COUNT(*) FROM live_balances WHERE account_id = ?", (household["checking"],)).fetchone()[0] == 0
     assert client.delete(url).status_code == 404
 
 

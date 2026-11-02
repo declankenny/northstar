@@ -215,8 +215,12 @@ export async function addAccount(account: NewAccount): Promise<AccountList> {
   return (await send<AccountList>("POST", "/api/accounts", account))!;
 }
 
-/** One account type. account_count is how many accounts use it: a type in use can't be deleted or change class. */
-export type TypeRow = { id: number; name: string; class_id: number; class_name: string; stale_after_days: number; account_count: number };
+/** One account type. account_count is how many accounts use it, and deleted_account_count how many deleted accounts still do
+ * (they keep their type until they can be restored): a type in use by either can't be deleted or change class. */
+export type TypeRow = {
+  id: number; name: string; class_id: number; class_name: string; stale_after_days: number; account_count: number;
+  deleted_account_count: number;
+};
 export type TypeList = { types: TypeRow[]; classes: { id: number; name: string }[] };
 
 export async function fetchTypes(): Promise<TypeList> {

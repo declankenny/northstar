@@ -10,8 +10,8 @@ from northstar.writer import Operation
 _SELECT = (
     "SELECT a.id, a.name, a.class_id, c.name AS class_name, a.type_id, t.name AS type_name, "
     "       a.is_open, a.notes, "
-    "       (SELECT COUNT(*) FROM balances b WHERE b.account_id = a.id) AS balance_count "
-    "FROM accounts a "
+    "       (SELECT COUNT(*) FROM live_balances b WHERE b.account_id = a.id) AS balance_count "
+    "FROM live_accounts a "
     "JOIN account_classes c ON c.id = a.class_id "
     "JOIN account_types t ON t.id = a.type_id "
 )
@@ -32,10 +32,10 @@ def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> d
         "SELECT stale_after_days FROM account_types WHERE id = ?", (summary["type_id"],)
     ).fetchone()[0]
     summary["earliest_date"] = conn.execute(
-        "SELECT MIN(as_of_date) FROM balances WHERE account_id = ?", (account_id,)
+        "SELECT MIN(as_of_date) FROM live_balances WHERE account_id = ?", (account_id,)
     ).fetchone()[0]
     latest = conn.execute(
-        "SELECT as_of_date, amount_cents FROM balances WHERE account_id = ? "
+        "SELECT as_of_date, amount_cents FROM live_balances WHERE account_id = ? "
         "ORDER BY as_of_date DESC LIMIT 1",
         (account_id,),
     ).fetchone()
@@ -51,7 +51,7 @@ def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> d
 def balance_history(conn: sqlite3.Connection, account_id: int) -> list[sqlite3.Row]:
     """Every balance of the account, newest date first."""
     return conn.execute(
-        "SELECT id, as_of_date, amount_cents, note, source FROM balances "
+        "SELECT id, as_of_date, amount_cents, note, source FROM live_balances "
         "WHERE account_id = ? ORDER BY as_of_date DESC",
         (account_id,),
     ).fetchall()
@@ -65,12 +65,12 @@ def account_rows(conn: sqlite3.Connection, today: date, closed: bool = False) ->
     """
     rows = conn.execute(
         "SELECT a.id, a.name, c.name AS class_name, t.name AS type_name, t.stale_after_days, a.notes, a.is_open, "
-        "  (SELECT COUNT(*) FROM balances b WHERE b.account_id = a.id) AS balance_count, "
-        "  (SELECT b.as_of_date FROM balances b WHERE b.account_id = a.id "
+        "  (SELECT COUNT(*) FROM live_balances b WHERE b.account_id = a.id) AS balance_count, "
+        "  (SELECT b.as_of_date FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_date, "
-        "  (SELECT b.amount_cents FROM balances b WHERE b.account_id = a.id "
+        "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_cents "
-        "FROM accounts a "
+        "FROM live_accounts a "
         "JOIN account_classes c ON c.id = a.class_id "
         "JOIN account_types t ON t.id = a.type_id "
         "WHERE a.is_open = ? "
@@ -152,7 +152,7 @@ def _check_name_free(conn: sqlite3.Connection, name: str, own_id: int | None = N
     the unique index, which enforces it even if this is bypassed). `name` is already trimmed. A closed account keeps its
     name, so the message says when that is who holds it."""
     holder = conn.execute(
-        "SELECT name, is_open FROM accounts WHERE name = ? COLLATE NOCASE AND id IS NOT ?", (name, own_id)).fetchone()
+        "SELECT name, is_open FROM live_accounts WHERE name = ? COLLATE NOCASE AND id IS NOT ?", (name, own_id)).fetchone()
     if holder is None:
         return
     if holder["is_open"]:
@@ -212,7 +212,7 @@ def close_account(op: Operation, account_id: int) -> None:
         if not account["is_open"]:
             raise ValidationError("That account is already closed.")
         latest = conn.execute(
-            "SELECT amount_cents FROM balances WHERE account_id = ? ORDER BY as_of_date DESC LIMIT 1",
+            "SELECT amount_cents FROM live_balances WHERE account_id = ? ORDER BY as_of_date DESC LIMIT 1",
             (account_id,),
         ).fetchone()
         if latest is not None and latest["amount_cents"] != 0:
@@ -233,9 +233,10 @@ def reopen_account(op: Operation, account_id: int) -> None:
 
 
 def delete_account(op: Operation, account_id: int) -> int:
-    """Delete the account and all its balances. Returns how many balances went with it."""
+    """Delete the account. Its balances stay in the database and leave every view with it, so net worth history changes
+    to match. Returns how many balances went with it. The name is free for another account straight away."""
     conn = op.conn
     with db.write_transaction(conn):
         count = get_account(conn, account_id)["balance_count"]
-        writer.delete(op, "accounts", account_id)
+        writer.update(op, "accounts", account_id, {"deleted": 1})
     return count

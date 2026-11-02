@@ -29,10 +29,10 @@ def net_worth_on(conn: sqlite3.Connection, as_of: date, account_id: int | None =
     """
     rows = conn.execute(
         "SELECT c.name AS class_name, SUM(b.amount_cents) AS total "
-        "FROM accounts a "
+        "FROM live_accounts a "
         "JOIN account_classes c ON c.id = a.class_id "
-        "JOIN balances b ON b.account_id = a.id AND b.as_of_date = ("
-        "    SELECT MAX(b2.as_of_date) FROM balances b2 "
+        "JOIN live_balances b ON b.account_id = a.id AND b.as_of_date = ("
+        "    SELECT MAX(b2.as_of_date) FROM live_balances b2 "
         "    WHERE b2.account_id = a.id AND b2.as_of_date <= ?) "
         "WHERE (? IS NULL OR a.id = ?) "
         "GROUP BY c.name",
@@ -92,7 +92,7 @@ def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None =
     if period not in PERIODS:
         raise ValidationError(f"The period must be one of: {', '.join(PERIODS)}.")
     first = conn.execute(
-        "SELECT MIN(as_of_date) FROM balances WHERE (? IS NULL OR account_id = ?)",
+        "SELECT MIN(as_of_date) FROM live_balances WHERE (? IS NULL OR account_id = ?)",
         (account_id, account_id)).fetchone()[0]
     if first is None or date.fromisoformat(first) > end:
         return {"start": end.isoformat(), "end": end.isoformat(), "period": period, "series": []}

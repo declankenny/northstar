@@ -121,7 +121,7 @@ def zero_account(conn):
 def test_a_balance_entered_between_the_close_check_and_the_close_cannot_leave_a_closed_nonzero_account(conn, zero_account):
     path = path_of(conn)
     other = Other(path, lambda c: balances.record_balance(op(c), zero_account, TODAY, 12345))
-    closer = Paused(db.connect(path), "SELECT amount_cents FROM balances", other.start_and_wait_a_moment)
+    closer = Paused(db.connect(path), "SELECT amount_cents FROM live_balances", other.start_and_wait_a_moment)
     accounts.close_account(op(closer), zero_account)
     other.join()
     assert not closed_account_with_nonzero_balance(conn, zero_account)
@@ -136,10 +136,10 @@ def test_a_close_between_the_open_check_and_the_balance_write_cannot_leave_a_clo
     other = Other(path, lambda c: accounts.close_account(op(c), zero_account))
     mine = db.connect(path)
     if change == "record":
-        paused = Paused(mine, "SELECT id, amount_cents, note FROM balances WHERE account_id", other.start_and_wait_a_moment)
+        paused = Paused(mine, "SELECT id, amount_cents, note FROM live_balances WHERE account_id", other.start_and_wait_a_moment)
         balances.record_balance(op(paused), zero_account, TODAY, 12345)
     else:
-        paused = Paused(mine, "SELECT 1 FROM balances WHERE account_id", other.start_and_wait_a_moment)
+        paused = Paused(mine, "SELECT 1 FROM live_balances WHERE account_id", other.start_and_wait_a_moment)
         balances.update_balance(op(paused), zero_id, "2026-10-20", "123.45", None, TODAY)
     other.join()
     assert not closed_account_with_nonzero_balance(conn, zero_account)

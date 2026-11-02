@@ -59,7 +59,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: the `deleted` flag on users, sessions removed and the hash made unusable, hidden from the list, the admin rule counting live admins, and reactivation as an explicit update (the request sets the password, name and admin flag, the theme resets, the id and creation metadata are kept, the system user cannot be reactivated).
 - Tests: a formerly admin user re-added without an admin request is a regular user; old passwords and sessions stay unusable; the system user cannot be reactivated or modified this way; creation metadata is unchanged.
-- [ ] Merged
+- [x] Merged
 
 ### 6. Migration B3: account soft delete and the partial name index
 

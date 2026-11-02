@@ -24,6 +24,7 @@ class TypeRow(BaseModel):
     class_name: str
     stale_after_days: int
     account_count: int       # how many accounts use it: a type in use can't be deleted or change class
+    deleted_account_count: int    # deleted accounts keep their type until they can be restored, so they hold it too
 
 
 class ClassRow(BaseModel):
