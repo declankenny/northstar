@@ -105,10 +105,12 @@ def test_an_operation_with_no_actor_is_made_by_the_system_user(conn):
 
 def test_a_real_change_stamps_who_and_when_and_leaves_the_creator_alone(conn, balance):
     actor = person(conn)
+    conn.execute("UPDATE balances SET created_at = '2019-06-15T12:00:00Z'")      # long ago, so a rewrite to now would show
     created_by = balance_row(conn)["created_by"]
     assert writer.update(Operation(conn, actor), "balances", balance, {"amount_cents": 1}) is True
     row = balance_row(conn)
     assert row["updated_by"] == actor and row["created_by"] == created_by
+    assert row["created_at"] == "2019-06-15T12:00:00Z"
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", row["updated_at"]) and row["updated_at"] > "2020-01-01T00:00:00Z"
 
 
