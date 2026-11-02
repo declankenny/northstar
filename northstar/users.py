@@ -20,7 +20,7 @@ import threading
 from contextlib import closing
 
 from northstar import config, db, sessions, writer
-from northstar.errors import ValidationError
+from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
 MIN_PASSWORD_LENGTH = 12
@@ -187,7 +187,7 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
         (user_id,)
     ).fetchone()
     if row is None:
-        raise ValidationError("That user no longer exists.")
+        raise NotFoundError("That user no longer exists.")
     return row
 
 

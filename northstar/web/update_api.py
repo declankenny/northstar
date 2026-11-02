@@ -5,15 +5,12 @@ Reading a date writes nothing. A save is all or nothing: if any amount is bad it
 `errors` say which accounts, and nothing is saved.
 """
 
-from contextlib import closing
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from northstar import balances, clock, db
-from northstar.errors import ValidationError
-from northstar.web.auth_routes import operation
+from northstar import balances, clock
+from northstar.web.auth_routes import operation, run
 
 router = APIRouter(prefix="/api")
 
@@ -59,21 +56,14 @@ def _page(conn, date_text: str | None, saved: dict[str, int] | None = None) -> d
 @router.get("/balances/update", response_model=UpdatePage)
 def read_update(request: Request, date: str | None = None):
     """The open accounts and what is saved on `date` (today when left out)."""
-    with closing(db.connect(request.app.state.db_path)) as conn:
-        try:
-            return _page(conn, date)
-        except ValidationError as error:
-            raise HTTPException(status_code=422, detail=str(error))
+    return run(request, lambda conn: _page(conn, date))
 
 
 @router.post("/balances/update", response_model=UpdatePage)
 def save_update(body: UpdateEntries, request: Request):
     """Save one date's amounts, then answer with that date as the server now holds it."""
-    with closing(db.connect(request.app.state.db_path)) as conn:
-        try:
-            counts = balances.save_update(operation(request, conn, "bulk_update", {"date": body.date}), body.date, body.amounts, clock.today())
-            return _page(conn, body.date, counts)
-        except balances.EntryErrors as error:
-            return JSONResponse({"detail": str(error), "errors": error.by_account}, status_code=422)
-        except ValidationError as error:
-            raise HTTPException(status_code=422, detail=str(error))
+    def action(conn):
+        counts = balances.save_update(operation(request, conn, "bulk_update", {"date": body.date}), body.date, body.amounts, clock.today())
+        return _page(conn, body.date, counts)
+
+    return run(request, action)

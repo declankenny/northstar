@@ -164,6 +164,10 @@ class StaleImport(ValidationError):
         super().__init__(message)
         self.dates = dates or []
 
+    @property
+    def details(self) -> dict:
+        return {"dates": self.dates}
+
 
 @dataclass(frozen=True)
 class ImportResult:

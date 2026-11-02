@@ -4,7 +4,6 @@ Like the other routes, these call the plain functions in users.py and add no rul
 They only ever touch the signed-in user, so no admin is needed. A broken rule is a 422.
 """
 
-from contextlib import closing
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -12,7 +11,7 @@ from pydantic import BaseModel
 
 from northstar import clock, db, throttle, users
 from northstar.errors import ValidationError
-from northstar.web.auth_routes import COOKIE, current_user, operation
+from northstar.web.auth_routes import COOKIE, current_user, operation, run
 
 router = APIRouter(prefix="/api/me")
 
@@ -41,19 +40,10 @@ def _me(conn, user_id: int) -> dict:
     return {**{key: row[key] for key in ("id", "email", "display_name", "theme")}, "is_admin": bool(row["is_admin"])}
 
 
-def _run(request: Request, action):
-    """Run a function from users.py on a connection, turning a broken rule into a 422."""
-    with closing(db.connect(request.app.state.db_path)) as conn:
-        try:
-            return action(conn)
-        except ValidationError as error:
-            raise HTTPException(status_code=422, detail=str(error))
-
-
 @router.get("", response_model=Me)
 def read_me(request: Request):
     user = current_user(request)
-    return _run(request, lambda conn: _me(conn, user["id"]))
+    return run(request, lambda conn: _me(conn, user["id"]))
 
 
 @router.patch("", response_model=Me)
@@ -69,7 +59,7 @@ def change_me(body: ProfileChange, request: Request):
                 users.set_theme(op, user["id"], body.theme)
         return _me(conn, user["id"])
 
-    return _run(request, action)
+    return run(request, action)
 
 
 @router.post("/password", status_code=204)
@@ -95,5 +85,5 @@ def change_password(body: PasswordChange, request: Request):
             raise
         throttle.clear(conn, user["email"], address)
 
-    _run(request, action)
+    run(request, action)
     return Response(status_code=204)
