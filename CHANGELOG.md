@@ -12,6 +12,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Breaking
 
+- Migrations: every change to an account, account type, balance or user is now recorded in a change log (four new tables), and balances gain a `version` column. Nothing in the app shows the log yet, and existing data gets no entries. A checked backup is made first, and the change log grows with use, so backups get a little larger.
 - Migrations: deleting an account no longer erases its balances. The account is marked deleted and, with its balances, disappears from every screen and from net worth history, exactly as before, but the data stays in the database for a later restore. A deleted account frees its name. A type that only deleted accounts use can't be deleted until restoring exists. A checked backup is made first.
 - Migrations: users are no longer erased when deleted: they are marked deleted, cannot sign in and are hidden, and adding their email again restores the same user with the name, password and admin setting you enter. A checked backup is made first.
 - Migrations: every table gets audit columns (who and when created and last changed), a system user is added to the users table, ids are never reused, and the session and sign-in attempt tables are renamed `sys_sessions` and `sys_login_attempts`. Existing rows are attributed to the system user. A checked backup is made first, and rolling back to an older image needs it restored. The system user is hidden and cannot sign in; no user may have an email ending in `.invalid`.
