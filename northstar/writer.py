@@ -17,9 +17,13 @@ command line) is made by the system user.
 import sqlite3
 from dataclasses import dataclass
 
+# The columns the writer fills from the operation's actor. A table has audit columns if it has these.
+AUTHOR_COLUMNS = ("created_by", "updated_by")
+# All four audit columns, which belong to the writer and which a caller cannot set. The two dates are filled by SQLite:
+# an insert takes the column default, and an update sets updated_at in its own statement.
+AUDIT_COLUMNS = (*AUTHOR_COLUMNS, "created_at", "updated_at")
 # A table the application writes for itself (sign-in sessions, failed-login tracking) is prefixed sys_. It holds no
 # household data, has no audit columns, and a write to it needs no operation.
-AUDIT_COLUMNS = ("created_by", "updated_by")
 
 _CONDITIONS = {"=": "= ?", "!=": "!= ?", "<=": "<= ?", "IS": "IS ?"}
 
@@ -47,11 +51,11 @@ def _actor(op: Operation) -> int:
 
 
 def _audited(known: set[str]) -> bool:
-    return all(column in known for column in AUDIT_COLUMNS)
+    return all(column in known for column in AUTHOR_COLUMNS)
 
 
 def _refuse_audit(values) -> None:
-    owned = sorted(set(values) & {*AUDIT_COLUMNS, "created_at", "updated_at"})
+    owned = sorted(set(values) & set(AUDIT_COLUMNS))
     if owned:
         raise ValueError(f"{', '.join(owned)} are set by the writer, not by the caller.")
 
