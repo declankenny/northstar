@@ -19,6 +19,10 @@ class EntryErrors(ValidationError):
         super().__init__(message)
         self.by_account = by_account
 
+    @property
+    def details(self) -> dict:
+        return {"errors": self.by_account}
+
 
 def parse_date(text: str | None, today: date) -> date:
     """A YYYY-MM-DD calendar date that is not in the future."""

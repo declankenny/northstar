@@ -5,14 +5,11 @@ their own. Every change answers with the whole list, so the browser shows what t
 holds. A broken rule is a 422 and an unknown type a 404.
 """
 
-from contextlib import closing
-
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from northstar import account_types, db
-from northstar.errors import NotFoundError, ValidationError
-from northstar.web.auth_routes import operation, require_admin
+from northstar import account_types
+from northstar.web.auth_routes import operation, require_admin, run
 
 router = APIRouter(prefix="/api/types", dependencies=[Depends(require_admin)])
 
@@ -49,17 +46,6 @@ class TypeChange(BaseModel):
     class_id: int | None = None   # left out or unchanged means the class stays as it is
 
 
-def _run(request: Request, action):
-    """Run an action on a connection, turning a broken rule into an error response."""
-    with closing(db.connect(request.app.state.db_path)) as conn:
-        try:
-            return action(conn)
-        except NotFoundError as error:
-            raise HTTPException(status_code=404, detail=str(error))
-        except ValidationError as error:
-            raise HTTPException(status_code=422, detail=str(error))
-
-
 def _list(conn) -> dict:
     return {"types": [dict(row) for row in account_types.list_types(conn)],
             "classes": [dict(row) for row in account_types.list_classes(conn)]}
@@ -67,7 +53,7 @@ def _list(conn) -> dict:
 
 @router.get("", response_model=TypeList)
 def list_types(request: Request):
-    return _run(request, _list)
+    return run(request, _list)
 
 
 @router.post("", response_model=TypeList, status_code=201)
@@ -75,7 +61,7 @@ def add_type(body: NewType, request: Request):
     def action(conn):
         account_types.add_type(operation(request, conn), body.name, body.class_id, body.stale_after_days)
         return _list(conn)
-    return _run(request, action)
+    return run(request, action)
 
 
 @router.patch("/{type_id}", response_model=TypeList)
@@ -83,7 +69,7 @@ def edit_type(type_id: int, body: TypeChange, request: Request):
     def action(conn):
         account_types.update_type(operation(request, conn), type_id, body.name, body.stale_after_days, body.class_id)
         return _list(conn)
-    return _run(request, action)
+    return run(request, action)
 
 
 @router.delete("/{type_id}", response_model=TypeList)
@@ -91,4 +77,4 @@ def delete_type(type_id: int, request: Request):
     def action(conn):
         account_types.delete_type(operation(request, conn), type_id)
         return _list(conn)
-    return _run(request, action)
+    return run(request, action)

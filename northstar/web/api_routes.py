@@ -3,15 +3,14 @@
 Like the page routes, these call the plain functions and add no rules of their own.
 """
 
-from contextlib import closing
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from northstar import clock, db, networth
-from northstar.errors import NotFoundError, ValidationError
+from northstar import clock, networth
+from northstar.web.auth_routes import run
 
 router = APIRouter(prefix="/api")
 
@@ -35,11 +34,5 @@ class NetWorthSeries(BaseModel):
 def net_worth_series(request: Request, start: date | None = None, end: date | None = None,
                      period: Literal["day", "week", "month"] = "month", account_id: int | None = None):
     today = clock.today()
-    with closing(db.connect(request.app.state.db_path)) as conn:
-        try:
-            result = networth.net_worth_series(conn, today, start, end, period, account_id)
-        except NotFoundError as error:
-            raise HTTPException(status_code=404, detail=str(error))
-        except ValidationError as error:
-            raise HTTPException(status_code=422, detail=str(error))
+    result = run(request, lambda conn: networth.net_worth_series(conn, today, start, end, period, account_id))
     return {"today": today.isoformat(), **result}

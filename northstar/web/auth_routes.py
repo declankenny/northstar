@@ -23,6 +23,13 @@ def current_user(request: Request):
     return request.state.user
 
 
+def run(request: Request, action):
+    """Run `action(conn)` on a connection that is closed afterwards. A broken rule it raises becomes an error response
+    (see northstar.web.errors), so callers do not catch it."""
+    with closing(db.connect(request.app.state.db_path)) as conn:
+        return action(conn)
+
+
 def operation(request: Request, conn, kind: str = "ui_edit", detail: dict | None = None) -> Operation:
     """The signed-in user's action on this connection: what every write is made through (see northstar.writer)."""
     return Operation(conn, current_user(request)["id"], kind, detail)
