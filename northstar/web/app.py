@@ -12,8 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from northstar import config, db, sessions, throttle, users
-from northstar.web import (account_api, api_routes, auth_routes, errors, profile_api, security_headers, types_api,
-                           update_api, users_api, version_api)
+from northstar.web import (account_api, api_routes, auth_routes, errors, import_api, profile_api, security_headers,
+                           types_api, update_api, users_api, version_api)
 
 WEB_DIR = Path(__file__).parent
 SPA_DIR = WEB_DIR / "spa"        # the built React app (see frontend/); absent until it is built
@@ -82,6 +82,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.include_router(api_routes.router)
     app.include_router(account_api.router)
     app.include_router(update_api.router)
+    app.include_router(import_api.router)
     app.include_router(profile_api.router)
     app.include_router(users_api.router)
     app.include_router(version_api.router)
