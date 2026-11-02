@@ -11,15 +11,12 @@ from fastapi.responses import JSONResponse
 from northstar.balance_import import StaleImport
 from northstar.errors import NotFoundError, ValidationError
 
-STATUS = {NotFoundError: 404, StaleImport: 409}
-DEFAULT_STATUS = 422
+# The most specific class in the error's type chain wins, and ValidationError is in every chain, so every error has a status.
+STATUS = {NotFoundError: 404, StaleImport: 409, ValidationError: 422}
 
 
 def status_for(error: ValidationError) -> int:
-    for kind in type(error).__mro__:
-        if kind in STATUS:
-            return STATUS[kind]
-    return DEFAULT_STATUS
+    return next(STATUS[kind] for kind in type(error).__mro__ if kind in STATUS)
 
 
 def respond(request: Request, error: ValidationError) -> JSONResponse:
