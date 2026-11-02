@@ -10,7 +10,7 @@ import { formatCents, percentChange } from "./money";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
 import { Link, navigate } from "./router";
-import { PATHS } from "./routes";
+import { importPath, PATHS } from "./routes";
 import { WHEN } from "./Tile";
 import { useRequest } from "./useRequest";
 
@@ -114,6 +114,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
         </div>
         <div className="actions-bar">
           <button className="btn" disabled={!open} onClick={() => setDialog({ kind: "balance", editing: null })}>Add balance</button>
+          {open && <button className="btn ghost" onClick={() => { navigate(importPath(id)); }}>Import CSV…</button>}
           <button className="btn ghost" aria-label="More actions" aria-haspopup="menu" aria-expanded={menu}
             onClick={(e) => { e.stopPropagation(); setMenu(!menu); }}>⋯</button>
           {menu && (

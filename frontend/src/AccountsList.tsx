@@ -7,7 +7,7 @@ import { formatDate } from "./dates";
 import { formatCents } from "./money";
 import { RowMenu } from "./RowMenu";
 import { Link, navigate } from "./router";
-import { accountPath } from "./routes";
+import { accountPath, importPath } from "./routes";
 import { useRequest } from "./useRequest";
 
 function ago(days: number | null): string {
@@ -22,8 +22,11 @@ function Row({ account, showStale, actions }: { account: ListedAccount; showStal
   const items = [
     { label: "Open", onClick: () => { navigate(accountPath(account.id)); } },
     { label: "Edit", onClick: () => actions.onEdit(account) },
-    // A closed account takes no new balances, so its menu has no Add balance.
-    ...(showStale ? [{ label: "Add balance", onClick: () => actions.onAddBalance(account) }] : []),
+    // A closed account takes no new balances, so its menu has no Add balance and no Import CSV.
+    ...(showStale ? [
+      { label: "Add balance", onClick: () => actions.onAddBalance(account) },
+      { label: "Import CSV…", onClick: () => { navigate(importPath(account.id)); } },
+    ] : []),
   ];
   return (
     <tr className="row">

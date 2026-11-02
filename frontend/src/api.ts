@@ -38,9 +38,13 @@ function signIn() {
  *  message, for a save that is refused because of particular rows. */
 export class RequestError extends Error {
   errors: Record<string, string>;
-  constructor(message: string, errors: Record<string, string> = {}) {
+  status: number;
+  dates: string[]; // the dates whose balance changed, when an import is refused because the account moved on (409)
+  constructor(message: string, errors: Record<string, string> = {}, status = 0, dates: string[] = []) {
     super(message);
     this.errors = errors;
+    this.status = status;
+    this.dates = dates;
   }
 }
 
@@ -59,7 +63,8 @@ async function send<T>(method: string, url: string, body: unknown, signal?: Abor
   if (!response.ok) {
     const answer = await response.json().catch(() => null);
     const detail = answer?.detail;
-    throw new RequestError(typeof detail === "string" ? detail : `The server answered ${response.status}`, answer?.errors ?? {});
+    throw new RequestError(typeof detail === "string" ? detail : `The server answered ${response.status}`, answer?.errors ?? {},
+      response.status, Array.isArray(answer?.dates) ? answer.dates : []);
   }
   return response.status === 204 ? null : response.json();
 }
@@ -284,4 +289,108 @@ export async function fetchVersion(signal?: AbortSignal): Promise<string> {
   }
   if (!response.ok) throw new Error(`The server answered ${response.status}`);
   return (await response.json()).version;
+}
+
+// -- Importing balances from a CSV file --
+
+/** The most the server reads of a file; a bigger one is refused here too, so it is never sent. */
+export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+
+/** The column for each thing the import needs, by position in the file, or null. */
+export type ImportMapping = { date: number | null; balance: number | null; note: number | null; currency: number | null };
+
+export type ImportColumn = {
+  index: number;
+  header: string;
+  samples: string[]; // the first values that are not blank
+  date_formats: string[]; // the formats under which every value is a date: one decides it, several need a choice
+};
+
+export type ImportRead = {
+  delimiter: string;
+  row_count: number;
+  columns: ImportColumn[];
+  suggested: ImportMapping;
+  date_formats: string[]; // every format the import reads
+  today: string;
+};
+
+/** A problem in the file. `record` is its record number (the header is 1), or null when it is about the whole file. */
+export type ImportProblem = { record: number | null; column: number | null; message: string };
+
+export type ImportOutcome = "add" | "replace" | "unchanged" | "skip";
+
+export type ImportRow = {
+  record: number;
+  date: string;
+  outcome: ImportOutcome;
+  amount_cents: number;
+  old_cents: number | null;
+  note: string | null;
+  old_note: string | null;
+  result_note: string | null;
+};
+
+/** What the review saw, handed back with the commit so it can refuse if the account has moved on. */
+export type ImportReviewed = {
+  fingerprint: string;
+  expectations: { date: string; balance_id: number | null; version: number | null }[];
+};
+
+export type ImportReview = {
+  can_commit: boolean;
+  errors: ImportProblem[];
+  unsupported_currencies: string[];
+  date_format: string | null;
+  counts: Record<ImportOutcome, number> | null; // complete, whatever is listed
+  rows: ImportRow[]; // newest first, at most 200 of each outcome that is not "unchanged"
+  hidden: Partial<Record<ImportOutcome, number>>; // how many more of each there are than are listed
+  reviewed: ImportReviewed | null;
+};
+
+export type ImportResult = { added: number; updated: number; unchanged: number; skipped: number };
+
+export type ImportPolicy = "skip" | "replace";
+
+/** The file as the server takes it: its name and its bytes as base64 text. */
+export type ImportFile = { name: string; content: string };
+
+export type ImportSettings = { file: ImportFile; mapping: ImportMapping; dateFormat: string | null; policy: ImportPolicy };
+
+/** Read a file chosen in the browser into memory. It is sent again with every step and kept nowhere on the server. */
+export function readImportFile(file: File): Promise<ImportFile> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("The file could not be read. Choose it again."));
+    reader.onload = () => {
+      const url = String(reader.result);
+      resolve({ name: file.name, content: url.slice(url.indexOf(",") + 1) }); // "data:text/csv;base64,<content>"
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+const importUrl = (accountId: number, step: "read" | "review" | "commit") => `/api/accounts/${accountId}/import/${step}`;
+
+const importBody = (settings: ImportSettings) => ({
+  content: settings.file.content,
+  file_name: settings.file.name,
+  mapping: settings.mapping,
+  date_format: settings.dateFormat,
+  policy: settings.policy,
+});
+
+/** The columns of a file, with their first values and the formats they can be read in. Writes nothing. */
+export async function fetchImportRead(accountId: number, file: ImportFile, signal?: AbortSignal): Promise<ImportRead> {
+  return (await send<ImportRead>("POST", importUrl(accountId, "read"), { content: file.content, file_name: file.name }, signal))!;
+}
+
+/** What importing would do. Problems in the file are part of the answer, not a refusal. Writes nothing. */
+export async function fetchImportReview(accountId: number, settings: ImportSettings, signal?: AbortSignal): Promise<ImportReview> {
+  return (await send<ImportReview>("POST", importUrl(accountId, "review"), importBody(settings), signal))!;
+}
+
+/** Write the import. Refused (a RequestError with status 409 and the changed dates) when the account moved on since the review. */
+export async function commitImport(accountId: number, settings: ImportSettings, reviewed: ImportReviewed): Promise<ImportResult> {
+  return (await send<ImportResult>("POST", importUrl(accountId, "commit"), { ...importBody(settings), reviewed }))!;
 }

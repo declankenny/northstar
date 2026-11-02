@@ -6,6 +6,10 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Added
+
+- Import dated balance history from a CSV file into one account (#79): Import CSV… on an account's page and in its ⋯ menu on the Accounts list. Choose the file, map its columns, review exactly what will be added, replaced or skipped, then import. Semicolon and tab files, European number and date styles, and amounts in parentheses are understood, the date format is chosen when a file could be read two ways, and nothing is written until the final step. Importing cannot be undone yet.
+
 ### Changed
 
 - Removed the redundant Update balances button from the dashboard header; Update balances remains available in the left-hand navigation (#78).
