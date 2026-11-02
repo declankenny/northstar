@@ -77,7 +77,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: the wizard's final step. The dry run rejects duplicate normalized dates within the account and captures the expected state of each date it touches. The commit compares these inside `BEGIN IMMEDIATE` and rejects the whole import if anything differs.
 - Tests: duplicate import dates fail before any write; an empty date becoming occupied, an expected record deleted or replaced, a version changing, and several records sharing an operation id each cause no writes and request a fresh preview.
-- [ ] Merged
+- [x] Merged
 
 ### 9. Export
 

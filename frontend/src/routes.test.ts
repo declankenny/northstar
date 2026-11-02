@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountIdFromPath, accountPath, PATHS, routeFromPath } from "./routes";
+import { accountIdFromPath, accountPath, importAccountIdFromPath, importPath, PATHS, routeFromPath } from "./routes";
 
 describe("routeFromPath", () => {
   it("opens each page at its own address", () => {
@@ -15,6 +15,17 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/accounts/12")).toBe("account");
     expect(accountIdFromPath("/accounts/12")).toBe(12);
     expect(accountPath(12)).toBe("/accounts/12");
+  });
+
+  it("opens the import of an account's balances at /accounts/<number>/import", () => {
+    expect(routeFromPath("/accounts/12/import")).toBe("import");
+    expect(routeFromPath("/accounts/12/import/")).toBe("import");
+    expect(importAccountIdFromPath("/accounts/12/import")).toBe(12);
+    expect(importPath(12)).toBe("/accounts/12/import");
+    for (const path of ["", "/", "/accounts", "/accounts/12", "/accounts/x/import", "/accounts/12/imports", "/import", "/accounts/12/import/x"]) {
+      expect(importAccountIdFromPath(path), path).toBeNull();
+    }
+    expect(accountIdFromPath("/accounts/12/import")).toBeNull();      // it is not the account's own page
   });
 
   it("shows the Dashboard at the site root, which the server sends to /dashboard", () => {

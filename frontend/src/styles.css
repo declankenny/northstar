@@ -246,3 +246,54 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .ub-discard { border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
 .ub-discard:hover { color: var(--text); }
 .ub-foot .btn { align-self: center; }
+
+/* Import balances from a CSV file. The page fills the window like Update balances: the steps scroll, the bar stays in view. */
+.imp { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.imp .top { margin-top: 6px; }
+.imp-body { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 16px; display: flex; flex-direction: column; }
+.steps { display: flex; gap: 8px; margin: 14px 0 18px; font-size: 13px; flex-wrap: wrap; }
+.steps span { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+.steps span.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.steps span.done { color: var(--text); }
+.imp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
+.imp-card.fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.imp-card p { margin: 0 0 10px; }
+.imp-drop { border: 2px dashed var(--border); border-radius: 14px; padding: 40px 20px; text-align: center; }
+.imp-drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.imp-drop p { margin: 6px 0; }
+.imp-rules { margin: 16px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+.imp-rules li { margin: 4px 0; }
+.imp-map { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.imp-map th, .imp-map td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.imp-map th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 500; }
+.imp-map select, .imp-card select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-width: 140px; }
+.imp-samples div { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); min-height: 1.3em; }
+.imp-use { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.imp-use .lbl { font-size: 12.5px; color: var(--muted); }
+.imp-fmt { margin-top: 8px; font-size: 12.5px; }
+.imp-fmt .ok { color: var(--pos); }
+.imp-fmt .warn { color: var(--warn); }
+.imp-counts { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 14px; }
+.imp-counts div { padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); min-width: 120px; }
+.imp-counts b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.imp-counts small { color: var(--muted); }
+.imp-policy { border: 0; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.imp-policy legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
+.imp-policy label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.imp-policy input { margin: 3px 0 0; flex: none; }
+.imp-list { flex: 1; min-height: 160px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+.imp-list table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.imp-list th, .imp-list td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+.imp-list th { position: sticky; top: 0; background: var(--surface); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 500; }
+.imp-list th.r, .imp-list td.r { text-align: right; }
+.imp-more { margin: 8px 2px 0; font-size: 12.5px; color: var(--muted); }
+.tag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.tag.add { color: var(--pos); }
+.tag.replace, .tag.chg { color: var(--warn); border-color: var(--warn); }
+.tag.skip, .tag.unchanged { color: var(--muted); }
+.tag.chg { margin-left: 6px; }
+.imp-errs { margin: 0 0 10px; padding-left: 18px; font-size: 13.5px; }
+.imp-errs li { margin: 4px 0; }
+.imp-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.imp-nav { display: flex; gap: 10px; align-items: center; }
+.imp-nav.centered { justify-content: center; margin-top: 4px; }

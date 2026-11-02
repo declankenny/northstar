@@ -4,9 +4,10 @@ import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
 import { Dashboard } from "./Dashboard";
+import { ImportBalances } from "./ImportBalances";
 import { Profile } from "./Profile";
 import { Link, usePath } from "./router";
-import { accountIdFromPath, PATHS, routeFromPath } from "./routes";
+import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
 import { useRequest } from "./useRequest";
 import { Users } from "./Users";
@@ -36,6 +37,7 @@ export function App() {
   const path = usePath();
   const route = routeFromPath(path);
   const accountId = accountIdFromPath(path);
+  const importId = importAccountIdFromPath(path);
   const { data: version } = useRequest(fetchVersion, []);      // a footer only: the app works without it, so a failure is ignored
   const { data: me, setData: setMe } = useRequest(fetchMe, []);
 
@@ -94,6 +96,8 @@ export function App() {
           <NotFound />
         ) : route === "account" && accountId !== null ? (
           <AccountPage key={accountId} id={accountId} isAdmin={me?.is_admin ?? false} />
+        ) : route === "import" && importId !== null ? (
+          <ImportBalances key={importId} id={importId} />
         ) : !me ? null : route === "types" ? (
           me.is_admin ? <AccountTypes /> : <p className="empty">Only admins can manage account types.</p>
         ) : route === "profile" ? (
