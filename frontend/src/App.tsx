@@ -5,6 +5,7 @@ import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
 import { Dashboard } from "./Dashboard";
 import { ImportBalances } from "./ImportBalances";
+import { Imports } from "./Imports";
 import { Profile } from "./Profile";
 import { Link, usePath } from "./router";
 import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
@@ -76,6 +77,7 @@ export function App() {
             <div className="group">Admin</div>
             <Link className={route === "types" ? "active" : ""} to={PATHS.types}>Account types</Link>
             <Link className={route === "users" ? "active" : ""} to={PATHS.users}>Users</Link>
+            <Link className={route === "imports" ? "active" : ""} to={PATHS.imports}>Imports</Link>
           </>
         )}
         <div className="spacer" />
@@ -100,6 +102,8 @@ export function App() {
           <ImportBalances key={importId} id={importId} />
         ) : !me ? null : route === "types" ? (
           me.is_admin ? <AccountTypes /> : <p className="empty">Only admins can manage account types.</p>
+        ) : route === "imports" ? (
+          me.is_admin ? <Imports /> : <p className="empty">Only admins can see imports.</p>
         ) : route === "profile" ? (
           <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
         ) : me.is_admin ? (

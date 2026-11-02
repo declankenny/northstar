@@ -217,9 +217,10 @@ def test_a_type_with_no_accounts_at_all_can_still_be_deleted(conn):
 
 SOURCE = Path(__file__).resolve().parent.parent / "northstar"
 READS = re.compile(r"\b(FROM|JOIN)\s+(accounts|balances)\b", re.I)
-# Files that may read the tables directly, and why: the backup tool counts every row, and the account types module has to
-# see deleted accounts because they still hold their type. Neither may read balances except the backup tool.
-EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}}
+# Files that may read the tables directly, and why: the backup tool counts every row, the account types module has to
+# see deleted accounts because they still hold their type, and the imports register has to name the account of an import
+# even when it has been deleted. None may read balances except the backup tool.
+EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}, "import_register.py": {"accounts"}}
 
 
 def direct_reads(source: str) -> set[str]:

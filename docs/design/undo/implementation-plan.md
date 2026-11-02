@@ -21,7 +21,7 @@ Steps 1 and 2 are in v0.2 and are inside the epic [#55](https://github.com/decla
 - Scope: `account_id` added to the import operation's detail. A read-only admin page, Imports, in the sidebar's Admin group, listing imports newest first (25): Import Date, Import By, Account, File Name, Added, Replaced and a Status column that is empty until step 2. The routes are admin only.
 - Tests: only imports are listed; order and the cap of 25; a deleted account and a deleted user still show; non-admins and signed-out users are refused.
 - Docs: a spec rule for the register and a decisions entry.
-- [ ] Merged
+- [x] Merged
 
 ### 2. Undo an import
 

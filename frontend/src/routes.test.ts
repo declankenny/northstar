@@ -8,6 +8,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/balance-update")).toBe("update");
     expect(routeFromPath("/types")).toBe("types");
     expect(routeFromPath("/users")).toBe("users");
+    expect(routeFromPath("/imports")).toBe("imports");
     expect(routeFromPath("/profile")).toBe("profile");
   });
 
