@@ -158,7 +158,7 @@ class Mapping:
 
 _ALIASES = {
     "date": {"date", "as of", "as of date", "asof", "balance date", "statement date", "day"},
-    "balance": {"balance", "amount", "value", "closing balance", "ending balance", "end balance", "total"},
+    "balance": {"balance", "amount", "balance amount", "value", "closing balance", "ending balance", "end balance", "total"},
     "note": {"note", "notes", "memo", "comment", "comments", "description"},
     "currency": {"currency", "currency code", "ccy", "curr"},
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  type AccountPage, addAccount, addBalance, editAccount, fetchAccount, fetchAccounts, type ListedAccount,
+  type AccountPage, addAccount, addBalance, downloadExport, editAccount, fetchAccount, fetchAccounts, type ListedAccount,
 } from "./api";
 import { AddAccountDialog, BalanceDialog, EditAccountDialog } from "./AccountDialogs";
 import { formatDate } from "./dates";
@@ -27,6 +27,7 @@ function Row({ account, showStale, actions }: { account: ListedAccount; showStal
       { label: "Add balance", onClick: () => actions.onAddBalance(account) },
       { label: "Import CSV…", onClick: () => { navigate(importPath(account.id)); } },
     ] : []),
+    { label: "Export CSV", onClick: () => { downloadExport(account.id); } },
   ];
   return (
     <tr className="row">

@@ -296,6 +296,11 @@ export async function fetchVersion(signal?: AbortSignal): Promise<string> {
 /** The most the server reads of a file; a bigger one is refused here too, so it is never sent. */
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
+/** The account's balances as a CSV file. The server answers with an attachment, so the browser saves it and the page stays. */
+export function downloadExport(accountId: number): void {
+  window.location.assign(`/api/accounts/${accountId}/export`);
+}
+
 /** The column for each thing the import needs, by position in the file, or null. */
 export type ImportMapping = { date: number | null; balance: number | null; note: number | null; currency: number | null };
 

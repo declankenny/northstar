@@ -15,6 +15,7 @@ Track a household's financial position over time. Northstar records dated balanc
 - Accounts with a name, a class (Asset or Liability) and a configurable type.
 - Dated balances per account, entered by hand, with one way to update many accounts at once.
 - Importing dated balance history from a CSV file into one existing account, with the columns and the date format chosen by the person and a review before anything is written.
+- Exporting one account's balances to a CSV file.
 - Net worth over time and per-account balance history, as charts and tables.
 - Closing an account to declutter, without losing its history.
 - Local sign-in for a household: admins and ordinary users, a light or dark theme.
@@ -23,7 +24,7 @@ Track a household's financial position over time. Northstar records dated balanc
 
 These are left out of the current release to keep it focused, not ruled out. Their GitHub milestones say when, and `roadmap.md` says why.
 
-- CSV export.
+- An export of every account in one file, and of notes, sources or currencies.
 - Multiple currencies and locale-aware number and date formatting. Until then, every amount is US dollars in integer cents and no currency is stored. A balance held in another currency or in crypto is entered as its US dollar value at the time. Existing balances stay valid when currencies arrive because they are US dollars.
 - Transactions, opening balances and reconciliation.
 - Bank feeds, starting with SimpleFIN.
@@ -74,6 +75,7 @@ These are left out of the current release to keep it focused, not ruled out. The
   - *Validation*: the whole file is read and every problem found in its rows is listed with its record number (the header is record 1, and a quoted multiline record counts once). A row is never dropped silently, and a file with any problem has nothing to import. Duplicate dates are reported once every row reads.
   - *The review and the commit*: the review lists the newest changes first, at most 200 of each kind, with complete counts, and the import still writes every one. The commit takes the account from the address only, repeats every check and is one transaction, all or nothing. It is refused, writing nothing and naming the dates that changed, if the file, the settings or any date in the file is not as it was when reviewed, whether the date was filled, edited, replaced or deleted, so submitting the same review twice cannot import twice. A refusal returns the person to a review that is up to date.
   - *Recording*: one import is one `import` operation, whose header holds the file's base name (never its folders), the policy, the date format, the columns used by position and the counts, and never anything from inside the file. Every balance it writes has the source `csv`, and a replacement is logged with the old and new amount, note and source. An import with nothing to write writes nothing. Nothing undoes an import yet.
+- **Exporting balances**: one account's balances are downloaded as a CSV file, from the account's page or its menu in the Accounts list, for an open or a closed account and for any signed-in user, with no questions asked. The file has one row per balance, oldest date first, and four columns: `Account ID`, `Account Name`, `Balance Date` (`YYYY-MM-DD`) and `Balance Amount` (a plain decimal in US dollars, such as `1234.56` or `-80.00`, with no symbol and no thousands separator, and the sign kept as stored). Notes, sources and currencies are not exported. Importing the file back into the same account maps its columns by itself and finds every balance unchanged.
 - **Staleness**: an open account is stale when the days from its latest balance to today exceed its type's `stale_after_days`. An open account with no balances is also flagged. Closed accounts are never flagged. A new type starts at 35 days. Starting values are 35 days for every starting type except real estate, which is 365. A type that changes rarely gets a large value, not a special "never stale" setting.
 
 ## Technical shape
