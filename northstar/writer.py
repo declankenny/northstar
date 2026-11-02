@@ -60,6 +60,7 @@ class Operation:
     actor_id: int | None
     kind: str
     detail: dict | None = None
+    undoes: int | None = None          # the id of the operation this one reverses, set only on an `undo`
     state: dict = field(default_factory=dict, compare=False, repr=False)
 
 
@@ -127,7 +128,8 @@ def _operation_id(op: Operation) -> int:
         kinds = ", ".join(row[0] for row in op.conn.execute("SELECT kind FROM sys_operation_kinds ORDER BY kind"))
         raise ValueError(f"{op.kind!r} is not an operation kind. The kinds are {kinds}.")
     op.state["id"] = _insert(op.conn, "sys_operations", {
-        "kind": op.kind, "user_id": _actor(op), "detail": None if op.detail is None else json.dumps(op.detail)})
+        "kind": op.kind, "user_id": _actor(op), "undoes_operation_id": op.undoes,
+        "detail": None if op.detail is None else json.dumps(op.detail)})
     return op.state["id"]
 
 

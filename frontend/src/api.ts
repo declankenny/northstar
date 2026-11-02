@@ -40,11 +40,13 @@ export class RequestError extends Error {
   errors: Record<string, string>;
   status: number;
   dates: string[]; // the dates whose balance changed, when an import is refused because the account moved on (409)
-  constructor(message: string, errors: Record<string, string> = {}, status = 0, dates: string[] = []) {
+  refusal: Omit<UndoRefusal, "refused"> | null; // why an import cannot be undone (409)
+  constructor(message: string, errors: Record<string, string> = {}, status = 0, dates: string[] = [], refusal: RequestError["refusal"] = null) {
     super(message);
     this.errors = errors;
     this.status = status;
     this.dates = dates;
+    this.refusal = refusal;
   }
 }
 
@@ -64,7 +66,9 @@ async function send<T>(method: string, url: string, body: unknown, signal?: Abor
     const answer = await response.json().catch(() => null);
     const detail = answer?.detail;
     throw new RequestError(typeof detail === "string" ? detail : `The server answered ${response.status}`, answer?.errors ?? {},
-      response.status, Array.isArray(answer?.dates) ? answer.dates : []);
+      response.status, Array.isArray(answer?.dates) ? answer.dates : [],
+      typeof answer?.reason === "string"
+        ? { message: String(detail), reason: answer.reason, blocked: answer.blocked ?? [], more: answer.more ?? 0 } : null);
   }
   return response.status === 204 ? null : response.json();
 }
@@ -107,6 +111,35 @@ export type ImportRegister = { imports: ImportEntry[]; more: boolean; limit: num
 
 export async function fetchImports(signal?: AbortSignal): Promise<ImportRegister> {
   return (await send<ImportRegister>("GET", "/api/imports", undefined, signal))!;
+}
+
+/** What undoing an import would do, for the confirmation. */
+export type UndoPlan = {
+  import_id: number; file: string | null; date: string; by: string; account_id: number | null; account_name: string | null;
+  delete: number; restore: number;
+};
+/** Why an import cannot be undone as things are now (409): `changed` lists the dates in the way, the other reasons only the message. */
+export type UndoRefusal = {
+  refused: true; message: string; reason: "reverted" | "account_closed" | "account_deleted" | "changed";
+  blocked: { date: string; why: string }[]; more: number;
+};
+export type UndoDone = { refused?: false; deleted: number; restored: number; after: ImportRegister };
+
+async function orRefusal<T>(request: Promise<T>): Promise<T | UndoRefusal> {
+  try {
+    return await request;
+  } catch (e) {
+    if (e instanceof RequestError && e.status === 409 && e.refusal) return { refused: true, ...e.refusal } as UndoRefusal;
+    throw e;
+  }
+}
+
+export function fetchUndoPlan(importId: number, signal?: AbortSignal): Promise<UndoPlan | UndoRefusal> {
+  return orRefusal(send<UndoPlan>("GET", `/api/imports/${importId}/undo`, undefined, signal).then((plan) => plan!));
+}
+
+export function undoImport(importId: number): Promise<UndoDone | UndoRefusal> {
+  return orRefusal(send<UndoDone>("POST", `/api/imports/${importId}/undo`, {}).then((done) => done!));
 }
 
 export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean }): Promise<UserRow> {

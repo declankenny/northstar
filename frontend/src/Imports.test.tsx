@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ImportEntry, ImportRegister } from "./api";
+import type { ImportEntry, ImportRegister, UndoPlan, UndoRefusal } from "./api";
 import { Imports } from "./Imports";
 
-vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchImports: vi.fn() }));
+vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchImports: vi.fn(), fetchUndoPlan: vi.fn(), undoImport: vi.fn() }));
 
-import { fetchImports } from "./api";
+import { fetchImports, fetchUndoPlan, undoImport } from "./api";
 
 const entry = (over: Partial<ImportEntry> = {}): ImportEntry => ({
   id: 1, date: "2026-11-02", by: "Demo Admin", account_id: 7, account_name: "Demo Savings", account_deleted: false, account_open: true,
@@ -27,7 +27,7 @@ describe("the Imports page", () => {
     render(<Imports />);
     const row = (await screen.findByText("savings-2026.csv")).closest("tr") as HTMLElement;
     const cells = within(row).getAllByRole("cell").map((cell) => cell.textContent);
-    expect(cells).toEqual(["2026-11-02", "Demo Admin", "Demo Savings", "savings-2026.csv", "297", "3", ""]);
+    expect(cells).toEqual(["2026-11-02", "Demo Admin", "Demo Savings", "savings-2026.csv", "297", "3", "Undo…"]);
     expect(within(row).getByRole("link", { name: "Demo Savings" }).getAttribute("href")).toBe("/accounts/7");
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent))
       .toEqual(["Import Date", "Import By", "Account", "File Name", "Added", "Replaced", "Status"]);
@@ -47,10 +47,11 @@ describe("the Imports page", () => {
     expect(within(await rowOf("c.csv")).getByText("Unknown account")).toBeTruthy();
   });
 
-  it("says when an import was reverted", async () => {
+  it("says when an import was reverted, and offers no Undo for it", async () => {
     vi.mocked(fetchImports).mockResolvedValue(register([entry({ reverted_on: "2026-11-05" })]));
     render(<Imports />);
     expect(await screen.findByText("Reverted on 2026-11-05")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Undo/ })).toBeNull();
   });
 
   it("says there are older imports when the list is cut off, and only then", async () => {
@@ -75,5 +76,108 @@ describe("the Imports page", () => {
     vi.mocked(fetchImports).mockRejectedValue(new Error("Only admins can do that."));
     render(<Imports />);
     expect((await screen.findByRole("alert")).textContent).toBe("Only admins can do that.");
+  });
+});
+
+const plan = (over: Partial<UndoPlan> = {}): UndoPlan => ({
+  import_id: 1, file: "savings-2026.csv", date: "2026-11-02", by: "Demo Admin", account_id: 7, account_name: "Demo Savings",
+  delete: 297, restore: 3, ...over,
+});
+
+const refusal = (over: Partial<UndoRefusal> = {}): UndoRefusal => ({
+  refused: true, message: "Some of this import's balances have changed since, and Undo does not overwrite later changes.",
+  reason: "changed", blocked: [{ date: "2026-03-31", why: "Edited since the import" }, { date: "2026-04-30", why: "Deleted since the import" }],
+  more: 4, ...over,
+});
+
+async function openUndo() {
+  render(<Imports />);
+  fireEvent.click(await screen.findByRole("button", { name: /Undo/ }));
+}
+
+describe("Undo on the Imports page", () => {
+  beforeEach(() => vi.mocked(fetchImports).mockResolvedValue(register([entry()])));
+
+  it("asks what it would do and says so, before anything is written", async () => {
+    vi.mocked(fetchUndoPlan).mockResolvedValue(plan());
+    await openUndo();
+    await screen.findByRole("button", { name: "Undo import" });
+    const dialog = screen.getByRole("dialog", { name: "Undo this import?" });
+    expect(dialog.textContent).toContain("savings-2026.csv, imported into Demo Savings on 2026-11-02 by Demo Admin.");
+    expect(dialog.textContent).toContain("297 balances the import added will be deleted.");
+    expect(dialog.textContent).toContain("3 balances it replaced will get their old amounts, notes and sources back.");
+    expect(dialog.textContent).toContain("An undo cannot be undone");
+    expect(fetchUndoPlan).toHaveBeenCalledWith(1, expect.anything());
+    expect(undoImport).not.toHaveBeenCalled();
+  });
+
+  it("leaves out the line for something the import did not do", async () => {
+    vi.mocked(fetchUndoPlan).mockResolvedValue(plan({ restore: 0, delete: 1 }));
+    await openUndo();
+    await screen.findByRole("button", { name: "Undo import" });
+    const dialog = screen.getByRole("dialog", { name: "Undo this import?" });
+    expect(dialog.textContent).toContain("1 balance the import added will be deleted.");
+    expect(dialog.textContent).not.toContain("replaced");
+  });
+
+  it("does nothing on Cancel", async () => {
+    vi.mocked(fetchUndoPlan).mockResolvedValue(plan());
+    await openUndo();
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(undoImport).not.toHaveBeenCalled();
+  });
+
+  it("undoes it on confirming, shows the register as it now is and says what was done", async () => {
+    vi.mocked(fetchUndoPlan).mockResolvedValue(plan());
+    vi.mocked(undoImport).mockResolvedValue({ deleted: 297, restored: 3, after: register([entry({ reverted_on: "2026-11-05" })]) });
+    await openUndo();
+    fireEvent.click(await screen.findByRole("button", { name: "Undo import" }));
+    expect(await screen.findByText("Reverted on 2026-11-05")).toBeTruthy();
+    expect(undoImport).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Undid savings-2026.csv: 297 balances deleted and 3 restored.");
+  });
+
+  it("names the dates in the way, with how many more, when the import cannot be undone", async () => {
+    vi.mocked(fetchUndoPlan).mockResolvedValue(refusal());
+    await openUndo();
+    const dialog = await screen.findByRole("dialog", { name: "This import can’t be undone yet" });
+    expect(within(dialog).getAllByRole("row").map((row) => row.textContent)).toEqual([
+      "2026-03-31Edited since the import", "2026-04-30Deleted since the import"]);
+    expect(dialog.textContent).toContain("and 4 more.");
+    expect(dialog.textContent).toContain("Nothing was changed. Fix these balances by hand, then try Undo again.");
+    expect(within(dialog).queryByRole("button", { name: "Undo import" })).toBeNull();
+  });
+
+  it("says plainly when the account is closed", async () => {
+    vi.mocked(fetchUndoPlan).mockResolvedValue(refusal({
+      reason: "account_closed", blocked: [], more: 0,
+      message: "Demo Savings is closed, and a closed account takes no changes. Reopen it, then try Undo again.",
+    }));
+    await openUndo();
+    const dialog = await screen.findByRole("dialog", { name: "This import can’t be undone yet" });
+    expect(dialog.textContent).toContain("Demo Savings is closed");
+    expect(within(dialog).queryByRole("row")).toBeNull();
+  });
+
+  it("shows a refusal that comes at the last moment, and reloads the register when it is closed", async () => {
+    vi.mocked(fetchUndoPlan).mockResolvedValue(plan());
+    vi.mocked(undoImport).mockResolvedValue(refusal({ blocked: [{ date: "2026-02-28", why: "Edited since the import" }], more: 0 }));
+    await openUndo();
+    fireEvent.click(await screen.findByRole("button", { name: "Undo import" }));
+    const dialog = await screen.findByRole("dialog", { name: "This import can’t be undone yet" });
+    expect(dialog.textContent).toContain("2026-02-28");
+    vi.mocked(fetchImports).mockClear();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await vi.waitFor(() => expect(fetchImports).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows the server's message when the plan cannot be fetched", async () => {
+    vi.mocked(fetchUndoPlan).mockRejectedValue(new Error("That import no longer exists."));
+    await openUndo();
+    const dialog = await screen.findByRole("dialog");
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("That import no longer exists.");
   });
 });

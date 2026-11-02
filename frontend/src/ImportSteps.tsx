@@ -197,7 +197,7 @@ export function ReviewStep(props: {
   let status: ReactNode = "Checking the file…";
   if (review.error) status = "The file could not be checked.";
   else if (problems.length > 0) status = "Problems must be fixed in the file.";
-  else if (counts && !checking) status = <>{writeSummary(counts)}. Importing can't be undone yet.</>;
+  else if (counts && !checking) status = <>{writeSummary(counts)}. It can be undone from the Imports page.</>;
 
   return (
     <>

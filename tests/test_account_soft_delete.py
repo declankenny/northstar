@@ -219,8 +219,9 @@ SOURCE = Path(__file__).resolve().parent.parent / "northstar"
 READS = re.compile(r"\b(FROM|JOIN)\s+(accounts|balances)\b", re.I)
 # Files that may read the tables directly, and why: the backup tool counts every row, the account types module has to
 # see deleted accounts because they still hold their type, and the imports register has to name the account of an import
-# even when it has been deleted. None may read balances except the backup tool.
-EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}, "import_register.py": {"accounts"}}
+# even when it has been deleted, and its undo has to find the balances of a deleted account to refuse and say why. No
+# other file may read balances directly.
+EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}, "import_register.py": {"accounts", "balances"}}
 
 
 def direct_reads(source: str) -> set[str]:
