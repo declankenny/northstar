@@ -1,5 +1,6 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { addType, deleteType, editType, fetchTypes, type TypeList, type TypeRow } from "./api";
+import { useRequest } from "./useRequest";
 import { ConfirmDialog, Modal, useAction } from "./Dialogs";
 import { RowMenu } from "./RowMenu";
 
@@ -55,13 +56,8 @@ function TypeDialog(props: { list: TypeList; editing: TypeRow | null; onSave: (t
 }
 
 export function AccountTypes() {
-  const [list, setList] = useState<TypeList | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: list, error, setData: setList } = useRequest(fetchTypes, []);
   const [dialog, setDialog] = useState<Dialog | null>(null);
-
-  useEffect(() => {
-    fetchTypes().then(setList, (e: Error) => setError(e.message));
-  }, []);
 
   if (error) return <p className="empty">Could not load account types. {error}</p>;
   if (!list) return <p className="empty">Loading…</p>;

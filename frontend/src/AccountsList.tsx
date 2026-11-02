@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  type AccountList, type AccountPage, addAccount, addBalance, editAccount, fetchAccount, fetchAccounts, type ListedAccount,
+  type AccountPage, addAccount, addBalance, editAccount, fetchAccount, fetchAccounts, type ListedAccount,
 } from "./api";
 import { AddAccountDialog, BalanceDialog, EditAccountDialog } from "./AccountDialogs";
 import { formatDate } from "./dates";
@@ -8,6 +8,7 @@ import { formatCents } from "./money";
 import { RowMenu } from "./RowMenu";
 import { Link, navigate } from "./router";
 import { accountPath } from "./routes";
+import { useRequest } from "./useRequest";
 
 function ago(days: number | null): string {
   if (days === null) return "";
@@ -48,21 +49,12 @@ function Row({ account, showStale, actions }: { account: ListedAccount; showStal
 
 export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
   const [closed, setClosed] = useState(false);
-  const [list, setList] = useState<AccountList | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const loaded = useRequest((signal) => fetchAccounts(closed, signal), [closed]); // the other list is not shown meanwhile
+  const { data: list, error, setData: setList } = loaded;
   const [menu, setMenu] = useState(false);
   const [adding, setAdding] = useState<"asset" | "liability" | null>(null);
   const [dialog, setDialog] = useState<{ kind: "edit" | "balance"; account: AccountPage } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-
-  useEffect(() => {
-    let current = true; // ignore an answer that arrives after the other list was chosen
-    fetchAccounts(closed).then(
-      (data) => { if (current) setList(data); },
-      (e: Error) => { if (current) setError(e.message); },
-    );
-    return () => { current = false; };
-  }, [closed]);
 
   useEffect(() => {
     if (!menu) return;

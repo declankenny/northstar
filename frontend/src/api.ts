@@ -15,12 +15,13 @@ export type NetWorthSeries = {
  * accountId the series covers that one account (its balance is in assets or liabilities by class). */
 export async function fetchNetWorth(
   query: { start?: string; period?: Period; accountId?: number } = {},
+  signal?: AbortSignal,
 ): Promise<NetWorthSeries> {
   const params = new URLSearchParams();
   if (query.start) params.set("start", query.start);
   if (query.period) params.set("period", query.period);
   if (query.accountId !== undefined) params.set("account_id", String(query.accountId));
-  return (await send<NetWorthSeries>("GET", `/api/networth?${params}`, undefined))!;
+  return (await send<NetWorthSeries>("GET", `/api/networth?${params}`, undefined, signal))!;
 }
 
 export type Theme = "light" | "dark";
@@ -44,11 +45,12 @@ export class RequestError extends Error {
 }
 
 /** Send a change and return the JSON answer, or throw an Error whose message is fit to show the user. */
-async function send<T>(method: string, url: string, body: unknown): Promise<T | null> {
+async function send<T>(method: string, url: string, body: unknown, signal?: AbortSignal): Promise<T | null> {
   const response = await fetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   if (response.status === 401) {
     signIn(); // the session ended: sign in again
@@ -62,8 +64,8 @@ async function send<T>(method: string, url: string, body: unknown): Promise<T | 
   return response.status === 204 ? null : response.json();
 }
 
-export async function fetchMe(): Promise<Me> {
-  const response = await fetch("/api/me");
+export async function fetchMe(signal?: AbortSignal): Promise<Me> {
+  const response = await fetch("/api/me", { signal });
   if (response.status === 401) {
     signIn();
     throw new Error("You are signed out.");
@@ -87,8 +89,8 @@ export type UserRow = {
   id: number; email: string; display_name: string; is_admin: boolean; created_at: string; reactivated?: boolean;
 };
 
-export async function fetchUsers(): Promise<UserRow[]> {
-  return (await send<UserRow[]>("GET", "/api/users", undefined))!;
+export async function fetchUsers(signal?: AbortSignal): Promise<UserRow[]> {
+  return (await send<UserRow[]>("GET", "/api/users", undefined, signal))!;
 }
 
 export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean }): Promise<UserRow> {
@@ -136,8 +138,8 @@ export type AccountPage = {
 /** Typed text, sent as typed: the server checks it with the same rules as every other page. */
 export type BalanceEntry = { date: string; amount: string; note: string };
 
-export async function fetchAccount(id: number): Promise<AccountPage> {
-  return (await send<AccountPage>("GET", `/api/accounts/${id}`, undefined))!;
+export async function fetchAccount(id: number, signal?: AbortSignal): Promise<AccountPage> {
+  return (await send<AccountPage>("GET", `/api/accounts/${id}`, undefined, signal))!;
 }
 
 export async function editAccount(id: number, change: { name: string; type_id: number; notes: string }): Promise<AccountPage> {
@@ -206,8 +208,8 @@ export type NewAccount = {
   date: string; // as of; ignored when the amount is blank
 };
 
-export async function fetchAccounts(closed: boolean): Promise<AccountList> {
-  return (await send<AccountList>("GET", `/api/accounts?closed=${closed}`, undefined))!;
+export async function fetchAccounts(closed: boolean, signal?: AbortSignal): Promise<AccountList> {
+  return (await send<AccountList>("GET", `/api/accounts?closed=${closed}`, undefined, signal))!;
 }
 
 /** Answers with the open list, which now includes the new account. */
@@ -223,8 +225,8 @@ export type TypeRow = {
 };
 export type TypeList = { types: TypeRow[]; classes: { id: number; name: string }[] };
 
-export async function fetchTypes(): Promise<TypeList> {
-  return (await send<TypeList>("GET", "/api/types", undefined))!;
+export async function fetchTypes(signal?: AbortSignal): Promise<TypeList> {
+  return (await send<TypeList>("GET", "/api/types", undefined, signal))!;
 }
 
 /** Each of these answers with the whole list as it now is. */
@@ -263,9 +265,9 @@ export type UpdatePage = {
 };
 
 /** Reading a date writes nothing. With no date the server uses today. */
-export async function fetchUpdate(date?: string): Promise<UpdatePage> {
+export async function fetchUpdate(date?: string, signal?: AbortSignal): Promise<UpdatePage> {
   const query = date ? `?date=${encodeURIComponent(date)}` : "";
-  return (await send<UpdatePage>("GET", `/api/balances/update${query}`, undefined))!;
+  return (await send<UpdatePage>("GET", `/api/balances/update${query}`, undefined, signal))!;
 }
 
 /** Amounts are typed text by account id. A bad amount is a RequestError whose `errors` say which, and nothing is saved. */
@@ -274,8 +276,8 @@ export async function saveUpdate(date: string, amounts: Record<number, string>):
 }
 
 /** The version of the running app, for the footer of the navigation. */
-export async function fetchVersion(): Promise<string> {
-  const response = await fetch("/api/version");
+export async function fetchVersion(signal?: AbortSignal): Promise<string> {
+  const response = await fetch("/api/version", { signal });
   if (response.status === 401) {
     signIn();
     throw new Error("You are signed out.");

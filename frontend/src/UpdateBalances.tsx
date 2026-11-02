@@ -4,6 +4,7 @@ import { dayNumber, formatDate, isoFromDay } from "./dates";
 import { Modal } from "./Dialogs";
 import { formatCents } from "./money";
 import { useLeaveGuard } from "./router";
+import { useLatest } from "./useRequest";
 import { baselineText, changedAmounts, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
 
 type Banner = { kind: "ok" | "bad"; text: string };
@@ -43,7 +44,7 @@ export function UpdateBalances() {
   const [pending, setPending] = useState<string | null>(null); // a date waiting for "keep or clear"
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false); // another date is being read
-  const latestLoad = useRef(0);                  // the newest read, so an older answer is ignored
+  const begin = useLatest();                     // the newest read, so an older answer is ignored and cancelled
   const focusAfter = useRef<number | null>(null); // a row to focus once the boxes can be focused again
   const body = useRef<HTMLDivElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
@@ -61,21 +62,21 @@ export function UpdateBalances() {
 
   /** Read a date and show it. Nothing is written. With `keep`, rows the user typed in keep their text. */
   const show = async (date: string | undefined, keep: boolean) => {
-    const mine = ++latestLoad.current;
+    const mine = begin();
     setLoading(true);
     try {
-      const next = await fetchUpdate(date);
-      if (mine !== latestLoad.current) return; // a newer read has started: this answer is out of date
+      const next = await fetchUpdate(date, mine.signal);
+      if (!mine.current()) return; // a newer read has started: this answer is out of date
       setValues(valuesForDate(rows, values, next.rows, keep));
       setPage(next);
       setErrors({});
     } catch (e) {
-      if (mine !== latestLoad.current) return;
+      if (!mine.current()) return;
       const message = (e as Error).message;
       if (page) setBanner({ kind: "bad", text: message });
       else setLoadError(message);
     } finally {
-      if (mine === latestLoad.current) setLoading(false);
+      if (mine.current()) setLoading(false);
     }
   };
 
