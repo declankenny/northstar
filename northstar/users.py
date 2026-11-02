@@ -116,6 +116,8 @@ def _clean_email(email: str) -> str:
     email = email.strip().lower()
     if not email or " " in email or email.count("@") != 1 or email.startswith("@") or email.endswith("@"):
         raise ValidationError("Enter a valid email address.")
+    if email.endswith(".invalid"):          # the system user's address is reserved, and no real one can end this way
+        raise ValidationError("Enter a valid email address.")
     return email
 
 
@@ -142,7 +144,7 @@ def create_user(op: Operation, email: str, display_name: str, password: str,
 def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3.Row | None:
     """The user if the email and password match, otherwise None. Never says which part was wrong."""
     row = conn.execute("SELECT * FROM users WHERE email = ?", (email.strip(),)).fetchone()
-    if row is None:
+    if row is None or row["is_system"]:         # the system user is refused exactly like an unknown email
         verify_password(password, _dummy_hash())
         return None
     if not verify_password(password, row["password_hash"]):
@@ -160,7 +162,7 @@ def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3
 
 def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT id, email, display_name, is_admin, theme FROM users WHERE id = ?", (user_id,)
+        "SELECT id, email, display_name, is_admin, theme FROM users WHERE id = ? AND is_system = 0", (user_id,)
     ).fetchone()
     if row is None:
         raise ValidationError("That user no longer exists.")
@@ -169,7 +171,7 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
 
 def set_password(op: Operation, email: str, password: str) -> None:
     """Change a password by email (the command line) and sign that user out everywhere."""
-    row = op.conn.execute("SELECT id FROM users WHERE email = ?", (email.strip(),)).fetchone()
+    row = op.conn.execute("SELECT id FROM users WHERE email = ? AND is_system = 0", (email.strip(),)).fetchone()
     if row is None:
         raise ValidationError("There is no user with that email.")
     set_user_password(op, row["id"], password)
@@ -266,7 +268,8 @@ def delete_user(op: Operation, user_id: int, acting_user_id: int) -> None:
 
 def list_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, email, display_name, is_admin, created_at FROM users ORDER BY email COLLATE NOCASE"
+        "SELECT id, email, display_name, is_admin, created_at FROM users WHERE is_system = 0 "
+        "ORDER BY email COLLATE NOCASE"
     ).fetchall()
 
 

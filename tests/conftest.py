@@ -56,7 +56,7 @@ def type_id(conn, name):
 
 def add_account(conn, name, class_id, type_name):
     cur = conn.execute(
-        "INSERT INTO accounts (name, class_id, type_id) VALUES (?, ?, ?)",
+        "INSERT INTO accounts (name, class_id, type_id, created_by, updated_by) VALUES (?, ?, ?, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",
         (name, class_id, type_id(conn, type_name)),
     )
     return cur.lastrowid
@@ -64,7 +64,7 @@ def add_account(conn, name, class_id, type_name):
 
 def add_balance(conn, account_id, as_of_date, amount_cents):
     conn.execute(
-        "INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (?, ?, ?)",
+        "INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, ?, ?, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",
         (account_id, as_of_date, amount_cents),
     )
 

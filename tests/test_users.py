@@ -52,7 +52,7 @@ def test_short_password_is_refused(conn):
 
 def test_is_admin_must_be_zero_or_one(conn):
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO users (email, display_name, password_hash, is_admin) VALUES ('x@e.com', 'X', 'h', 2)")
+        conn.execute("INSERT INTO users (email, display_name, password_hash, is_admin, created_by, updated_by) VALUES ('x@e.com', 'X', 'h', 2, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))")
 
 
 def test_authenticate(conn):
@@ -83,7 +83,7 @@ def test_session_lifecycle(conn):
 
 def test_the_token_itself_is_not_stored(conn):
     token = sessions.create_session(conn, make_user(conn))
-    assert conn.execute("SELECT COUNT(*) FROM sessions WHERE token_hash = ?", (token,)).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM sys_sessions WHERE token_hash = ?", (token,)).fetchone()[0] == 0
 
 
 def test_session_expires_and_expired_ones_are_purged(conn):
@@ -93,14 +93,14 @@ def test_session_expires_and_expired_ones_are_purged(conn):
     assert sessions.user_for_token(conn, token, now=start + timedelta(days=29))
     assert sessions.user_for_token(conn, token, now=start + timedelta(days=31)) is None
     sessions.create_session(conn, uid, now=start + timedelta(days=31))
-    assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM sys_sessions").fetchone()[0] == 1
 
 
 def test_deleting_a_user_deletes_their_sessions(conn):
     uid = make_user(conn)
     sessions.create_session(conn, uid)
     conn.execute("DELETE FROM users WHERE id = ?", (uid,))
-    assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM sys_sessions").fetchone()[0] == 0
 
 
 def test_command_line_creates_a_user_and_never_prints_the_password(tmp_path, monkeypatch, capsys):

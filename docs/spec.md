@@ -44,7 +44,11 @@ These are left out of the current release to keep it focused, not ruled out. The
 
 **balances**: id, account_id, as_of_date, amount_cents (integer), note (optional), source ("manual" now, which leaves room for a feed), created_at, updated_at. One balance per account per date.
 
-**users** and **sessions** hold sign-in (see "Security"). A user has an email, display name, password hash, admin flag and theme.
+**users** and **sys_sessions** hold sign-in (see "Security"). A user has an email, display name, password hash, admin flag and theme.
+
+**Audit columns and the system user**: every table except the `sys_` ones has `created_at`, `created_by`, `updated_at` and `updated_by`, and the two author columns are foreign keys to users. The writer fills them: a row is authored by the signed-in user who made it, an update stamps who changed it and when, and an update that changes nothing stamps nothing. The command line, the seeded rows and every row that existed before these columns were added are authored by the system user. It is the one `users` row with `is_system` set, with a reserved `.invalid` email and a password hash no password matches, and nobody can sign in as it: sign-in treats it exactly like an unknown email. It is hidden from the user list and cannot be edited, deleted or have its password reset. No real user may have an address ending in `.invalid`.
+
+**Stable ids and the `sys_` prefix**: every table the application owns, apart from the `sys_` ones, uses `AUTOINCREMENT`, so the id of a deleted row is never given to another. A table the application writes for itself (`sys_sessions`, `sys_login_attempts`, `sys_schema_migrations`) is prefixed `sys_`, has no audit columns, and is written without an operation.
 
 ## Rules
 

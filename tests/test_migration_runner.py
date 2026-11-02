@@ -47,8 +47,11 @@ def folder_with(tmp_path, **extra):
 
 def fill(conn):
     """One synthetic account with one balance."""
-    conn.execute("INSERT INTO accounts (name, class_id, type_id) VALUES ('Test account', 1, 1)")
-    conn.execute("INSERT INTO balances (account_id, as_of_date, amount_cents) VALUES (1, '2026-01-31', 12345)")
+    audited = any(row[1] == "created_by" for row in conn.execute("PRAGMA table_info(accounts)"))
+    by = ", created_by, updated_by" if audited else ""
+    system = ", (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1)" if audited else ""
+    conn.execute(f"INSERT INTO accounts (name, class_id, type_id{by}) VALUES ('Test account', 1, 1{system})")
+    conn.execute(f"INSERT INTO balances (account_id, as_of_date, amount_cents{by}) VALUES (1, '2026-01-31', 12345{system})")
 
 
 def counts(conn):
@@ -180,7 +183,8 @@ CREATE TABLE balances_new (
     account_id INTEGER NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
     as_of_date TEXT NOT NULL CHECK (date(as_of_date) IS as_of_date),
     amount_cents INTEGER NOT NULL, note TEXT, source TEXT NOT NULL DEFAULT 'manual',
-    created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users (id),
+    updated_at TEXT NOT NULL, updated_by INTEGER NOT NULL REFERENCES users (id),
     UNIQUE (account_id, as_of_date));
 INSERT INTO balances_new SELECT * FROM balances;
 DROP TABLE balances;
@@ -273,7 +277,7 @@ def test_a_backup_validates_at_each_migration_boundary(tmp_path):
 def test_a_backup_missing_a_required_table_is_still_refused_under_the_new_ledger(tmp_path):
     path = tmp_path / "northstar.db"
     db.upgrade(path)
-    sqlite3.connect(path).execute("DROP TABLE login_attempts").connection.commit()
+    sqlite3.connect(path).execute("DROP TABLE sys_login_attempts").connection.commit()
     with pytest.raises(ValidationError, match="not a valid Northstar database"):
         backup.check_database(path)
 

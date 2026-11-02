@@ -75,7 +75,7 @@ def test_signing_in_with_a_weaker_hash_upgrades_it(conn):
     old = hash_with(PASSWORD, 2**3, 8, 1)
     conn.execute("UPDATE users SET password_hash = ? WHERE email = 'a@example.com'", (old,))
     assert users.authenticate(conn, "a@example.com", PASSWORD) is not None
-    now = conn.execute("SELECT password_hash FROM users").fetchone()[0]
+    now = conn.execute("SELECT password_hash FROM users WHERE is_system = 0").fetchone()[0]
     assert now != old and now.startswith(f"scrypt${users.SCRYPT['n']}$")
     assert users.authenticate(conn, "a@example.com", PASSWORD) is not None       # and still works
 
@@ -83,9 +83,9 @@ def test_signing_in_with_a_weaker_hash_upgrades_it(conn):
 def test_a_failed_sign_in_does_not_change_the_stored_hash(conn):
     users.create_user(op(conn), "a@example.com", "A", PASSWORD)
     old = hash_with(PASSWORD, 2**3, 8, 1)
-    conn.execute("UPDATE users SET password_hash = ?", (old,))
+    conn.execute("UPDATE users SET password_hash = ? WHERE is_system = 0", (old,))
     assert users.authenticate(conn, "a@example.com", "wrong-password-123") is None
-    assert conn.execute("SELECT password_hash FROM users").fetchone()[0] == old
+    assert conn.execute("SELECT password_hash FROM users WHERE is_system = 0").fetchone()[0] == old
 
 
 def test_a_stronger_hash_is_never_downgraded_by_signing_in(conn):
@@ -93,7 +93,7 @@ def test_a_stronger_hash_is_never_downgraded_by_signing_in(conn):
     strong = hash_with(PASSWORD, 2**6, 8, 1)
     conn.execute("UPDATE users SET password_hash = ?", (strong,))
     users.authenticate(conn, "a@example.com", PASSWORD)
-    assert conn.execute("SELECT password_hash FROM users").fetchone()[0] == strong
+    assert conn.execute("SELECT password_hash FROM users WHERE is_system = 0").fetchone()[0] == strong
 
 
 def test_an_unknown_email_still_costs_a_full_hash(conn, monkeypatch):

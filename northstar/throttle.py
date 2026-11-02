@@ -54,7 +54,7 @@ def _wait(conn: sqlite3.Connection, where: str, params: tuple, limit: int, windo
     `where` is built from constants in this module, never from what a person typed.
     """
     rows = conn.execute(
-        f"SELECT attempted_at FROM login_attempts WHERE {where} AND attempted_at > ? "
+        f"SELECT attempted_at FROM sys_login_attempts WHERE {where} AND attempted_at > ? "
         "ORDER BY attempted_at, id", (*params, _stamp(now - window))).fetchall()
     if len(rows) < limit:
         return None
@@ -71,7 +71,7 @@ def begin(conn: sqlite3.Connection, email: str, address: str | None, now: dateti
     email_hash = hash_value("email", email.strip().lower())
     address_hash = hash_value("address", address) if address else None
     with db.write_transaction(conn):
-        writer.sys_delete(conn, "login_attempts", [("attempted_at", "<=", _stamp(now - KEEP))])
+        writer.sys_delete(conn, "sys_login_attempts", [("attempted_at", "<=", _stamp(now - KEEP))])
         waits = [
             _wait(conn, "email_hash = ? AND address_hash IS ?", (email_hash, address_hash), PAIR_LIMIT, PAIR_WINDOW, now),
             _wait(conn, "email_hash = ?", (email_hash,), ACCOUNT_LIMIT, ACCOUNT_WINDOW, now),
@@ -81,13 +81,13 @@ def begin(conn: sqlite3.Connection, email: str, address: str | None, now: dateti
         blocked = [wait for wait in waits if wait is not None]
         if blocked:
             return None, max(blocked)
-        return writer.sys_insert(conn, "login_attempts", {
+        return writer.sys_insert(conn, "sys_login_attempts", {
             "email_hash": email_hash, "address_hash": address_hash, "attempted_at": _stamp(now)}), None
 
 
 def clear(conn: sqlite3.Connection, email: str, address: str | None) -> None:
     """After a success: forget this email's attempts from this address, and nobody else's."""
-    writer.sys_delete(conn, "login_attempts", [
+    writer.sys_delete(conn, "sys_login_attempts", [
         ("email_hash", "=", hash_value("email", email.strip().lower())),
         ("address_hash", "IS", hash_value("address", address) if address else None)])
 

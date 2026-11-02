@@ -57,7 +57,7 @@ def test_a_blocked_attempt_is_not_recorded_so_it_cannot_extend_the_block(conn):
         attempt(conn)
     for _ in range(10):
         assert attempt(conn)[0] is None
-    assert conn.execute("SELECT COUNT(*) FROM login_attempts").fetchone()[0] == 5
+    assert conn.execute("SELECT COUNT(*) FROM sys_login_attempts").fetchone()[0] == 5
 
 
 def test_an_attacker_at_another_address_does_not_block_the_owner_at_home(conn):
@@ -128,9 +128,9 @@ def test_a_successful_sign_in_clears_that_emails_failures_from_that_address_only
         attempt(conn, address=ELSEWHERE)
     attempt_id, _ = attempt(conn)                          # the attempt that is about to succeed
     throttle.clear(conn, ME, HOME)
-    assert conn.execute("SELECT COUNT(*) FROM login_attempts WHERE address_hash = ?",
+    assert conn.execute("SELECT COUNT(*) FROM sys_login_attempts WHERE address_hash = ?",
                         (throttle.hash_value("address", HOME),)).fetchone()[0] == 0
-    assert conn.execute("SELECT COUNT(*) FROM login_attempts WHERE address_hash = ?",
+    assert conn.execute("SELECT COUNT(*) FROM sys_login_attempts WHERE address_hash = ?",
                         (throttle.hash_value("address", ELSEWHERE),)).fetchone()[0] == 4
     assert all(allowed(attempt(conn)) for _ in range(5))   # a fresh allowance at home
     assert attempt(conn)[0] is None
@@ -140,14 +140,14 @@ def test_clearing_does_not_touch_other_emails_from_the_same_address(conn):
     for _ in range(3):
         attempt(conn, email="victim@example.com")
     throttle.clear(conn, ME, HOME)
-    assert conn.execute("SELECT COUNT(*) FROM login_attempts").fetchone()[0] == 3
+    assert conn.execute("SELECT COUNT(*) FROM sys_login_attempts").fetchone()[0] == 3
 
 
 # -- what is stored --
 
 def test_only_hashes_are_stored_never_the_email_or_the_address(conn):
     attempt(conn, email="secret-typed-text@example.com", address=HOME)
-    row = conn.execute("SELECT * FROM login_attempts").fetchone()
+    row = conn.execute("SELECT * FROM sys_login_attempts").fetchone()
     stored = " ".join(str(value) for value in tuple(row))
     assert "secret-typed-text" not in stored and HOME not in stored
     assert len(row["email_hash"]) == 64 and len(row["address_hash"]) == 64
@@ -156,13 +156,13 @@ def test_only_hashes_are_stored_never_the_email_or_the_address(conn):
 
 def test_an_attempt_with_no_known_address_stores_no_address(conn):
     attempt(conn, address=None)
-    assert conn.execute("SELECT address_hash FROM login_attempts").fetchone()[0] is None
+    assert conn.execute("SELECT address_hash FROM sys_login_attempts").fetchone()[0] is None
 
 
 def test_rows_older_than_the_longest_window_are_removed(conn):
     attempt(conn, now=NOW)
     attempt(conn, email="other@example.com", now=NOW + timedelta(hours=1, minutes=1))
-    assert conn.execute("SELECT COUNT(*) FROM login_attempts").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM sys_login_attempts").fetchone()[0] == 1
 
 
 # -- many requests at once --

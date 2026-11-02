@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from northstar import db, writer
-from northstar.writer import NOW, Operation
+from northstar.writer import Operation
 
 from conftest import add_account, add_balance, op
 
@@ -56,14 +56,9 @@ def test_update_changes_the_fields_and_says_so(conn, balance):
 
 
 def test_update_with_nothing_different_touches_nothing(conn, balance):
-    assert writer.update(op(conn), "balances", balance, {"amount_cents": 10000, "updated_at": NOW}) is False
-    assert balance_row(conn)["updated_at"] == "2020-01-01T00:00:00Z"        # NOW alone is not a change
-
-
-def test_now_is_applied_together_with_a_real_change(conn, balance):
-    assert writer.update(op(conn), "balances", balance, {"amount_cents": 1, "updated_at": NOW}) is True
-    row = balance_row(conn)
-    assert row["updated_at"] > "2020-01-01T00:00:00Z" and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", row["updated_at"])
+    before = tuple(balance_row(conn))
+    assert writer.update(op(conn), "balances", balance, {"amount_cents": 10000}) is False
+    assert tuple(balance_row(conn)) == before                                  # not even updated_at or updated_by
 
 
 def test_update_of_a_missing_row_changes_nothing(conn):
@@ -71,17 +66,60 @@ def test_update_of_a_missing_row_changes_nothing(conn):
 
 
 def test_update_only_if_the_guard_still_holds(conn):
-    user = conn.execute("INSERT INTO users (email, display_name, password_hash) VALUES ('a@example.com', 'A', 'old')").lastrowid
+    user = conn.execute("INSERT INTO users (email, display_name, password_hash, created_by, updated_by) VALUES ('a@example.com', 'A', 'old', (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))").lastrowid
     assert writer.update(op(conn), "users", user, {"password_hash": "new"}, only_if={"password_hash": "stale"}) is False
-    assert conn.execute("SELECT password_hash FROM users").fetchone()[0] == "old"
+    assert conn.execute("SELECT password_hash FROM users WHERE id = ?", (user,)).fetchone()[0] == "old"
     assert writer.update(op(conn), "users", user, {"password_hash": "new"}, only_if={"password_hash": "old"}) is True
-    assert conn.execute("SELECT password_hash FROM users").fetchone()[0] == "new"
+    assert conn.execute("SELECT password_hash FROM users WHERE id = ?", (user,)).fetchone()[0] == "new"
 
 
 def test_a_database_rule_still_refuses_a_bad_update(conn):
     types = [row[0] for row in conn.execute("SELECT id FROM account_types ORDER BY id")]
     with pytest.raises(sqlite3.IntegrityError):
         writer.update(op(conn), "account_types", types[0], {"name": "savings"})      # another type's name, ignoring case
+
+
+# -- the audit columns --
+
+def system_user(conn):
+    return conn.execute("SELECT id FROM users WHERE is_system = 1").fetchone()[0]
+
+
+def person(conn, email="p@example.com"):
+    return writer.insert(op(conn), "users", {"email": email, "display_name": "P", "password_hash": "x"})
+
+
+def test_an_insert_is_authored_by_the_actor(conn):
+    actor = person(conn)
+    new_id = writer.insert(Operation(conn, actor), "account_types", {"name": "Test type", "class_id": 1, "stale_after_days": 40})
+    row = conn.execute("SELECT * FROM account_types WHERE id = ?", (new_id,)).fetchone()
+    assert (row["created_by"], row["updated_by"]) == (actor, actor)
+    assert row["created_at"] and row["updated_at"]
+
+
+def test_an_operation_with_no_actor_is_made_by_the_system_user(conn):
+    new_id = writer.insert(op(conn), "account_types", {"name": "Test type", "class_id": 1, "stale_after_days": 40})
+    row = conn.execute("SELECT * FROM account_types WHERE id = ?", (new_id,)).fetchone()
+    assert (row["created_by"], row["updated_by"]) == (system_user(conn), system_user(conn))
+
+
+def test_a_real_change_stamps_who_and_when_and_leaves_the_creator_alone(conn, balance):
+    actor = person(conn)
+    conn.execute("UPDATE balances SET created_at = '2019-06-15T12:00:00Z'")      # long ago, so a rewrite to now would show
+    created_by = balance_row(conn)["created_by"]
+    assert writer.update(Operation(conn, actor), "balances", balance, {"amount_cents": 1}) is True
+    row = balance_row(conn)
+    assert row["updated_by"] == actor and row["created_by"] == created_by
+    assert row["created_at"] == "2019-06-15T12:00:00Z"
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", row["updated_at"]) and row["updated_at"] > "2020-01-01T00:00:00Z"
+
+
+@pytest.mark.parametrize("column", ["created_by", "updated_by", "created_at", "updated_at"])
+def test_a_caller_cannot_set_the_audit_columns(conn, balance, column):
+    with pytest.raises(ValueError, match="set by the writer"):
+        writer.insert(op(conn), "account_types", {"name": "X", "class_id": 1, "stale_after_days": 5, column: 1})
+    with pytest.raises(ValueError, match="set by the writer"):
+        writer.update(op(conn), "balances", balance, {column: 1})
 
 
 # -- delete --
@@ -103,18 +141,18 @@ def test_writes_roll_back_with_the_transaction_they_are_in(conn):
 
 def test_sys_delete_applies_every_condition(conn):
     for token, user in (("a", 1), ("b", 1), ("c", 2)):
-        conn.execute("INSERT INTO users (email, display_name, password_hash) VALUES (?, 'U', 'x')", (f"{token}@example.com",))
-        conn.execute("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, '2026-12-01T00:00:00Z')", (token, user))
-    assert writer.sys_delete(conn, "sessions", [("user_id", "=", 1), ("token_hash", "!=", "a")]) == 1
-    assert [row[0] for row in conn.execute("SELECT token_hash FROM sessions ORDER BY token_hash")] == ["a", "c"]
-    assert writer.sys_delete(conn, "sessions", [("expires_at", "<=", "2026-12-01T00:00:00Z")]) == 2
+        conn.execute("INSERT INTO users (email, display_name, password_hash, created_by, updated_by) VALUES (?, 'U', 'x', (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))", (f"{token}@example.com",))
+        conn.execute("INSERT INTO sys_sessions (token_hash, user_id, expires_at) VALUES (?, ?, '2026-12-01T00:00:00Z')", (token, user))
+    assert writer.sys_delete(conn, "sys_sessions", [("user_id", "=", 1), ("token_hash", "!=", "a")]) == 1
+    assert [row[0] for row in conn.execute("SELECT token_hash FROM sys_sessions ORDER BY token_hash")] == ["a", "c"]
+    assert writer.sys_delete(conn, "sys_sessions", [("expires_at", "<=", "2026-12-01T00:00:00Z")]) == 2
 
 
 def test_sys_insert_returns_the_rowid(conn):
-    first = writer.sys_insert(conn, "login_attempts", {"email_hash": "e", "address_hash": None, "attempted_at": "2026-01-01T00:00:00Z"})
-    second = writer.sys_insert(conn, "login_attempts", {"email_hash": "e", "address_hash": None, "attempted_at": "2026-01-01T00:00:00Z"})
+    first = writer.sys_insert(conn, "sys_login_attempts", {"email_hash": "e", "address_hash": None, "attempted_at": "2026-01-01T00:00:00Z"})
+    second = writer.sys_insert(conn, "sys_login_attempts", {"email_hash": "e", "address_hash": None, "attempted_at": "2026-01-01T00:00:00Z"})
     assert second == first + 1
-    assert writer.sys_delete(conn, "login_attempts", [("email_hash", "=", "e"), ("address_hash", "IS", None)]) == 2
+    assert writer.sys_delete(conn, "sys_login_attempts", [("email_hash", "=", "e"), ("address_hash", "IS", None)]) == 2
 
 
 # -- what the writer refuses --
@@ -127,13 +165,13 @@ def test_sys_insert_returns_the_rowid(conn):
     lambda c: writer.update(op(c), "accounts", 1, {"name": "x", "bogus": 1}),
     lambda c: writer.update(op(c), "accounts", 1, {"name": "x"}, only_if={"bogus": 1}),
     lambda c: writer.delete(op(c), "no_such_table", 1),
-    lambda c: writer.insert(op(c), "sessions", {"token_hash": "x", "user_id": 1, "expires_at": "x"}),   # system table, no operation
-    lambda c: writer.update(op(c), "login_attempts", 1, {"email_hash": "x"}),
+    lambda c: writer.insert(op(c), "sys_sessions", {"token_hash": "x", "user_id": 1, "expires_at": "x"}),   # system table, no operation
+    lambda c: writer.update(op(c), "sys_login_attempts", 1, {"email_hash": "x"}),
     lambda c: writer.sys_insert(c, "accounts", {"name": "x"}),                            # household table without one
     lambda c: writer.sys_delete(c, "balances", [("id", "=", 1)]),
-    lambda c: writer.sys_delete(c, "sessions", []),                                       # never "delete everything" by accident
-    lambda c: writer.sys_delete(c, "sessions", [("user_id", "LIKE", 1)]),
-    lambda c: writer.sys_delete(c, "sessions", [("user_id = 1 OR 1", "=", 1)]),
+    lambda c: writer.sys_delete(c, "sys_sessions", []),                                       # never "delete everything" by accident
+    lambda c: writer.sys_delete(c, "sys_sessions", [("user_id", "LIKE", 1)]),
+    lambda c: writer.sys_delete(c, "sys_sessions", [("user_id = 1 OR 1", "=", 1)]),
 ])
 def test_the_writer_refuses_what_it_does_not_know(conn, call):
     with pytest.raises(ValueError):
