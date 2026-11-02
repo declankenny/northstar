@@ -274,7 +274,8 @@ describe("Import: importing", () => {
     const counts = within(screen.getByLabelText("What was imported"));
     expect(counts.getByText("added").previousSibling?.textContent).toBe("2");
     expect(counts.getByText("skipped").previousSibling?.textContent).toBe("1");
-    expect(screen.getByRole("link", { name: "Back to Demo Savings" }).getAttribute("href")).toBe("/accounts/7");
+    expect(screen.getByRole("button", { name: "Exit" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Back to/ })).toBeNull();           // Exit replaced the link back to the account
   });
 
   it("cannot be pressed twice while it is importing", async () => {
@@ -342,6 +343,90 @@ describe("Import: choosing another file", () => {
     await toMap();
     pick();
     await vi.waitFor(() => expect(fetchImportRead).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("Import: Cancel and Exit", () => {
+  // The page was opened from the account page, so there is a page of the app to go back to.
+  const openedFromTheAccount = () => {
+    window.history.replaceState({ idx: 0 }, "", "/accounts/7");
+    window.history.pushState({ idx: 1 }, "", "/accounts/7/import");
+  };
+  const footer = () => Array.from(document.querySelectorAll(".ub-foot button")).map((b) => b.textContent);
+  const before = (first: HTMLElement, second: HTMLElement) => !!(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("puts a red Cancel to the left of Choose file… on the first screen", async () => {
+    render(<ImportBalances id={7} />);
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    expect(cancel.className).toContain("danger");
+    expect(before(cancel, screen.getByRole("button", { name: "Choose file…" }))).toBe(true);
+  });
+
+  it("puts Cancel, Back and the main button together, in that order, on the mapping and the review", async () => {
+    await toMap();
+    expect(footer()).toEqual(["Cancel", "Back", "Continue to review"]);
+    vi.mocked(fetchImportReview).mockResolvedValue(reviewOf());
+    fireEvent.click(screen.getByRole("button", { name: "Continue to review" }));
+    await screen.findByText(/Nothing has been saved yet/);
+    expect(footer()).toEqual(["Cancel", "Back", "Import 2 balances"]);
+  });
+
+  it("keeps Cancel and Back beside the corrected-file button when the file has problems", async () => {
+    await toReview(reviewOf({ can_commit: false, counts: null, rows: [], reviewed: null, errors: [{ record: 4, column: 1, message: "Bad." }] }));
+    expect(footer()).toEqual(["Cancel", "Back", "Choose corrected file…"]);
+  });
+
+  it("leaves at once for the page it was opened from when nothing is chosen yet", async () => {
+    openedFromTheAccount();
+    const confirm = vi.spyOn(window, "confirm");
+    render(<ImportBalances id={7} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe("/accounts/7"));
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("asks first once a file is chosen, stays when the person says so, and leaves when they agree", async () => {
+    openedFromTheAccount();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await toMap();
+    fireEvent.change(useOf("Note"), { target: { value: "ignore" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Nothing has been imported"));
+    expect(window.location.pathname).toBe("/accounts/7/import");
+    expect(useOf("Note").value).toBe("ignore");                                // still there, with the choice
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe("/accounts/7"));
+    expect(confirm).toHaveBeenCalledTimes(2);                                  // once for each press, never twice for one
+  });
+
+  it("goes to the account when there is no earlier page of the app", async () => {
+    window.history.replaceState({ idx: 0 }, "", "/accounts/7/import");
+    render(<ImportBalances id={7} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(window.location.pathname).toBe("/accounts/7");
+  });
+
+  it("cannot be pressed while the import is being written", async () => {
+    await toReview();
+    vi.mocked(commitImport).mockReturnValue(new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Import 2 balances" }));
+    await screen.findByRole("button", { name: "Importing…" });
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("is Exit once the import is written: no question, and back to the page it was opened from", async () => {
+    openedFromTheAccount();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await toReview();
+    vi.mocked(commitImport).mockResolvedValue({ added: 2, updated: 0, unchanged: 0, skipped: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Import 2 balances" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Exit" }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe("/accounts/7"));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();      // there is nothing left to cancel
   });
 });
 

@@ -26,7 +26,14 @@ export function Steps({ step }: { step: Step }) {
 
 // -- 1. Choose file --
 
-export function ChooseFileStep(props: { reading: boolean; error: string | null; onPick: () => void; onDropFile: (file: File) => void }) {
+/** The wizard's own way out, in the same row as its other buttons. Red because it throws the choices away. */
+function CancelButton({ onCancel, disabled }: { onCancel: () => void; disabled?: boolean }) {
+  return <button className="btn danger" disabled={disabled} onClick={onCancel}>Cancel</button>;
+}
+
+export function ChooseFileStep(props: {
+  reading: boolean; error: string | null; onPick: () => void; onDropFile: (file: File) => void; onCancel: () => void;
+}) {
   const [over, setOver] = useState(false);
   const drop = (event: DragEvent) => {
     event.preventDefault();
@@ -46,7 +53,10 @@ export function ChooseFileStep(props: { reading: boolean; error: string | null; 
             <>
               <p><b>Choose a CSV file</b> or drop it here</p>
               <p className="m">Nothing is saved until you press Import on the last screen.</p>
-              <button className="btn" onClick={props.onPick}>Choose file…</button>
+              <div className="imp-nav centered">
+                <CancelButton onCancel={props.onCancel} />
+                <button className="btn" onClick={props.onPick}>Choose file…</button>
+              </div>
             </>
           )}
         </div>
@@ -76,6 +86,7 @@ export function MapStep(props: {
   onPick: () => void;
   onBack: () => void;
   onContinue: () => void;
+  onCancel: () => void;
 }) {
   const { read, uses } = props;
   const ready: Readiness = readiness(uses, read, props.dateFormat);
@@ -128,9 +139,12 @@ export function MapStep(props: {
         </div>
       </div>
       <div className="ub-foot">
-        <button className="btn ghost" onClick={props.onBack}>Back</button>
         <div className="ub-status">{ready.reason ?? "All set."}</div>
-        <button className="btn" disabled={!ready.ready} onClick={props.onContinue}>Continue to review</button>
+        <div className="imp-nav">
+          <CancelButton onCancel={props.onCancel} />
+          <button className="btn ghost" onClick={props.onBack}>Back</button>
+          <button className="btn" disabled={!ready.ready} onClick={props.onContinue}>Continue to review</button>
+        </div>
       </div>
     </>
   );
@@ -169,6 +183,7 @@ export function ReviewStep(props: {
   onBack: () => void;
   onImport: () => void;
   onPick: () => void;
+  onCancel: () => void;
 }) {
   const { review, stale } = props;
   const data = review.data;
@@ -259,11 +274,14 @@ export function ReviewStep(props: {
         </div>
       </div>
       <div className="ub-foot">
-        <button className="btn ghost" onClick={props.onBack} disabled={props.committing}>Back</button>
         <div className="ub-status">{status}</div>
-        {problems.length > 0
-          ? <button className="btn" onClick={props.onPick}>Choose corrected file…</button>
-          : <button className="btn" disabled={!canImport} onClick={props.onImport}>{props.committing ? "Importing…" : `Import ${plural(writes, "balance")}`}</button>}
+        <div className="imp-nav">
+          <CancelButton onCancel={props.onCancel} disabled={props.committing} />
+          <button className="btn ghost" onClick={props.onBack} disabled={props.committing}>Back</button>
+          {problems.length > 0
+            ? <button className="btn" onClick={props.onPick}>Choose corrected file…</button>
+            : <button className="btn" disabled={!canImport} onClick={props.onImport}>{props.committing ? "Importing…" : `Import ${plural(writes, "balance")}`}</button>}
+        </div>
       </div>
     </>
   );
@@ -271,7 +289,7 @@ export function ReviewStep(props: {
 
 // -- 4. Result --
 
-export function ResultStep(props: { fileName: string; result: ImportResult; accountPath: ReactNode; onAnother: () => void }) {
+export function ResultStep(props: { fileName: string; result: ImportResult; onExit: () => void; onAnother: () => void }) {
   const { result } = props;
   return (
     <div className="imp-body">
@@ -284,7 +302,7 @@ export function ResultStep(props: { fileName: string; result: ImportResult; acco
           <div><b>{result.skipped.toLocaleString("en-US")}</b><small>skipped</small></div>
         </div>
         <div className="imp-actions">
-          {props.accountPath}
+          <button className="btn" onClick={props.onExit}>Exit</button>
           <button className="btn ghost" onClick={props.onAnother}>Import another file</button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import {
 } from "./api";
 import { ChooseFileStep, MapStep, ResultStep, ReviewStep, type Step, Steps } from "./ImportSteps";
 import { decidedFormat, formatChoices, mappingFrom, setUse, type Use, usesFrom } from "./importLogic";
-import { Link, useLeaveGuard } from "./router";
+import { goBack, Link, useLeaveGuard } from "./router";
 import { accountPath, PATHS } from "./routes";
 import { useRequest } from "./useRequest";
 
@@ -103,6 +103,9 @@ export function ImportBalances({ id }: { id: number }) {
   };
 
   const name = account.data?.name ?? "";
+  // Cancel and Exit both do what the browser's Back button does (asking first while there is something to lose), and fall back to
+  // the account when the page was not opened from another page of the app.
+  const leave = () => { goBack(accountPath(id)); };
   const back = <Link className="btn" to={accountPath(id)}>Back to {name || "the account"}</Link>;
 
   let body;
@@ -121,22 +124,23 @@ export function ImportBalances({ id }: { id: number }) {
           if (use === "date" || uses[column] === "date") setChosenFormat(null);      // another column, another format
         }}
         onFormat={setChosenFormat} onPick={() => picker.current?.click()} onBack={() => setStep("file")}
-        onContinue={() => { setStale(null); setFailure(null); setStep("review"); }} />
+        onContinue={() => { setStale(null); setFailure(null); setStep("review"); }} onCancel={leave} />
     );
   } else if (step === "review" && file) {
     body = (
       <ReviewStep fileName={file.name} review={review} policy={policy} onPolicy={setPolicy} stale={stale} failure={failure}
-        committing={committing} onBack={() => setStep("map")} onImport={() => void importNow()} onPick={() => picker.current?.click()} />
+        committing={committing} onBack={() => setStep("map")} onImport={() => void importNow()} onPick={() => picker.current?.click()}
+        onCancel={leave} />
     );
   } else if (step === "result" && file && result) {
     body = (
-      <ResultStep fileName={file.name} result={result} accountPath={back}
+      <ResultStep fileName={file.name} result={result} onExit={leave}
         onAnother={() => { setFile(null); setStep("file"); setResult(null); setChangedUses(null); setChosenFormat(null); setPolicy("skip"); }} />
     );
   } else {
     body = (
       <ChooseFileStep reading={reading || (file !== null && read.loading)} error={fileError ?? read.error}
-        onPick={() => picker.current?.click()} onDropFile={(dropped) => void choose(dropped)} />
+        onPick={() => picker.current?.click()} onDropFile={(dropped) => void choose(dropped)} onCancel={leave} />
     );
   }
 

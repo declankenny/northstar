@@ -295,3 +295,5 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .imp-errs { margin: 0 0 10px; padding-left: 18px; font-size: 13.5px; }
 .imp-errs li { margin: 4px 0; }
 .imp-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.imp-nav { display: flex; gap: 10px; align-items: center; }
+.imp-nav.centered { justify-content: center; margin-top: 4px; }
