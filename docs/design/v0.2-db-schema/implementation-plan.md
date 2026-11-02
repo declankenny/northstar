@@ -71,7 +71,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: `sys_operations`, `sys_operation_kinds`, `sys_record_changes` and `sys_audited_fields`, seeded by the migration; `balances.version` added with a plain `ADD COLUMN ... DEFAULT 0`; the chokepoint writing the log, with the writer sequence in the design; the registry loaded at startup.
 - Tests: every write path produces its log row and the audit columns agree with the logged mutation; the first changed balance receives the allocated operation id and later ones share it; a no-op save creates no operation; a theme-only update changes audit metadata without a header; one change per record per operation (a repeat rolls the whole operation back); the schema test that every column of every non-`sys_` table has a registry row; every operation kind used by the code exists in the table.
-- [ ] Merged
+- [x] Merged
 
 ### 8. Import commit
 
