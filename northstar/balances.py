@@ -48,7 +48,7 @@ def clean_note(note: str | None) -> str | None:
     return note or None
 
 
-def _require_open(account) -> None:
+def require_open(account) -> None:
     if not account["is_open"]:
         raise ValidationError(f"{account['name']} is closed. Reopen it before changing its balances.")
 
@@ -63,7 +63,7 @@ def record_balance(op: Operation, account_id: int, as_of: date, cents: int,
     conn = op.conn
     new_note = None if note is KEEP_NOTE else clean_note(note)
     with db.write_transaction(conn):       # the open check and the write are one step (see db.write_transaction)
-        _require_open(accounts.get_account(conn, account_id))
+        require_open(accounts.get_account(conn, account_id))
         existing = conn.execute(
             "SELECT id, amount_cents, note FROM live_balances WHERE account_id = ? AND as_of_date = ?",
             (account_id, as_of.isoformat()),
@@ -129,7 +129,7 @@ def update_balance(op: Operation, balance_id: int, date_text: str | None,
     new_note = clean_note(note)
     with db.write_transaction(conn):
         balance = get_balance(conn, balance_id)
-        _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
+        require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
         if conn.execute(
             "SELECT 1 FROM live_balances WHERE account_id = ? AND as_of_date = ? AND id != ?",
             (balance["account_id"], as_of.isoformat(), balance_id),
@@ -148,7 +148,7 @@ def delete_balance(op: Operation, balance_id: int) -> None:
     conn = op.conn
     with db.write_transaction(conn):
         balance = get_balance(conn, balance_id)
-        _require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
+        require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
         writer.delete(op, "balances", balance_id)
 
 
