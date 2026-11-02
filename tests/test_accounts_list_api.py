@@ -4,7 +4,7 @@ import pytest
 
 from northstar import balances, networth
 
-from conftest import add_account, add_balance, type_id, with_db
+from conftest import add_account, add_balance, type_id, with_db, op
 
 TODAY = date(2026, 10, 30)
 
@@ -150,7 +150,7 @@ def test_a_failed_balance_rolls_the_account_back(conn):
     # The plain function on its own: a balance that fails after the account was made leaves no account.
     savings = type_id(conn, "Savings")
     with pytest.raises(Exception):
-        balances.add_account_with_balance(conn, "asset", "Joint", savings, None, "5", "2026-10-31", TODAY)
+        balances.add_account_with_balance(op(conn), "asset", "Joint", savings, None, "5", "2026-10-31", TODAY)
     assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 0
 
 

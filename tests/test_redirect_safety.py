@@ -13,7 +13,7 @@ from northstar import users
 from northstar.web.app import create_app
 from northstar.web.auth_routes import LANDING, safe_next
 
-from conftest import sign_in, with_db
+from conftest import sign_in, with_db, op
 
 # -- next --
 
@@ -47,7 +47,7 @@ def test_a_signed_in_visitor_is_not_sent_off_site_by_the_next_parameter(client):
 
 def test_signing_in_does_not_send_a_visitor_off_site(anon_client):
     with with_db(anon_client) as conn:
-        users.create_user(conn, "a@example.com", "Test A", "synthetic-pass-123")
+        users.create_user(op(conn), "a@example.com", "Test A", "synthetic-pass-123")
     for target in ("//evil.com", "/\t/evil.com", "/\r\nSet-Cookie: x=1", "https://evil.com"):
         response = anon_client.post("/login", data={"email": "a@example.com", "password": "synthetic-pass-123", "next": target})
         assert response.status_code == 303 and response.headers["location"] == LANDING
