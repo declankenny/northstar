@@ -1,9 +1,11 @@
 """The change log (migration 0008): what the writer records for every kind of write, and the rules around it.
 Synthetic data only."""
 
+import ast
 import json
 import sqlite3
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -79,13 +81,58 @@ def test_only_ids_secrets_and_generated_metadata_are_unlogged(conn):
     assert {("balances", "amount_cents"), ("balances", "as_of_date"), ("accounts", "name")} <= logged
 
 
-def test_the_kinds_in_the_table_are_the_kinds_the_code_uses(conn):
-    assert {row[0] for row in conn.execute("SELECT kind FROM sys_operation_kinds")} == set(writer.KINDS)
+SEEDED_KINDS = {"ui_edit", "bulk_update", "import", "undo", "cli"}
 
 
-def test_an_operation_of_an_unknown_kind_is_refused(conn):
-    with pytest.raises(ValueError, match="not an operation kind"):
-        writer.Operation(conn, None, "made_up")
+def test_the_operation_kinds_are_seeded(conn):
+    assert {row[0] for row in conn.execute("SELECT kind FROM sys_operation_kinds")} == SEEDED_KINDS
+
+
+def test_an_operation_of_an_unknown_kind_is_refused_when_it_first_writes_and_changes_nothing(conn, checking):
+    action = op(conn, kind="made_up")
+    with pytest.raises(ValueError, match="'made_up' is not an operation kind. The kinds are bulk_update, cli, import, ui_edit, undo"):
+        writer.update(action, "accounts", checking, {"notes": "x"})
+    assert conn.execute("SELECT notes FROM accounts WHERE id = ?", (checking,)).fetchone()[0] is None
+    assert headers(conn) == []
+
+
+def test_a_new_kind_is_just_a_row(conn, checking):
+    conn.execute("INSERT INTO sys_operation_kinds (kind) VALUES ('integration')")
+    writer.update(op(conn, kind="integration"), "accounts", checking, {"notes": "x"})
+    assert headers(conn)[0]["kind"] == "integration"
+
+
+def kinds_used_in(source: str) -> set[str]:
+    """Every operation kind written as a string in a module: the third argument of Operation(...) or operation(...), a
+    kind= keyword, or the default of a parameter called kind."""
+    tree = ast.parse(source)
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+            if name in ("Operation", "operation", "op") and len(node.args) > 2 and isinstance(node.args[2], ast.Constant):
+                found.add(node.args[2].value)
+            found |= {kw.value.value for kw in node.keywords if kw.arg == "kind" and isinstance(kw.value, ast.Constant)}
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args.args
+            for arg, default in zip(args[len(args) - len(node.args.defaults):], node.args.defaults):
+                if arg.arg == "kind" and isinstance(default, ast.Constant):
+                    found.add(default.value)
+    return found
+
+
+def test_the_scan_finds_the_kinds_in_each_way_they_are_written():
+    source = ('Operation(conn, None, "cli")\noperation(request, conn, "bulk_update", {})\nop(conn, kind="undo")\n'
+              'def helper(request, conn, kind: str = "ui_edit"): pass\nOperation(conn, None, kind_variable)')
+    assert kinds_used_in(source) == {"cli", "bulk_update", "undo", "ui_edit"}
+
+
+def test_every_kind_the_code_uses_is_a_row_in_the_table(conn):
+    used = set()
+    for file in sorted((Path(__file__).resolve().parent.parent / "northstar").rglob("*.py")):
+        used |= kinds_used_in(file.read_text(encoding="utf-8"))
+    assert {"ui_edit", "bulk_update", "cli"} <= used                       # the scan sees the call sites that exist
+    assert used <= {row[0] for row in conn.execute("SELECT kind FROM sys_operation_kinds")}
 
 
 def test_json_is_available_and_the_columns_check_it(conn):
@@ -443,5 +490,5 @@ def test_the_upgrade_adds_the_log_without_writing_to_it(tmp_path):
     for table in ("sys_operations", "sys_record_changes"):
         assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
     assert conn.execute("SELECT COUNT(*) FROM sys_audited_fields").fetchone()[0] > 40
-    assert {row[0] for row in conn.execute("SELECT kind FROM sys_operation_kinds")} == set(writer.KINDS)
+    assert {row[0] for row in conn.execute("SELECT kind FROM sys_operation_kinds")} == SEEDED_KINDS
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []

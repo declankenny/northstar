@@ -39,9 +39,6 @@ SOFT_DELETED = frozenset({"accounts", "users"})
 # A table the application writes for itself (sign-in sessions, failed-login tracking, the change log) is prefixed sys_.
 # It holds no household data, has no audit columns, and a write to it needs no operation.
 
-# The origin of an action. These are the rows of sys_operation_kinds, and a test keeps the two the same.
-KINDS = ("ui_edit", "bulk_update", "import", "undo", "cli")
-
 _CONDITIONS = {"=": "= ?", "!=": "!= ?", "<=": "<= ?", "IS": "IS ?"}
 
 
@@ -53,8 +50,9 @@ class DuplicateChangeError(RuntimeError):
 @dataclass(frozen=True)
 class Operation:
     """One user action. `actor_id` is the signed-in user's id, or None for the command line, which has no user and so
-    acts as the system user. `kind` is where the action came from (one of KINDS) and `detail` is anything the header
-    should say about it, as plain JSON values (for a bulk update, its date).
+    acts as the system user. `kind` is where the action came from, one of the rows of sys_operation_kinds (the table is
+    the only list, and the kind is checked when the header is written), and `detail` is anything the header should say
+    about it, as plain JSON values (for a bulk update, its date).
 
     An operation is for one action and one transaction. The writer keeps what it learns, the id of the operation's header
     and the fields that are logged, in `state`."""
@@ -63,10 +61,6 @@ class Operation:
     kind: str
     detail: dict | None = None
     state: dict = field(default_factory=dict, compare=False, repr=False)
-
-    def __post_init__(self):
-        if self.kind not in KINDS:
-            raise ValueError(f"{self.kind!r} is not an operation kind.")
 
 
 def _is_system(table: str) -> bool:
@@ -129,6 +123,9 @@ def _operation_id(op: Operation) -> int:
         if op.conn.execute("SELECT 1 FROM sys_operations WHERE id = ?", (known,)).fetchone() is None:
             raise RuntimeError("This operation was rolled back, so it cannot make more changes. Start a new one.")
         return known
+    if op.conn.execute("SELECT 1 FROM sys_operation_kinds WHERE kind = ?", (op.kind,)).fetchone() is None:
+        kinds = ", ".join(row[0] for row in op.conn.execute("SELECT kind FROM sys_operation_kinds ORDER BY kind"))
+        raise ValueError(f"{op.kind!r} is not an operation kind. The kinds are {kinds}.")
     op.state["id"] = _insert(op.conn, "sys_operations", {
         "kind": op.kind, "user_id": _actor(op), "detail": None if op.detail is None else json.dumps(op.detail)})
     return op.state["id"]
