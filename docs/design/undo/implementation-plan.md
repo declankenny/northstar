@@ -28,7 +28,7 @@ Steps 1 and 2 are in v0.2 and are inside the epic [#55](https://github.com/decla
 - Scope: `GET` and `POST /api/imports/{id}/undo`. All or nothing, imports only, admin only, an import undone at most once. The review screen's "cannot be undone yet" line is removed and the Status column shows Undo or "Reverted on <date>".
 - Tests: an import that added, one that replaced and a mix; a refusal for each of a balance edited since, deleted since, changed by a later import, and a closed or deleted account, with nothing written in each; a second undo refused; the commit repeats the preview's checks; the change log records the undo.
 - Docs: the spec rule, a decisions entry saying why this differs from the deferred design, and the changelog.
-- [ ] Merged
+- [x] Merged
 
 ### 3. Deferred: other operations and partial undo
 

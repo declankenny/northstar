@@ -100,6 +100,15 @@ button.btn:disabled { opacity: .45; cursor: default; }
 .tablepanel td.num { white-space: nowrap; }
 .tablepanel th.r, .tablepanel td.r { text-align: right; }
 .reverted { color: var(--muted); }
+button.btn.small { padding: 5px 12px; font-size: 13px; }
+.card .why { margin: 12px 0 0; }
+.card .why table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.card .why td { padding: 6px 8px 6px 0; border-top: 1px solid var(--border); }
+.card .why td:first-child { white-space: nowrap; width: 110px; }
+.card .why .sub { margin: 8px 0 0; }
+.card .why-text { margin: 12px 0 0; font-size: 14px; }
+.card .facts { margin: 12px 0 0; padding-left: 18px; font-size: 14px; }
+.card .facts li { margin: 4px 0; }
 .actions { text-align: right; white-space: nowrap; }
 .inline { display: inline-flex; gap: 10px; align-items: center; margin: 0; }
 .inline input { font: inherit; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--border);

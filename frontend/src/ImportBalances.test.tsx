@@ -202,7 +202,7 @@ describe("Import: the review", () => {
     expect(skipped.textContent).toContain("$999.99");
     expect(skipped.textContent).toContain("$1,100.50");
     expect(list.getAllByRole("row").slice(1).map((r) => (r as HTMLTableRowElement).cells[0].textContent)).toEqual(["Mar 31, 2026", "Feb 28, 2026", "Jan 31, 2026"]);
-    expect(screen.getByText(/2 balances will be added. Importing can't be undone yet./)).toBeTruthy();
+    expect(screen.getByText(/2 balances will be added. It can be undone from the Imports page./)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Import 2 balances" })).toBeTruthy();
   });
 
