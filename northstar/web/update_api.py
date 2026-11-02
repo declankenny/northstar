@@ -71,7 +71,7 @@ def save_update(body: UpdateEntries, request: Request):
     """Save one date's amounts, then answer with that date as the server now holds it."""
     with closing(db.connect(request.app.state.db_path)) as conn:
         try:
-            counts = balances.save_update(operation(request, conn), body.date, body.amounts, clock.today())
+            counts = balances.save_update(operation(request, conn, "bulk_update", {"date": body.date}), body.date, body.amounts, clock.today())
             return _page(conn, body.date, counts)
         except balances.EntryErrors as error:
             return JSONResponse({"detail": str(error), "errors": error.by_account}, status_code=422)

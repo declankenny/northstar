@@ -197,6 +197,7 @@ CREATE TABLE balances_new (
     amount_cents INTEGER NOT NULL, note TEXT, source TEXT NOT NULL DEFAULT 'manual',
     created_at TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users (id),
     updated_at TEXT NOT NULL, updated_by INTEGER NOT NULL REFERENCES users (id),
+    version INTEGER NOT NULL DEFAULT 0,
     UNIQUE (account_id, as_of_date));
 INSERT INTO balances_new SELECT * FROM balances;
 DROP TABLE balances;

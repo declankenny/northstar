@@ -28,7 +28,7 @@ def balance(conn):
 # -- the operation --
 
 def test_an_operation_carries_the_connection_and_the_actor(conn):
-    operation = Operation(conn, 7)
+    operation = Operation(conn, 7, "ui_edit")
     assert operation.conn is conn and operation.actor_id == 7
     with pytest.raises(AttributeError):
         operation.actor_id = 8                                   # one action has one author
@@ -91,7 +91,7 @@ def person(conn, email="p@example.com"):
 
 def test_an_insert_is_authored_by_the_actor(conn):
     actor = person(conn)
-    new_id = writer.insert(Operation(conn, actor), "account_types", {"name": "Test type", "class_id": 1, "stale_after_days": 40})
+    new_id = writer.insert(op(conn, actor), "account_types", {"name": "Test type", "class_id": 1, "stale_after_days": 40})
     row = conn.execute("SELECT * FROM account_types WHERE id = ?", (new_id,)).fetchone()
     assert (row["created_by"], row["updated_by"]) == (actor, actor)
     assert row["created_at"] and row["updated_at"]
@@ -107,7 +107,7 @@ def test_a_real_change_stamps_who_and_when_and_leaves_the_creator_alone(conn, ba
     actor = person(conn)
     conn.execute("UPDATE balances SET created_at = '2019-06-15T12:00:00Z'")      # long ago, so a rewrite to now would show
     created_by = balance_row(conn)["created_by"]
-    assert writer.update(Operation(conn, actor), "balances", balance, {"amount_cents": 1}) is True
+    assert writer.update(op(conn, actor), "balances", balance, {"amount_cents": 1}) is True
     row = balance_row(conn)
     assert row["updated_by"] == actor and row["created_by"] == created_by
     assert row["created_at"] == "2019-06-15T12:00:00Z"

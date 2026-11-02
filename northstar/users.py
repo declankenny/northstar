@@ -174,7 +174,7 @@ def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3
         # The password is right and the hash is weaker than today's cost: store a fresh one. The condition
         # on the old value means a password changed in the meantime is not overwritten.
         try:
-            writer.update(Operation(conn, row["id"]), "users", row["id"], {"password_hash": hash_password(password)},
+            writer.update(Operation(conn, row["id"], "ui_edit"), "users", row["id"], {"password_hash": hash_password(password)},
                           only_if={"password_hash": row["password_hash"]})
         except sqlite3.Error:
             pass            # signing in matters more than the upgrade, which happens at the next sign-in
@@ -325,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValidationError(f"There is no database at {path}. Start Northstar once to set one up, then run this again.")
         with closing(db.connect(path)) as conn:
             db.require_current(conn, path)
-            op = Operation(conn, None)      # the command line has no signed-in user
+            op = Operation(conn, None, "cli")      # the command line has no signed-in user
             if args.command == "create":
                 _, restored = add_user(op, args.email, args.name, _ask_password(), args.admin)
                 print(f"{'Restored' if restored else 'Created'} {args.email.strip().lower()}{' (admin)' if args.admin else ''}.")

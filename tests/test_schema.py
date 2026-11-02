@@ -31,7 +31,7 @@ def test_seed_classes_and_types(conn):
 def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn):
     assert [r["version"] for r in conn.execute("SELECT version FROM sys_schema_migrations ORDER BY version")] == [
         "0001_initial", "0002_login_attempts", "0003_unique_account_names", "0004_audit_columns_and_system_user",
-        "0005_sys_table_names", "0006_user_soft_delete", "0007_account_soft_delete"]
+        "0005_sys_table_names", "0006_user_soft_delete", "0007_account_soft_delete", "0008_change_log"]
     assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sys_login_attempts'").fetchone()[0] == 1
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     assert {"email", "password_hash", "is_admin", "theme"} <= columns

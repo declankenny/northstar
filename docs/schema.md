@@ -14,6 +14,10 @@ erDiagram
     users ||--o{ accounts : "created_by, updated_by"
     users ||--o{ balances : "created_by, updated_by"
     users ||--o{ users : "created_by, updated_by"
+    users ||--o{ sys_operations : "user_id"
+    sys_operation_kinds ||--o{ sys_operations : "kind"
+    sys_operations |o--o{ sys_operations : "undoes_operation_id"
+    sys_operations ||--o{ sys_record_changes : "operation_id"
 
     account_classes {
         integer id PK
@@ -57,6 +61,7 @@ erDiagram
         integer created_by FK "who created it"
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
+        integer version "id of the operation that last wrote it, 0 if before the log"
     }
     users {
         integer id PK
@@ -84,6 +89,31 @@ erDiagram
         text address_hash "nullable"
         text attempted_at "UTC"
     }
+    sys_operation_kinds {
+        text kind PK "ui_edit, bulk_update, import, undo or cli"
+    }
+    sys_operations {
+        integer id PK "also the version it writes onto balances"
+        text kind FK
+        integer user_id FK "the system user for the command line"
+        text created_at "UTC"
+        integer undoes_operation_id FK "only on an undo"
+        text detail "JSON, optional"
+    }
+    sys_record_changes {
+        integer id PK
+        integer operation_id FK
+        text tablename
+        integer record_id
+        text change "INSERT, UPDATE or DELETE"
+        text old_json "logged fields before, optional"
+        text new_json "logged fields after, optional"
+    }
+    sys_audited_fields {
+        text tablename PK
+        text fieldname PK
+        integer is_logged "0 or 1"
+    }
     sys_schema_migrations {
         text version PK
         text applied_at "UTC"
@@ -98,6 +128,7 @@ erDiagram
 - A table that starts with `sys_` is written by the application for itself: it has no audit columns and is never logged. Every other table has the four audit columns, and `created_by` and `updated_by` point at `users`. Rows that existed before the audit columns were added, and rows made by the command line, are authored by the system user: the one `users` row with `is_system = 1`, which nobody can sign in as.
 - `live_accounts` and `live_balances` are views: the accounts that are not deleted, and the balances of those accounts. All reads go through them, and a test fails on a direct read of `accounts` or `balances`. Anything that rebuilds either table must drop both views first and create them again afterwards, because SQLite cannot rename a table while a view refers to it.
 - Every household table uses `AUTOINCREMENT`, so the id of a deleted row is never given to another row.
+- The change log is `sys_operations` (one row per user action that makes a logged change), `sys_record_changes` (one row per record it changed, with the logged fields as JSON) and `sys_audited_fields` (which fields are logged). `sys_record_changes.record_id` and `tablename` name any household record, so there is no foreign key to it. See "Change log" in `spec.md`.
 - `sys_login_attempts` has no relationships on purpose: it keeps only hashes of the email and the address, never the typed values.
 
 ## What the diagram cannot show

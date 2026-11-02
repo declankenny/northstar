@@ -6,9 +6,9 @@ from northstar.writer import Operation
 from northstar.web.app import create_app
 
 
-def op(conn, actor_id=None):
+def op(conn, actor_id=None, kind="ui_edit"):
     """A write operation on a connection, for tests that call the application's write functions directly."""
-    return Operation(conn, actor_id)
+    return Operation(conn, actor_id, kind)
 
 
 @pytest.fixture

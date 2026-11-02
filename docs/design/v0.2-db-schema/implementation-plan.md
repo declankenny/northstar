@@ -65,7 +65,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 - Scope: the `deleted` flag on accounts, the account and its balances leaving every view (including `live_accounts`), net worth history changing as it does today, the unique name index becoming partial (`WHERE deleted = 0`), and the delete confirmation wording. The spec rule that deleting an account permanently deletes its balances changes in the same pull request. Restore is v0.5.
 - Tests: deleting an account frees its name; every balance query excludes deleted accounts; the spec and decisions entries are in the pull request.
-- [ ] Merged
+- [x] Merged
 
 ### 7. Migration C: change log, registry and `balances.version`
 

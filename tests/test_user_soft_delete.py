@@ -17,7 +17,7 @@ OTHER = "another-synthetic-pass-456"
 
 
 def make(conn, email="a@example.com", name="A", admin=False, actor=None):
-    return users.create_user(Operation(conn, actor), email, name, PASSWORD, is_admin=admin)
+    return users.create_user(op(conn, actor), email, name, PASSWORD, is_admin=admin)
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ def test_deleting_a_user_who_authored_data_works_and_the_data_keeps_its_author(c
 
 def users_account(conn, actor):
     from northstar import accounts
-    return accounts.add_account(Operation(conn, actor), "Test account", 1, 1)
+    return accounts.add_account(op(conn, actor), "Test account", 1, 1)
 
 
 def test_deleting_a_user_who_created_another_user_works(conn, admin):
@@ -233,7 +233,7 @@ def test_the_command_line_creates_restores_and_hides(tmp_path, monkeypatch, caps
     conn = db.connect(path)
     gone = conn.execute("SELECT id FROM users WHERE email = 'gone@example.com'").fetchone()[0]
     boss = conn.execute("SELECT id FROM users WHERE email = 'boss@example.com'").fetchone()[0]
-    users.delete_user(Operation(conn, boss), gone, boss)
+    users.delete_user(op(conn, boss), gone, boss)
     assert users.main(["list"]) == 0
     assert "gone@example.com" not in capsys.readouterr().out
     assert users.main(["set-password", "gone@example.com"]) == 1

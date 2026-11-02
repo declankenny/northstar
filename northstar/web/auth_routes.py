@@ -23,9 +23,9 @@ def current_user(request: Request):
     return request.state.user
 
 
-def operation(request: Request, conn) -> Operation:
+def operation(request: Request, conn, kind: str = "ui_edit", detail: dict | None = None) -> Operation:
     """The signed-in user's action on this connection: what every write is made through (see northstar.writer)."""
-    return Operation(conn, current_user(request)["id"])
+    return Operation(conn, current_user(request)["id"], kind, detail)
 
 
 def require_admin(request: Request):
