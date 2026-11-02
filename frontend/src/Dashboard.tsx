@@ -43,7 +43,6 @@ export function Dashboard() {
           <div className="eyebrow">{formatDate(data.today).toUpperCase()}</div>
           <h1>Dashboard</h1>
         </div>
-        <Link className="btn" to={PATHS.update}>Update balances</Link>
       </div>
 
       {data.series.length === 0 ? (
