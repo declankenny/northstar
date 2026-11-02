@@ -8,6 +8,8 @@ import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+from northstar import writer
+
 SESSION_DAYS = 30
 _FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -27,12 +29,11 @@ def _now() -> datetime:
 def create_session(conn: sqlite3.Connection, user_id: int, now: datetime | None = None) -> str:
     """Start a session and return its token, which is shown to the browser once."""
     now = now or _now()
-    conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (_stamp(now),))
+    writer.sys_delete(conn, "sessions", [("expires_at", "<=", _stamp(now))])
     token = secrets.token_urlsafe(32)
-    conn.execute(
-        "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-        (_hash(token), user_id, _stamp(now), _stamp(now + timedelta(days=SESSION_DAYS))),
-    )
+    writer.sys_insert(conn, "sessions", {
+        "token_hash": _hash(token), "user_id": user_id, "created_at": _stamp(now),
+        "expires_at": _stamp(now + timedelta(days=SESSION_DAYS))})
     return token
 
 
@@ -49,12 +50,12 @@ def user_for_token(conn: sqlite3.Connection, token: str | None, now: datetime | 
 
 def end_session(conn: sqlite3.Connection, token: str | None) -> None:
     if token:
-        conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_hash(token),))
+        writer.sys_delete(conn, "sessions", [("token_hash", "=", _hash(token))])
 
 
 def end_sessions(conn: sqlite3.Connection, user_id: int, except_token: str | None = None) -> None:
     """Sign a user out everywhere, optionally keeping the browser that holds except_token."""
     if except_token:
-        conn.execute("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?", (user_id, _hash(except_token)))
+        writer.sys_delete(conn, "sessions", [("user_id", "=", user_id), ("token_hash", "!=", _hash(except_token))])
     else:
-        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        writer.sys_delete(conn, "sessions", [("user_id", "=", user_id)])

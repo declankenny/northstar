@@ -19,8 +19,9 @@ import sys
 import threading
 from contextlib import closing
 
-from northstar import config, db, sessions
+from northstar import config, db, sessions, writer
 from northstar.errors import ValidationError
+from northstar.writer import Operation
 
 MIN_PASSWORD_LENGTH = 12
 MAX_NAME_LENGTH = 100
@@ -123,7 +124,7 @@ def _check_password(password: str) -> None:
         raise ValidationError(f"The password must be at least {MIN_PASSWORD_LENGTH} characters.")
 
 
-def create_user(conn: sqlite3.Connection, email: str, display_name: str, password: str,
+def create_user(op: Operation, email: str, display_name: str, password: str,
                 is_admin: bool = False) -> int:
     email = _clean_email(email)
     display_name = display_name.strip()
@@ -131,13 +132,11 @@ def create_user(conn: sqlite3.Connection, email: str, display_name: str, passwor
         raise ValidationError("Enter a name.")
     _check_password(password)
     try:
-        cur = conn.execute(
-            "INSERT INTO users (email, display_name, password_hash, is_admin) VALUES (?, ?, ?, ?)",
-            (email, display_name, hash_password(password), 1 if is_admin else 0),
-        )
+        return writer.insert(op, "users", {
+            "email": email, "display_name": display_name, "password_hash": hash_password(password),
+            "is_admin": 1 if is_admin else 0})
     except sqlite3.IntegrityError:
         raise ValidationError("A user with that email already exists.")
-    return cur.lastrowid
 
 
 def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3.Row | None:
@@ -152,8 +151,8 @@ def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3
         # The password is right and the hash is weaker than today's cost: store a fresh one. The condition
         # on the old value means a password changed in the meantime is not overwritten.
         try:
-            conn.execute("UPDATE users SET password_hash = ? WHERE id = ? AND password_hash = ?",
-                         (hash_password(password), row["id"], row["password_hash"]))
+            writer.update(Operation(conn, row["id"]), "users", row["id"], {"password_hash": hash_password(password)},
+                          only_if={"password_hash": row["password_hash"]})
         except sqlite3.Error:
             pass            # signing in matters more than the upgrade, which happens at the next sign-in
     return row
@@ -168,21 +167,22 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
     return row
 
 
-def set_password(conn: sqlite3.Connection, email: str, password: str) -> None:
+def set_password(op: Operation, email: str, password: str) -> None:
     """Change a password by email (the command line) and sign that user out everywhere."""
-    row = conn.execute("SELECT id FROM users WHERE email = ?", (email.strip(),)).fetchone()
+    row = op.conn.execute("SELECT id FROM users WHERE email = ?", (email.strip(),)).fetchone()
     if row is None:
         raise ValidationError("There is no user with that email.")
-    set_user_password(conn, row["id"], password)
+    set_user_password(op, row["id"], password)
 
 
-def set_user_password(conn: sqlite3.Connection, user_id: int, password: str,
+def set_user_password(op: Operation, user_id: int, password: str,
                       keep_token: str | None = None) -> None:
     """Change a password and end the user's sessions, except the one holding keep_token."""
+    conn = op.conn
     _check_password(password)
     get_user(conn, user_id)
     with db.write_transaction(conn):
-        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(password), user_id))
+        writer.update(op, "users", user_id, {"password_hash": hash_password(password)})
         sessions.end_sessions(conn, user_id, except_token=keep_token)
 
 
@@ -190,13 +190,13 @@ class WrongPasswordError(ValidationError):
     """The current password typed was not the account's password. Sign-in throttling counts these."""
 
 
-def change_own_password(conn: sqlite3.Connection, user_id: int, current: str, new: str,
+def change_own_password(op: Operation, user_id: int, current: str, new: str,
                         keep_token: str | None) -> None:
     """A user changes their own password. Needs the current one. Their other browsers are signed out."""
-    row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    row = op.conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
     if row is None or not verify_password(current, row["password_hash"]):
         raise WrongPasswordError("The current password is wrong.")
-    set_user_password(conn, user_id, new, keep_token=keep_token)
+    set_user_password(op, user_id, new, keep_token=keep_token)
 
 
 def _clean_name(display_name: str) -> str:
@@ -208,17 +208,17 @@ def _clean_name(display_name: str) -> str:
     return display_name
 
 
-def set_display_name(conn: sqlite3.Connection, user_id: int, display_name: str) -> None:
+def set_display_name(op: Operation, user_id: int, display_name: str) -> None:
     display_name = _clean_name(display_name)
-    get_user(conn, user_id)
-    conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (display_name, user_id))
+    get_user(op.conn, user_id)
+    writer.update(op, "users", user_id, {"display_name": display_name})
 
 
-def set_theme(conn: sqlite3.Connection, user_id: int, theme: str) -> None:
+def set_theme(op: Operation, user_id: int, theme: str) -> None:
     if theme not in THEMES:
         raise ValidationError("The theme must be light or dark.")
-    get_user(conn, user_id)
-    conn.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, user_id))
+    get_user(op.conn, user_id)
+    writer.update(op, "users", user_id, {"theme": theme})
 
 
 def _is_last_admin(conn: sqlite3.Connection, user: sqlite3.Row) -> bool:
@@ -226,7 +226,7 @@ def _is_last_admin(conn: sqlite3.Connection, user: sqlite3.Row) -> bool:
         "SELECT COUNT(*) FROM users WHERE is_admin = 1").fetchone()[0] == 1
 
 
-def update_user(conn: sqlite3.Connection, user_id: int, acting_user_id: int, email: str | None = None,
+def update_user(op: Operation, user_id: int, acting_user_id: int, email: str | None = None,
                 display_name: str | None = None, is_admin: bool | None = None) -> None:
     """An admin changes another user's email, name and admin flag (None leaves a field alone).
 
@@ -234,6 +234,7 @@ def update_user(conn: sqlite3.Connection, user_id: int, acting_user_id: int, ema
     doesn't end the user's sessions: they stay signed in and use the new address next time. You can't
     remove your own admin, and the last admin can't be demoted.
     """
+    conn = op.conn
     with db.write_transaction(conn):       # counting the admins and demoting one are a single step
         user = get_user(conn, user_id)
         new_email = user["email"] if email is None else _clean_email(email)
@@ -245,21 +246,22 @@ def update_user(conn: sqlite3.Connection, user_id: int, acting_user_id: int, ema
             if user_id == acting_user_id:
                 raise ValidationError("You can't remove your own admin. Ask another admin.")
         try:
-            conn.execute("UPDATE users SET email = ?, display_name = ?, is_admin = ? WHERE id = ?",
-                         (new_email, new_name, 1 if new_admin else 0, user_id))
+            writer.update(op, "users", user_id, {
+                "email": new_email, "display_name": new_name, "is_admin": 1 if new_admin else 0})
         except sqlite3.IntegrityError:
             raise ValidationError("A user with that email already exists.")
 
 
-def delete_user(conn: sqlite3.Connection, user_id: int, acting_user_id: int) -> None:
+def delete_user(op: Operation, user_id: int, acting_user_id: int) -> None:
     """Delete a user and their sessions. Not yourself, and never the last admin."""
+    conn = op.conn
     with db.write_transaction(conn):
         user = get_user(conn, user_id)
         if user_id == acting_user_id:
             raise ValidationError("You can't delete your own account.")
         if _is_last_admin(conn, user):
             raise ValidationError("There must be at least one admin.")
-        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        writer.delete(op, "users", user_id)
 
 
 def list_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -294,11 +296,12 @@ def main(argv: list[str] | None = None) -> int:
             raise ValidationError(f"There is no database at {path}. Start Northstar once to set one up, then run this again.")
         with closing(db.connect(path)) as conn:
             db.require_current(conn, path)
+            op = Operation(conn, None)      # the command line has no signed-in user
             if args.command == "create":
-                create_user(conn, args.email, args.name, _ask_password(), args.admin)
+                create_user(op, args.email, args.name, _ask_password(), args.admin)
                 print(f"Created {args.email.strip().lower()}{' (admin)' if args.admin else ''}.")
             elif args.command == "set-password":
-                set_password(conn, args.email, _ask_password())
+                set_password(op, args.email, _ask_password())
                 print(f"Password changed for {args.email.strip().lower()}. They are signed out everywhere.")
             else:
                 for row in list_users(conn):

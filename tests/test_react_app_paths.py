@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from northstar import users
 from northstar.web.app import create_app
 
-from conftest import sign_in, with_db
+from conftest import sign_in, with_db, op
 
 PAGES = ["/dashboard", "/accounts", "/accounts/12", "/balance-update", "/types", "/users", "/profile", "/nope"]
 
@@ -65,7 +65,7 @@ def test_signed_out_visitors_are_sent_to_sign_in_and_back(tmp_path, monkeypatch,
     monkeypatch.setattr("northstar.web.app.SPA_DIR", spa)
     anon = TestClient(create_app(tmp_path / "web.db"), follow_redirects=False)
     with with_db(anon) as conn:
-        users.create_user(conn, "a@example.com", "Test A", "synthetic-pass-123")
+        users.create_user(op(conn), "a@example.com", "Test A", "synthetic-pass-123")
     response = anon.get(path)
     assert response.status_code == 303 and response.headers["location"].startswith("/login?next=")
     back = anon.post("/login", data={"email": "a@example.com", "password": "synthetic-pass-123", "next": path})

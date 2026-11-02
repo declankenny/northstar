@@ -7,6 +7,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from northstar import clock, config, db, sessions, throttle, users
+from northstar.writer import Operation
 
 router = APIRouter()
 COOKIE = "northstar_session"
@@ -20,6 +21,11 @@ def current_user(request: Request):
     inside a protected route.
     """
     return request.state.user
+
+
+def operation(request: Request, conn) -> Operation:
+    """The signed-in user's action on this connection: what every write is made through (see northstar.writer)."""
+    return Operation(conn, current_user(request)["id"])
 
 
 def require_admin(request: Request):

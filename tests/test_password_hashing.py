@@ -12,6 +12,7 @@ import time
 import pytest
 
 from northstar import users
+from conftest import op
 
 PASSWORD = "synthetic-pass-123"
 
@@ -70,7 +71,7 @@ def test_garbage_does_not_need_rehashing_it_just_does_not_verify():
 
 
 def test_signing_in_with_a_weaker_hash_upgrades_it(conn):
-    users.create_user(conn, "a@example.com", "A", PASSWORD)
+    users.create_user(op(conn), "a@example.com", "A", PASSWORD)
     old = hash_with(PASSWORD, 2**3, 8, 1)
     conn.execute("UPDATE users SET password_hash = ? WHERE email = 'a@example.com'", (old,))
     assert users.authenticate(conn, "a@example.com", PASSWORD) is not None
@@ -80,7 +81,7 @@ def test_signing_in_with_a_weaker_hash_upgrades_it(conn):
 
 
 def test_a_failed_sign_in_does_not_change_the_stored_hash(conn):
-    users.create_user(conn, "a@example.com", "A", PASSWORD)
+    users.create_user(op(conn), "a@example.com", "A", PASSWORD)
     old = hash_with(PASSWORD, 2**3, 8, 1)
     conn.execute("UPDATE users SET password_hash = ?", (old,))
     assert users.authenticate(conn, "a@example.com", "wrong-password-123") is None
@@ -88,7 +89,7 @@ def test_a_failed_sign_in_does_not_change_the_stored_hash(conn):
 
 
 def test_a_stronger_hash_is_never_downgraded_by_signing_in(conn):
-    users.create_user(conn, "a@example.com", "A", PASSWORD)
+    users.create_user(op(conn), "a@example.com", "A", PASSWORD)
     strong = hash_with(PASSWORD, 2**6, 8, 1)
     conn.execute("UPDATE users SET password_hash = ?", (strong,))
     users.authenticate(conn, "a@example.com", PASSWORD)

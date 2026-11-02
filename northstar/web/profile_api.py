@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from northstar import clock, db, throttle, users
 from northstar.errors import ValidationError
-from northstar.web.auth_routes import COOKIE, current_user
+from northstar.web.auth_routes import COOKIE, current_user, operation
 
 router = APIRouter(prefix="/api/me")
 
@@ -61,11 +61,12 @@ def change_me(body: ProfileChange, request: Request):
     user = current_user(request)
 
     def action(conn):
+        op = operation(request, conn)
         with db.write_transaction(conn):
             if body.display_name is not None:
-                users.set_display_name(conn, user["id"], body.display_name)
+                users.set_display_name(op, user["id"], body.display_name)
             if body.theme is not None:
-                users.set_theme(conn, user["id"], body.theme)
+                users.set_theme(op, user["id"], body.theme)
         return _me(conn, user["id"])
 
     return _run(request, action)
@@ -85,7 +86,7 @@ def change_password(body: PasswordChange, request: Request):
             raise HTTPException(status_code=429, headers={"Retry-After": str(wait)},
                                 detail=f"Too many attempts. Try again in about {throttle.describe(wait)}.")
         try:
-            users.change_own_password(conn, user["id"], body.current_password, body.new_password,
+            users.change_own_password(operation(request, conn), user["id"], body.current_password, body.new_password,
                                       request.cookies.get(COOKIE))
         except users.WrongPasswordError:
             raise

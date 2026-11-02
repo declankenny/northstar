@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from northstar import account_types, db
 from northstar.errors import NotFoundError, ValidationError
-from northstar.web.auth_routes import require_admin
+from northstar.web.auth_routes import operation, require_admin
 
 router = APIRouter(prefix="/api/types", dependencies=[Depends(require_admin)])
 
@@ -72,7 +72,7 @@ def list_types(request: Request):
 @router.post("", response_model=TypeList, status_code=201)
 def add_type(body: NewType, request: Request):
     def action(conn):
-        account_types.add_type(conn, body.name, body.class_id, body.stale_after_days)
+        account_types.add_type(operation(request, conn), body.name, body.class_id, body.stale_after_days)
         return _list(conn)
     return _run(request, action)
 
@@ -80,7 +80,7 @@ def add_type(body: NewType, request: Request):
 @router.patch("/{type_id}", response_model=TypeList)
 def edit_type(type_id: int, body: TypeChange, request: Request):
     def action(conn):
-        account_types.update_type(conn, type_id, body.name, body.stale_after_days, body.class_id)
+        account_types.update_type(operation(request, conn), type_id, body.name, body.stale_after_days, body.class_id)
         return _list(conn)
     return _run(request, action)
 
@@ -88,6 +88,6 @@ def edit_type(type_id: int, body: TypeChange, request: Request):
 @router.delete("/{type_id}", response_model=TypeList)
 def delete_type(type_id: int, request: Request):
     def action(conn):
-        account_types.delete_type(conn, type_id)
+        account_types.delete_type(operation(request, conn), type_id)
         return _list(conn)
     return _run(request, action)

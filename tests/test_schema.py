@@ -4,7 +4,7 @@ import pytest
 
 from northstar import db, users
 
-from conftest import add_account, type_id
+from conftest import add_account, type_id, op
 
 ASSET, LIABILITY = 1, 2
 
@@ -35,7 +35,7 @@ def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     assert {"email", "password_hash", "is_admin", "theme"} <= columns
     assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sessions'").fetchone()[0] == 1
-    users.create_user(conn, "a@example.com", "Test A", "synthetic-pass-123")
+    users.create_user(op(conn), "a@example.com", "Test A", "synthetic-pass-123")
     assert conn.execute("SELECT theme FROM users").fetchone()[0] == "dark"       # the default
 
 

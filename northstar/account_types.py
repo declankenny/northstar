@@ -2,7 +2,9 @@
 
 import sqlite3
 
+from northstar import writer
 from northstar.errors import NotFoundError, ValidationError
+from northstar.writer import Operation
 
 
 def list_types(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -63,37 +65,34 @@ def _check_class(conn: sqlite3.Connection, class_id: int | None) -> int:
     return class_id
 
 
-def add_type(conn: sqlite3.Connection, name: str | None, class_id: int | None,
+def add_type(op: Operation, name: str | None, class_id: int | None,
              stale_after_days: int | str | None) -> int:
+    conn = op.conn
     name = _clean_name(conn, name)
     class_id = _check_class(conn, class_id)
     days = _clean_days(stale_after_days)
-    return conn.execute(
-        "INSERT INTO account_types (name, class_id, stale_after_days) VALUES (?, ?, ?)",
-        (name, class_id, days),
-    ).lastrowid
+    return writer.insert(op, "account_types", {"name": name, "class_id": class_id, "stale_after_days": days})
 
 
-def update_type(conn: sqlite3.Connection, type_id: int, name: str | None,
+def update_type(op: Operation, type_id: int, name: str | None,
                 stale_after_days: int | str | None, class_id: int | None = None) -> None:
     """Rename a type and change its stale days. The class changes only while no account uses it."""
+    conn = op.conn
     current = get_type(conn, type_id)
     name = _clean_name(conn, name, exclude_id=type_id)
     days = _clean_days(stale_after_days)
     new_class = current["class_id"] if class_id is None else _check_class(conn, class_id)
     if new_class != current["class_id"] and count_accounts(conn, type_id):
         raise ValidationError("The class can't change while accounts use this type.")
-    conn.execute(
-        "UPDATE account_types SET name = ?, class_id = ?, stale_after_days = ? WHERE id = ?",
-        (name, new_class, days, type_id),
-    )
+    writer.update(op, "account_types", type_id, {"name": name, "class_id": new_class, "stale_after_days": days})
 
 
-def delete_type(conn: sqlite3.Connection, type_id: int) -> None:
+def delete_type(op: Operation, type_id: int) -> None:
     """Delete a type that no account uses."""
+    conn = op.conn
     get_type(conn, type_id)
     in_use = count_accounts(conn, type_id)
     if in_use:
         noun = "account uses" if in_use == 1 else "accounts use"
         raise ValidationError(f"{in_use} {noun} this type. Change their type first.")
-    conn.execute("DELETE FROM account_types WHERE id = ?", (type_id,))
+    writer.delete(op, "account_types", type_id)
