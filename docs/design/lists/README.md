@@ -13,11 +13,11 @@ Related issues: [#120](https://github.com/declankenny/northstar/issues/120) (the
 
 ## Where it slots in
 
-Not decided. It is wanted before 1.0 and it is not in v0.2, which is feature-complete. The considerations so far:
+Decided: its own release, v0.4, after v0.3 (multi-currency). Household reporting moved to v0.5 and data history and recovery to v0.6. It is not in v0.2, which is feature-complete.
 
-- **After v0.3 (multi-currency).** Money columns, money filters and the CSV money format change meaning once an amount has a currency. Building lists first means reworking them.
-- **Before v0.4 (reporting) and v0.5 (history).** Reports and history screens are lists. Building the shared list first means they use it, rather than being migrated onto it later.
-- **Its own release or inside v0.4.** The epic is large enough that sharing a release with reporting would delay both. A release of its own would renumber the later milestones.
+- **After v0.3.** Money columns, money filters and the CSV money format change meaning once an amount has a currency. Building lists first means reworking them.
+- **Before reporting and history.** Reports and history screens are lists. Building the shared list first means they use it, rather than being migrated onto it later.
+- **A release of its own.** The epic is large enough that sharing a release with reporting would delay both.
 
 ## Lifecycle
 

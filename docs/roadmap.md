@@ -57,8 +57,9 @@ Two things have to be settled before 1.0 because they shape the promise:
 | --- | --- |
 | v0.2 | Balance CSV import and export |
 | v0.3 | Multi-currency and locale-aware formatting |
-| v0.4 | Household reporting |
-| v0.5 | Data history and recovery |
+| v0.4 | Managing lists |
+| v0.5 | Household reporting |
+| v0.6 | Data history and recovery |
 | **v1.0** | Stabilization |
 | v1.1 | Transactions, transaction CSV and statement reconciliation |
 | v1.2 | SimpleFIN automation |
@@ -70,6 +71,7 @@ The milestones say what each release contains. This order is the position:
 - **CSV import comes first.** It is what makes Northstar useful to anyone with existing history, and every later report is only as good as the data behind it. Northstar's own CSV format is canonical and independent of locale, so an export imports identically anywhere. Someone else's spreadsheet is a separate case, read through an explicit column mapping and an explicitly chosen date and number interpretation.
 - **Multi-currency comes before reporting.** Reporting is then built once, already able to separate exchange-rate effects from real balance movement.
 - **Locale formatting ships with multi-currency.** It does not change the data model, but a household outside the United States needs both to adopt Northstar, so they arrive together.
+- **Managing lists comes before reporting and history.** Reports and history screens are lists, so a shared list built once means they use it instead of being moved onto it later. It follows multi-currency because money columns, money filters and the list CSV format depend on what an amount means.
 - **Data history builds on CSV import.** Batch undo needs a record of each change (previous value, source, batch). Full history grows that record rather than building it twice.
 - **Transactions come before SimpleFIN.** A feed needs somewhere to put transactions, duplicate handling and reconciliation before it can be trusted.
 - **Budgeting comes last.** It depends on categorized transactions with known coverage.
