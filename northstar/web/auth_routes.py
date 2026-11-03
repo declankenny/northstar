@@ -5,13 +5,14 @@ from contextlib import closing
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 from northstar import clock, config, db, sessions, throttle, users
 from northstar.writer import Operation
 
 router = APIRouter(prefix="/api/auth")
+pages = APIRouter()
 COOKIE = "northstar_session"
 LANDING = "/dashboard"   # where people go after signing in, and from the site root
 
@@ -58,6 +59,17 @@ def safe_next(target: str) -> str:
         if not parts.scheme and not parts.netloc:
             return target
     return LANDING
+
+
+@pages.get("/login", include_in_schema=False)
+def sign_in_page(request: Request, next: str = "/"):
+    """The sign-in page is a page of the React app like any other. Someone already signed in is sent on."""
+    if request.state.user:
+        return RedirectResponse(safe_next(next), status_code=303)
+    index = request.app.state.spa_index
+    if not index.is_file():
+        raise HTTPException(status_code=404)       # no build: there is no page to show
+    return FileResponse(index)
 
 
 class SignIn(BaseModel):

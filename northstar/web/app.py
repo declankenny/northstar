@@ -79,6 +79,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     errors.install(app)
     security_headers.install(app)   # last, so it is outermost and covers the other middleware's responses
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
+    app.state.spa_index = SPA_DIR / "index.html"      # the sign-in page is that page (see auth_routes.sign_in_page)
+    app.include_router(auth_routes.pages)
     app.include_router(auth_routes.router)
     app.include_router(types_api.router)
     app.include_router(api_routes.router)
@@ -95,13 +97,6 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         return RedirectResponse(auth_routes.LANDING, status_code=303)
 
     if (SPA_DIR / "index.html").exists():
-        @app.get("/login", include_in_schema=False)
-        def sign_in_page(request: Request, next: str = "/"):
-            """The sign-in page is a page of the React app like any other. Someone already signed in is sent on."""
-            if request.state.user:
-                return RedirectResponse(auth_routes.safe_next(next), status_code=303)
-            return FileResponse(SPA_DIR / "index.html")
-
         @app.get("/{path:path}", include_in_schema=False)
         def react_app(path: str):
             """The React app for any page address (/accounts/12, /balance-update), which then shows the
