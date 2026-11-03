@@ -7,7 +7,7 @@ This folder holds the design for v0.3: accounts held in their own currency, hous
 | File | What it holds |
 | --- | --- |
 | [design.md](design.md) | The design as drafted on November 3, 2026, with what is decided, what is proposed and what is still open. |
-| [implementation-plan.md](implementation-plan.md) | A draft order of work as pull requests, with a status box for each. |
+| [implementation-plan.md](implementation-plan.md) | A draft order of work for the whole v0.3 milestone as pull requests, with a status box for each. |
 
 Related issues: [#56](https://github.com/declankenny/northstar/issues/56) (the epic).
 
@@ -19,9 +19,9 @@ A requirements interview on November 1, 2026 produced a first proposal. It was t
 
 These are not part of this design. Each has its own design and issue.
 
-- **System Properties**: the admin-maintained settings (system currency, new-user locale, rate staleness threshold). Currency needs it.
-- **First-run setup page**: asks for the system currency and system locale before the first account is created. It is a standalone v0.3 feature.
-- **System Alerts**: may ship before or after currency. Currency does not depend on it.
+- **System Properties** ([#124](https://github.com/declankenny/northstar/issues/124)): the admin-maintained settings (system currency, new-user locale, rate staleness threshold). Currency needs it.
+- **First-run setup page** ([#64](https://github.com/declankenny/northstar/issues/64)): creates the first admin and can set the system currency and locale. It is a standalone v0.3 feature.
+- **System Alerts** ([#133](https://github.com/declankenny/northstar/issues/133)): a backlog feature with no milestone. Currency does not depend on it.
 - **Crypto**, **exchange-rate CSV import** and **exchange-rate effects in reporting** (v0.5): not in v0.3.
 
 ## Lifecycle

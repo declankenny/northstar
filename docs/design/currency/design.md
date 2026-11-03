@@ -82,7 +82,7 @@ Steps (proposed): choose a catalog currency and see the permanent system currenc
 
 ## Migration and recovery
 
-An existing installation gets the catalog, USD as system currency and USD on every account, with no change to any amount. Users get the default locale. The money columns are renamed from `amount_cents` to `amount_minor` (open: coordinated with the change log's JSON and the undo handlers, which key on field names, so likely its own preceding change). Test upgrade from v0.2, a backup before the upgrade, and restore after it. Update `docs/schema.md`, the audited-field registry and the operator guide with the code.
+An existing installation gets the catalog and no change to any amount. Its system currency is USD, and USD is on every account, if it has at least one account; otherwise the system currency is unset and an admin sets it on the System Properties screen before an account can be created. Users get the default locale. The money columns keep the name `amount_cents` and now hold integers in the account currency's minor unit (decided, see the implementation plan). Test upgrade from v0.2, a backup before the upgrade, and restore after it. Update `docs/schema.md`, the audited-field registry and the operator guide with the code.
 
 ## Validation
 
@@ -97,6 +97,5 @@ The acceptance list from the interview carries over: existing USD results unchan
 - Catalog policy for withdrawn and special codes, and for precision changes.
 - Provider terms, publication time and range limits.
 - Wizard behaviour after a partial fetch, and manual-only coverage review.
-- Money column rename and the change log.
 - Whether the System Properties design adds a multi-currency toggle.
 - Whether zero balances need no rate (proposed above, not yet confirmed).
