@@ -6,7 +6,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-## [0.2.0] - TODO release date
+## [0.2.0] - 2026-11-03
 
 Import and export of balances as CSV, a change log with an admin register of imports and undo of an import, and a refusal when two people change the same balance. The runtime is now Python 3.15.
 
