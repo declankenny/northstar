@@ -44,7 +44,7 @@ These are agreed in discussion. None is written into the spec or the decisions l
 | --- | --- | --- |
 | Unique account name | Unique among live accounts, case-insensitive and trimmed. The contract: comparison is SQLite `NOCASE` (ASCII case only, like `account_types.name` and `users.email`), trimming is what the application's `_clean_name` does (`strip()`), the index is on `name COLLATE NOCASE`, and application validation and future import matching compare the same way. The migration finds duplicates with the same SQLite comparison. Existing names were trimmed on write, so the migration asserts this and does not rewrite them. Names that differ only in non-ASCII case count as different. Migration A creates a full unique index, which is equivalent while nothing is soft-deleted. Migration B3 (account soft delete) swaps it for a partial index (`WHERE deleted = 0`) once `deleted` exists, with no rebuild. The migration renames later duplicates to "Name (2)" and so on: collect every existing normalized name first, go through duplicates in id order (the first keeps its name), give each later one the smallest `Name (n)` with n of 2 or more not in the set, and add it to the set. | Helps people, and the future multi-account import maps by name. Auto-rename so no one is stuck at startup. Deterministic and collision-free. |
 | Soft delete, users | A `deleted` flag. Deleted users cannot sign in and are hidden from the list. Sessions are removed and the password hash made unusable. Re-adding the email reactivates the same row, as an explicit update through the writer: the id and creation metadata are kept, the password hash, display name and admin flag come from the create request (an explicit false stays false), the theme resets to the default, sessions stay revoked, the system user cannot be reactivated, and it is logged as one record update of the non-secret fields. Email stays globally unique. The admin rule counts live admins only. | History keeps pointing at a real person row, so the audit columns can be real foreign keys. |
-| Soft delete, accounts | A `deleted` flag. The account and its balances leave every view, and net worth history changes as it does today. Restore is a v0.5 feature. | Removes the snapshot columns, the id-reuse problem and the cascade bypass. The spec rule that deleting permanently deletes balances changes. |
+| Soft delete, accounts | A `deleted` flag. The account and its balances leave every view, and net worth history changes as it does today. Restore is a v0.6 feature. | Removes the snapshot columns, the id-reuse problem and the cascade bypass. The spec rule that deleting permanently deletes balances changes. |
 | Balances | Stay hard-deleted. The change log holds the old values. | A flag would touch every balance query on the money path. |
 | Flag form | A bool with partial indexes, for example the unique name `WHERE deleted = 0`, not a leading index column. Reads go through views such as `live_accounts`. | A view stops a query forgetting the filter. At household scale speed is not the issue. |
 | Audit columns | Every user-facing table gets `created_at`, `created_by`, `updated_at` and `updated_by`: accounts, account\_types, balances, users and account\_classes. Exempt: every `sys_` table (see below). A schema test enforces the rule. | One uniform rule. The log tables already carry their own author and time. |
@@ -73,7 +73,7 @@ These are agreed in discussion. None is written into the spec or the decisions l
 | No triggers for the log | A trigger cannot know the signed-in user or the operation without hidden connection state, and a static trigger would have to be regenerated whenever an audited column is added. | Separate from the existing decision that rejects triggers for invariants. |
 | Baseline | Not written. Existing balances get version 0. | Undo restores from the old values on the later change rows. The creator and creation time come from the backfilled audit columns. |
 | Undo | Not designed here any more. The register and the all-or-nothing undo of imports are in [../undo/design.md](../undo/design.md), Part 1, and the fuller design that was written here is kept in its Part 2. | Undo and restore are different features on different timelines, and undo of other operations waits for the history screens. |
-| Retention | Waits for #58 (v0.5), with the System Properties table. Operation header rows are kept when change rows are purged. | v0.2 only needs to record. The design must not block a later purge. |
+| Retention | Waits for #58 (v0.6), with the System Properties table. Operation header rows are kept when change rows are purged. | v0.2 only needs to record. The design must not block a later purge. |
 
 ## Migration runner
 
@@ -127,7 +127,7 @@ Because neither accounts nor users is ever hard-deleted, the audit columns and t
 | Import, #79 | An import recorded as one batch, with the value of every balance it replaced. |
 | Provenance and batch undo, #81 | Who, when, which operation, what was replaced. Undo of an import is in [../undo/design.md](../undo/design.md). |
 | Conflicting edits, #10 | `balances.version`, the id of the operation that last wrote the balance. |
-| History and recovery, #58 (v0.5) | History screens, restore of earlier values and deleted accounts, and retention, all built on this record. |
+| History and recovery, #58 (v0.6) | History screens, restore of earlier values and deleted accounts, and retention, all built on this record. |
 
 The change log records committed changes to fields marked as logged. The audit columns on each row record row creation and the latest applicable update, including updates to unlogged fields such as a theme change. The log is authoritative for recorded changes, but it is not a complete security-event log. For a logged mutation, the audit columns and the log are written by the same function from the same operation, and a test checks that they agree. The test does not require the current row's updater to equal the most recent logged actor, because an unlogged update can come after.
 
@@ -186,7 +186,7 @@ Rules:
 - Values in the JSON keep their types, so integer cents stay integers.
 - At most one row per record per operation. A second mutation of the same record in one operation makes the writer roll the whole operation back. A date move is valid because it changes two different records.
 - A change only to unlogged business fields updates the row and its audit columns without a change-log row. If no business field changes, nothing is written.
-- Rows are appended and never updated or deleted by the app. Purging is the retention question for v0.5 (#58). Nothing in the design may block it: no foreign key points into this table, `created_at` on the operation is indexed, and operation rows are kept when change rows are purged, so ids and versions are never reused.
+- Rows are appended and never updated or deleted by the app. Purging is the retention question for v0.6 (#58). Nothing in the design may block it: no foreign key points into this table, `created_at` on the operation is indexed, and operation rows are kept when change rows are purged, so ids and versions are never reused.
 
 ### `sys_audited_fields`
 
@@ -227,7 +227,7 @@ Enforcement is by test, because SQLite cannot intercept writes globally: a test 
 
 **A date move.** The app asks for confirmation before overwriting. The confirmation carries the moving balance's id and version and the expected state of the target date. If anything differs at commit, nothing is written and the user is asked to confirm again. If another balance sits on the target date, the operation has two rows: a `DELETE` of the balance it replaces, then an `UPDATE` of the moving balance with the new `as_of_date`. The delete comes first because of the unique `(account_id, as_of_date)`.
 
-**Deleting an account with 200 balances.** One operation and one `UPDATE` row on `accounts` (`deleted` 0 to 1). The balances stay in place and drop out of every view with the account. Restore is the reverse, in v0.5.
+**Deleting an account with 200 balances.** One operation and one `UPDATE` row on `accounts` (`deleted` 0 to 1). The balances stay in place and drop out of every view with the account. Restore is the reverse, in v0.6.
 
 **Undo of a balance operation.** Moved to [../undo/design.md](../undo/design.md): Part 1 is what v0.2 builds, and Part 2 is the fuller design as it was written here.
 
@@ -242,7 +242,7 @@ Enforcement is by test, because SQLite cannot intercept writes globally: a test 
 
 - **Renaming `schema_migrations`.** The runner creates the table by name with `CREATE TABLE IF NOT EXISTS`, outside the migration transaction, and writes the version row with the name hardcoded in the script. The ordering described under the runner (read either name, classify, back up, then rename) is what keeps the backup before any change. `backup.py` and the tests also read the name.
 - **Rolling back the app.** An older app on a renamed database cannot see the recorded versions, so it creates an empty `schema_migrations` and then fails at migration 0001. The failure is expected to roll back, but the empty ledger stays, so it does not fail "before any write". v0.2 handles that under the classification rules in the runner section: only an empty old ledger of the legacy shape beside a valid populated new one is dropped, and only after the too-new check; every other combination is refused. A backport guard to the 0.1 branch is optional and cannot help people on the original releases. The documented recovery is still to restore the pre-migration backup. Needs a test: upgrade a v0.1 database, start the original v0.1 code, then restart v0.2. Verify the old app refuses or fails clearly, changes nothing else in the database, and does not stop v0.2 reopening it. Also test: a database from a future version with a stray empty old ledger is refused without mutation; two empty ledgers, a malformed ledger and two populated ledgers are refused without deletion; and a failure during cleanup or upgrade leaves no partial recovery.
-- **Volume.** A large import is one record-change row per record, not per field. Retention (v0.5) can bound record-change storage. Operation headers and their detail JSON, including file names and skipped-id lists, are kept indefinitely, and pruning them is deferred to #58.
+- **Volume.** A large import is one record-change row per record, not per field. Retention (v0.6) can bound record-change storage. Operation headers and their detail JSON, including file names and skipped-id lists, are kept indefinitely, and pruning them is deferred to #58.
 - **No foreign keys on `tablename` and `record_id`.** Tests cover this instead.
 - **JSON in SQLite.** Confirm `json_extract` is available in the SQLite build the container ships. TODO: not checked.
 - **Duplicate names.** Tests cover case variants, leading and trailing whitespace, an existing `Name (2)` and representative non-ASCII names, and check that the migration's collision detection and the final index give the same answer. `accounts._clean_name` has no length limit, so a suffix cannot exceed one. The table definition itself was not checked.
@@ -279,7 +279,7 @@ Enforcement is by test, because SQLite cannot intercept writes globally: a test 
 - The `sys_` prefix marks tables written by the app for itself.
 - Database columns are not renamed from 1.0.0 onwards. Display names come from a Labels table, to be designed later.
 - Baseline rows are not written.
-- Undo is designed in [../undo/design.md](../undo/design.md). v0.2 undoes imports only, all or nothing. Restore is v0.5.
+- Undo is designed in [../undo/design.md](../undo/design.md). v0.2 undoes imports only, all or nothing. Restore is v0.6.
 - Account names compare with SQLite `NOCASE` and are trimmed as the application trims them.
 - Reactivating a user is an explicit update: the request sets the password, name and admin flag, and the theme resets.
 

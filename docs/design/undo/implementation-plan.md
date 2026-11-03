@@ -10,7 +10,7 @@ Every step follows the working rules: the spec and `docs/decisions.md` change in
 | --- | --- | --- | --- |
 | 1 | Import register | the change log (shipped) | [#81](https://github.com/declankenny/northstar/issues/81) |
 | 2 | Undo an import | 1 | [#81](https://github.com/declankenny/northstar/issues/81) |
-| 3 | Undo of other operations, and partial undo | 2, and the history screens | v0.5, to create |
+| 3 | Undo of other operations, and partial undo | 2, and the history screens | v0.6, to create |
 
 Steps 1 and 2 are in v0.2 and are inside the epic [#55](https://github.com/declankenny/northstar/issues/55). Step 3 is not scheduled.
 
