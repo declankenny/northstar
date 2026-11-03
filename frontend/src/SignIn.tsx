@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { requestSignIn } from "./api";
+import { Brand } from "./Brand";
 
 /** The sign-in page. The server decides where to go next (it checks the `next` address), and the page goes there with a
  *  full load, so the app starts afresh with the new session. */
@@ -26,7 +27,7 @@ export function SignIn() {
   return (
     <div className="signin-page" role="main">
       <section className="signin">
-        <div className="brand"><i>★</i> Northstar</div>
+        <Brand />
         <h1>Sign in</h1>
         {error && <p className="error" role="alert">{error}</p>}
         <form onSubmit={submit}>

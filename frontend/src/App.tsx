@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Brand } from "./Brand";
 import { fetchMe, fetchVersion, signOut, type Theme, updateMe } from "./api";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
@@ -74,9 +75,7 @@ function Shell() {
   return (
     <div className="app">
       <nav>
-        <div className="brand">
-          <i>★</i> Northstar
-        </div>
+        <Brand />
         <Link className={route === "dashboard" ? "active" : ""} to={PATHS.dashboard}>Dashboard</Link>
         <Link className={route === "accounts" || route === "account" ? "active" : ""} to={PATHS.accounts}>Accounts</Link>
         <Link className={route === "update" ? "active" : ""} to={PATHS.update}>Update balances</Link>

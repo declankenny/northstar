@@ -22,8 +22,8 @@ a { color: var(--accent); }
 nav { background: var(--sidebar); border-right: 1px solid var(--border);
   padding: 20px 14px; display: flex; flex-direction: column; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 22px; font-weight: 650; font-size: 17px; }
-.brand i { width: 26px; height: 26px; border-radius: 7px; background: var(--accent-soft);
-  display: grid; place-items: center; color: var(--accent); font-style: normal; }
+.brand .mark { display: block; }
+:root[data-theme="dark"] .mark-light, :root[data-theme="light"] .mark-dark { display: none; }
 .group { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 20px 10px 6px; }
 nav a { display: block; padding: 9px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; margin-bottom: 2px; }
 nav a:hover { color: var(--text); }
