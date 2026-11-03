@@ -28,7 +28,7 @@ Then open <http://localhost:8000> and sign in. The app listens on `127.0.0.1` on
 
 ## Run it from source, for development
 
-You need Python 3.14 and Node. These commands run on the host and not in a container.
+You need Python 3.15 and Node. These commands run on the host and not in a container.
 
 ```
 pip install -e ".[dev]"

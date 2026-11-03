@@ -14,6 +14,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Changed
 
+- The runtime moved from Python 3.14 to 3.15 (#72): the image, CI and the README together, and the minimum Python version in `pyproject.toml` is now 3.15. Running from source needs Python 3.15.
 - Two people changing the same balance no longer silently overwrite each other (#10): editing or deleting a balance, or saving it on Update balances, is refused if it has been changed, deleted or added since you opened it. The message says what it is now and who changed it, and the edit dialog can show the current value. The Update screen keeps what you typed, marks the rows that changed, and saves them when you press Save again.
 - Removed the redundant Update balances button from the dashboard header; Update balances remains available in the left-hand navigation (#78).
 
