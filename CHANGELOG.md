@@ -6,11 +6,18 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+## [0.2.0] - TODO release date
+
+Import and export of balances as CSV, a change log with an admin register of imports and undo of an import, and a refusal when two people change the same balance. The runtime is now Python 3.15.
+
 ### Added
 
 - A register of past imports for admins (#81): Imports under Admin in the sidebar lists each import's date, who made it, the account, the file name and how many balances it added and replaced. Each import that nothing has changed since can be undone from there (admins only): the balances it added are deleted and the ones it replaced get their old amounts back, or, if any of them has been changed since or the account is closed, the undo says which dates are in the way and changes nothing. The import review no longer says an import cannot be undone.
 - Export one account's balances as a CSV file (#80): Export CSV on an account's page and in its ⋯ menu on the Accounts list. The file has the columns Account ID, Account Name, Balance Date and Balance Amount, oldest first, and importing it back into the same account finds every balance unchanged. Importing also recognises "Balance Amount" as a balance column.
 - Import dated balance history from a CSV file into one account (#79): Import CSV… on an account's page and in its ⋯ menu on the Accounts list. Choose the file, map its columns, review exactly what will be added, replaced or skipped, then import. Semicolon and tab files, European number and date styles, and amounts in parentheses are understood, the date format is chosen when a file could be read two ways, and nothing is written until the final step. Importing cannot be undone yet.
+- Account names are unique, and adding or renaming to a taken name says so, including when a closed account holds it (#82).
+- A migration runner that can rebuild tables safely, with foreign keys off and checked before commit, as groundwork for the v0.2 schema changes (#85).
+- A roadmap, `docs/roadmap.md`, that sets out where Northstar is going, what 1.0 will promise, and why the planned releases come in their order. The releases themselves are GitHub milestones.
 
 ### Changed
 
@@ -27,14 +34,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 - Migrations: account names are now unique, ignoring case, across open and closed accounts. An existing database with duplicate names keeps the lowest id's name and renames each later duplicate to "Name (2)", "Name (3)" and so on (the smallest number no account uses), so check your account list after upgrading. A checked backup is made first.
 - Migrations: the record of applied migrations is renamed from `schema_migrations` to `sys_schema_migrations` the first time this version starts, after a checked backup in `backups/`. Rolling back to an older image needs that backup restored, as for any migration. No environment variable changes, and backups made before the upgrade still restore.
 
-### Added
-
-- Account names are unique, and adding or renaming to a taken name says so, including when a closed account holds it (#82).
-- A migration runner that can rebuild tables safely, with foreign keys off and checked before commit, as groundwork for the v0.2 schema changes (#85).
-
-- A roadmap, `docs/roadmap.md`, that sets out where Northstar is going, what 1.0 will promise, and why the planned releases come in their order. The releases themselves are GitHub milestones.
-
-## [0.1.1] - TODO release date
+## [0.1.1] - 2026-11-01
 
 Fixes to backup, restore and the sign-in page.
 
