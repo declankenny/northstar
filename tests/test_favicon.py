@@ -23,3 +23,10 @@ def test_the_entry_point_links_the_icons_that_are_served(page):
     html = page.read_text(encoding="utf-8")
     linked = set(re.findall(r'<link rel="(?:icon|apple-touch-icon)" href="/static/([^"]+)"', html))
     assert linked == set(ICONS), page.name
+
+
+@pytest.mark.parametrize("name", ["brand-light.svg", "brand-dark.svg"])
+def test_the_page_brand_marks_are_served_to_a_signed_out_browser(anon_client, name):
+    response = anon_client.get(f"/static/{name}")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/svg+xml")
