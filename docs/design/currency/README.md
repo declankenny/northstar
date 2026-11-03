@@ -7,7 +7,7 @@ This folder holds the design for v0.3: accounts held in their own currency, hous
 | File | What it holds |
 | --- | --- |
 | [design.md](design.md) | The design as drafted on November 3, 2026, with what is decided, what is proposed and what is still open. |
-| [implementation-plan.md](implementation-plan.md) | A draft order of work for the whole v0.3 milestone as pull requests, with a status box for each. |
+| [implementation-plan.md](implementation-plan.md) | A draft order of work for the whole v0.3 milestone as pull requests. The issues say what is done. |
 
 Related issues: [#56](https://github.com/declankenny/northstar/issues/56) (the epic).
 
