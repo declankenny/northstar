@@ -10,7 +10,7 @@ Thank you for thinking about it. Northstar is a small project kept by one person
 
 ## Setting up
 
-You need Python 3.14 and Node.
+You need Python 3.15 and Node.
 
 ```
 pip install -e ".[dev]"
