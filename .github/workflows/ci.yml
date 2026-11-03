@@ -121,7 +121,6 @@ jobs:
           assert (d.MIGRATIONS_DIR / '0001_initial.sql').is_file(), 'the first migration is not in the image';
           assert (d.MIGRATIONS_DIR / '0002_login_attempts.sql').is_file(), 'the second migration is not in the image';
           assert (a.WEB_DIR / 'static' / 'theme.js').is_file(), 'the theme script is not in the image';
-          assert (a.WEB_DIR / 'static' / 'login.css').is_file(), 'the sign-in stylesheet is not in the image';
           print('image ok')"
       - name: Start the image and check that it reports healthy and runs as a non-root user
         run: |

@@ -18,9 +18,9 @@ def variables(text):
 
 # -- the health check --
 
-def test_the_sign_in_page_is_public_and_answers_200(anon_client):
+def test_the_sign_in_page_is_public_and_answers_200(anon_spa_client):
     """The health check asks for it with no cookie, so it must not redirect or need a user."""
-    assert anon_client.get("/login").status_code == 200
+    assert anon_spa_client.get("/login").status_code == 200
 
 
 def test_the_image_has_a_health_check_that_asks_the_sign_in_page_without_curl():

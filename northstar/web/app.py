@@ -9,7 +9,6 @@ from urllib.parse import quote, urlsplit
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from northstar import config, db, sessions, throttle, users
 from northstar.web import (account_api, api_routes, auth_routes, errors, import_api, imports_api, profile_api, security_headers,
@@ -18,8 +17,11 @@ from northstar.web import (account_api, api_routes, auth_routes, errors, import_
 WEB_DIR = Path(__file__).parent
 SPA_DIR = WEB_DIR / "spa"        # the built React app (see frontend/); absent until it is built
 # First parts of an address that belong to the server. The React app owns every other address.
-SERVER_PATHS = ("api", "login", "logout", "static")
+SERVER_PATHS = ("api", "login", "static")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+# What a signed-out visitor may fetch: the sign-in page, its endpoint, and the files the page is made of.
+PUBLIC_PATHS = ("/login", "/api/auth/login")
+PUBLIC_PREFIXES = ("/static/", "/assets/")
 
 
 async def refuse_cross_site_posts(request: Request, call_next):
@@ -37,15 +39,16 @@ async def refuse_cross_site_posts(request: Request, call_next):
 
 
 async def require_login(request: Request, call_next):
-    """Every page and endpoint needs a signed-in user, except the login page and its stylesheet.
+    """Every page and endpoint needs a signed-in user, except the sign-in page and its endpoint, the files of the
+    build (/assets) and the public files (/static).
 
-    Pages redirect to the login page. The JSON API answers 401. The signed-in user is left on
+    Pages redirect to the sign-in page. The JSON API answers 401. The signed-in user is left on
     request.state.user for auth_routes.current_user().
     """
     with closing(db.connect(request.app.state.db_path)) as conn:
         request.state.user = sessions.user_for_token(conn, request.cookies.get(auth_routes.COOKIE))
     path = request.url.path
-    if request.state.user or path == "/login" or path.startswith("/static/"):
+    if request.state.user or path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
         return await call_next(request)
     if path.startswith("/api/"):
         return JSONResponse({"detail": "Not signed in."}, status_code=401)
@@ -71,12 +74,13 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
 
     app = FastAPI(title="Northstar")
     app.state.db_path = db_path
-    app.state.templates = Jinja2Templates(directory=WEB_DIR / "templates")
     app.middleware("http")(refuse_cross_site_posts)
     app.middleware("http")(require_login)
     errors.install(app)
     security_headers.install(app)   # last, so it is outermost and covers the other middleware's responses
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
+    app.state.spa_index = SPA_DIR / "index.html"      # the sign-in page is that page (see auth_routes.sign_in_page)
+    app.include_router(auth_routes.pages)
     app.include_router(auth_routes.router)
     app.include_router(types_api.router)
     app.include_router(api_routes.router)

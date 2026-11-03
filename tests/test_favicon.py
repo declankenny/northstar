@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = [ROOT / "frontend" / "index.html", ROOT / "northstar" / "web" / "templates" / "login.html"]
+PAGES = [ROOT / "frontend" / "index.html"]
 ICONS = ["favicon.ico", "favicon.svg", "favicon-32x32.png", "favicon-16x16.png", "apple-touch-icon.png"]
 
 
@@ -19,12 +19,7 @@ def test_every_icon_is_served_to_a_signed_out_browser_as_an_image(anon_client, n
 
 
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
-def test_both_entry_points_link_the_icons_that_are_served(page):
+def test_the_entry_point_links_the_icons_that_are_served(page):
     html = page.read_text(encoding="utf-8")
     linked = set(re.findall(r'<link rel="(?:icon|apple-touch-icon)" href="/static/([^"]+)"', html))
     assert linked == set(ICONS), page.name
-
-
-def test_the_sign_in_page_names_its_icons(anon_client):
-    page = anon_client.get("/login").text
-    assert 'href="/static/favicon.svg"' in page

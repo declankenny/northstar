@@ -56,8 +56,8 @@ def test_add_user_who_can_then_sign_in(client):
     assert created.status_code == 201
     assert created.json()["email"] == "new@example.com" and created.json()["is_admin"] is False
     other = TestClient(create_app(client.app.state.db_path), follow_redirects=False)
-    login = other.post("/login", data={"email": "new@example.com", "password": NEW["password"]})
-    assert login.status_code == 303 and other.get("/api/me").status_code == 200
+    login = other.post("/api/auth/login", json={"email": "new@example.com", "password": NEW["password"]})
+    assert login.status_code == 200 and other.get("/api/me").status_code == 200
     assert other.get("/api/users").status_code == 403          # not an admin
 
 

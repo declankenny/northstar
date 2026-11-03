@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from northstar import users
 from northstar.web.app import create_app
 
-from conftest import sign_in, with_db, op
+from conftest import post_sign_in, sign_in, with_db, op
 
 PAGES = ["/dashboard", "/accounts", "/accounts/12", "/balance-update", "/types", "/users", "/imports", "/profile", "/nope"]
 
@@ -40,7 +40,7 @@ def test_a_missing_build_file_is_a_404_not_the_apps_page(built):
     assert built.get("/assets/missing.js").status_code == 404
 
 
-@pytest.mark.parametrize("path", ["/api/nope", "/api", "/login/extra", "/logout/extra", "/static/missing.css"])
+@pytest.mark.parametrize("path", ["/api/nope", "/api", "/login/extra", "/static/missing.css"])
 def test_server_addresses_that_do_not_exist_are_404_not_the_apps_page(built, path):
     response = built.get(path)
     assert response.status_code == 404 and "<title>" not in response.text
@@ -56,7 +56,7 @@ def test_nothing_outside_the_build_folder_is_served(built):
     assert built.get("/%2e%2e/%2e%2e/pyproject.toml").text.startswith("<!doctype html>")
 
 
-@pytest.mark.parametrize("path", PAGES + ["/assets/app.js"])
+@pytest.mark.parametrize("path", PAGES)
 def test_signed_out_visitors_are_sent_to_sign_in_and_back(tmp_path, monkeypatch, path):
     spa = tmp_path / "spa"
     (spa / "assets").mkdir(parents=True)
@@ -68,8 +68,22 @@ def test_signed_out_visitors_are_sent_to_sign_in_and_back(tmp_path, monkeypatch,
         users.create_user(op(conn), "a@example.com", "Test A", "synthetic-pass-123")
     response = anon.get(path)
     assert response.status_code == 303 and response.headers["location"].startswith("/login?next=")
-    back = anon.post("/login", data={"email": "a@example.com", "password": "synthetic-pass-123", "next": path})
-    assert back.headers["location"] == path
+    back = post_sign_in(anon, "a@example.com", "synthetic-pass-123", next=path)
+    assert back.json() == {"next": path}
+
+
+def test_the_files_of_the_build_are_public_so_the_sign_in_page_can_load(tmp_path, monkeypatch):
+    spa = tmp_path / "spa"
+    (spa / "assets").mkdir(parents=True)
+    (spa / "index.html").write_text("<!doctype html><title>Northstar</title>")
+    (spa / "assets" / "app.js").write_text("console.log('app')")
+    monkeypatch.setattr("northstar.web.app.SPA_DIR", spa)
+    anon = TestClient(create_app(tmp_path / "web.db"), follow_redirects=False)
+    assert anon.get("/assets/app.js").status_code == 200
+    assert anon.get("/assets/missing.js").status_code == 404
+    assert anon.get("/login").status_code == 200 and "<title>Northstar</title>" in anon.get("/login").text
+    assert anon.get("/dashboard").status_code == 303                # the app's own pages stay behind sign-in
+    assert anon.get("/api/networth").status_code == 401             # and so does every other endpoint
 
 
 def test_without_a_build_there_are_no_page_addresses_and_the_api_is_unchanged(tmp_path, monkeypatch):

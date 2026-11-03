@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { fetchMe, fetchVersion, type Theme, updateMe } from "./api";
+import { useEffect, useState } from "react";
+import { fetchMe, fetchVersion, signOut, type Theme, updateMe } from "./api";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
@@ -7,6 +7,7 @@ import { Dashboard } from "./Dashboard";
 import { ImportBalances } from "./ImportBalances";
 import { Imports } from "./Imports";
 import { Profile } from "./Profile";
+import { SignIn } from "./SignIn";
 import { Link, usePath } from "./router";
 import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
@@ -34,9 +35,16 @@ function NotFound() {
   );
 }
 
+/** The sign-in page is the one page that needs no signed-in user, so it must not ask who is signed in (that would send a
+ *  signed-out visitor straight back to it). Every other page is the app, with its navigation. */
 export function App() {
+  return routeFromPath(usePath()) === "login" ? <SignIn /> : <Shell />;
+}
+
+function Shell() {
   const path = usePath();
   const route = routeFromPath(path);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const accountId = accountIdFromPath(path);
   const importId = importAccountIdFromPath(path);
   const { data: version } = useRequest(fetchVersion, []);      // a footer only: the app works without it, so a failure is ignored
@@ -82,9 +90,8 @@ export function App() {
         )}
         <div className="spacer" />
         <Link className={route === "profile" ? "active" : ""} to={PATHS.profile}>{me ? me.display_name : "Profile"}</Link>
-        <form method="post" action="/logout">
-          <button className="signout">Sign out</button>
-        </form>
+        <button className="signout" onClick={() => signOut().catch((error: Error) => setSignOutError(error.message))}>Sign out</button>
+        {signOutError && <p className="signout-error" role="alert">{signOutError}</p>}
         <div className="version">{versionLabel(version)}</div>
       </nav>
       <main>

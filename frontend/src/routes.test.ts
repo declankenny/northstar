@@ -10,6 +10,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/users")).toBe("users");
     expect(routeFromPath("/imports")).toBe("imports");
     expect(routeFromPath("/profile")).toBe("profile");
+    expect(routeFromPath("/login")).toBe("login");
   });
 
   it("opens an account at /accounts/<number>", () => {
@@ -41,7 +42,7 @@ describe("routeFromPath", () => {
 
   it("says anything else is not a page", () => {
     for (const path of ["", "/nope", "/profile/extra", "/users/1", "/accounts/x", "/accounts/1/edit", "/types/1", "/balance-update/1",
-      "/app/", "/app/accounts", "/#/accounts", "/Dashboard", "/accounts//", "/api/networth", "/login"]) {
+      "/app/", "/app/accounts", "/#/accounts", "/Dashboard", "/accounts//", "/api/networth", "/login/extra", "/logout"]) {
       expect(routeFromPath(path), path).toBe("notfound");
     }
   });
