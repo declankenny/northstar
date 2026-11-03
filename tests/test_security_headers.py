@@ -17,7 +17,7 @@ from northstar.web.app import create_app
 from conftest import sign_in, with_db
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGES = [ROOT / "frontend" / "index.html", *sorted((ROOT / "northstar" / "web" / "templates").glob("*.html"))]
+PAGES = [ROOT / "frontend" / "index.html"]
 
 EXPECTED = {
     "x-content-type-options": "nosniff",
@@ -52,8 +52,8 @@ def signed_out(built):
 # (description, how to ask)
 RESPONSES = [
     ("the sign-in page", lambda c: signed_out(c).get("/login")),
-    ("a refused sign-in", lambda c: signed_out(c).post("/login", data={"email": "x@example.com", "password": "wrong-password-123"})),
-    ("the sign-in stylesheet", lambda c: signed_out(c).get("/static/login.css")),
+    ("a refused sign-in", lambda c: signed_out(c).post("/api/auth/login", json={"email": "x@example.com", "password": "wrong-password-123"})),
+    ("a sign-out", lambda c: c.post("/api/auth/logout")),
     ("the theme script", lambda c: signed_out(c).get("/static/theme.js")),
     ("a redirect to sign-in", lambda c: signed_out(c).get("/dashboard")),
     ("the API signed out (401)", lambda c: signed_out(c).get("/api/networth")),
@@ -136,9 +136,8 @@ def test_no_page_has_inline_styles_or_event_handlers(page):
     assert "javascript:" not in html.lower()
 
 
-def test_both_entry_points_load_the_one_shared_theme_script():
-    for page in (ROOT / "frontend" / "index.html", ROOT / "northstar" / "web" / "templates" / "login.html"):
-        assert '<script src="/static/theme.js"></script>' in page.read_text(encoding="utf-8"), page.name
+def test_the_entry_point_loads_the_shared_theme_script():
+    assert '<script src="/static/theme.js"></script>' in (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
 
 
 def test_the_theme_script_is_public_javascript_that_applies_the_saved_theme(built):

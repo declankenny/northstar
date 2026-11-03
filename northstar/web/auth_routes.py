@@ -1,15 +1,17 @@
-"""Login and logout. Every other route is protected by the middleware in app.py."""
+"""Sign in and sign out, as JSON for the React sign-in screen. The sign-in page itself is a page of the React app (see
+app.py). Every other route is protected by the middleware in app.py."""
 
 from contextlib import closing
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 
 from northstar import clock, config, db, sessions, throttle, users
 from northstar.writer import Operation
 
-router = APIRouter()
+router = APIRouter(prefix="/api/auth")
 COOKIE = "northstar_session"
 LANDING = "/dashboard"   # where people go after signing in, and from the site root
 
@@ -58,39 +60,33 @@ def safe_next(target: str) -> str:
     return LANDING
 
 
-def _page(request: Request, status: int, next_path: str, error: str | None = None, email: str = ""):
-    context = {"error": error, "next": next_path, "email": email}
-    return request.app.state.templates.TemplateResponse(request, "login.html", context, status_code=status)
-
-
-@router.get("/login")
-def login_form(request: Request, next: str = "/"):
-    if request.state.user:
-        return RedirectResponse(safe_next(next), status_code=303)
-    return _page(request, 200, safe_next(next))
+class SignIn(BaseModel):
+    email: str = ""
+    password: str = ""
+    next: str = "/"
 
 
 @router.post("/login")
-def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("/")):
-    next_path = safe_next(next)
+def login(body: SignIn, request: Request):
+    """Sign in. The answer says where to go next, already checked by safe_next, and the screen goes there with a full
+    page load. A refusal is a `detail` the screen shows as it is."""
+    next_path = safe_next(body.next)
     address = throttle.address_of(request)
     with closing(db.connect(request.app.state.db_path)) as conn:
         # The attempt takes its slot first and is only cleared by a success, so many requests at once
         # cannot all be checked before the first failure is recorded. A blocked attempt does not check
         # the password at all, so a correct guess cannot get through during a block.
-        _, wait = throttle.begin(conn, email, address, clock.now())
+        _, wait = throttle.begin(conn, body.email, address, clock.now())
         if wait is not None:
             throttle.log.warning("Sign-in throttled for %s: try again in %s.", address or "an unknown address", throttle.describe(wait))
-            response = _page(request, 429, next_path,
-                             f"Too many sign-in attempts. Try again in about {throttle.describe(wait)}.", email)
-            response.headers["Retry-After"] = str(wait)
-            return response
-        user = users.authenticate(conn, email, password)
+            return JSONResponse({"detail": f"Too many sign-in attempts. Try again in about {throttle.describe(wait)}."},
+                                status_code=429, headers={"Retry-After": str(wait)})
+        user = users.authenticate(conn, body.email, body.password)
         if user is None:
-            return _page(request, 400, next_path, "That email and password don't match.", email)
-        throttle.clear(conn, email, address)
+            return JSONResponse({"detail": "That email and password don't match."}, status_code=400)
+        throttle.clear(conn, body.email, address)
         token = sessions.create_session(conn, user["id"])
-    response = RedirectResponse(next_path, status_code=303)
+    response = JSONResponse({"next": next_path})
     response.set_cookie(COOKIE, token, max_age=sessions.SESSION_DAYS * 86400, httponly=True,
                         samesite="lax", secure=config.cookie_secure())
     return response
@@ -100,6 +96,6 @@ def login(request: Request, email: str = Form(""), password: str = Form(""), nex
 def logout(request: Request):
     with closing(db.connect(request.app.state.db_path)) as conn:
         sessions.end_session(conn, request.cookies.get(COOKIE))
-    response = RedirectResponse("/login", status_code=303)
+    response = Response(status_code=204)
     response.delete_cookie(COOKIE)
     return response

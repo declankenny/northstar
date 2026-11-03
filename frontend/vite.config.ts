@@ -2,8 +2,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 // The build goes into the Python package, where FastAPI serves it from the site root (see app.py).
-// In development, `npm run dev` serves the page on its own port and sends the API and the sign-in
-// page (the one server-rendered page) to the Python app, so the browser still sees one origin.
+// In development, `npm run dev` serves the pages (the sign-in page too) on its own port and sends the API and
+// the public files to the Python app, so the browser still sees one origin.
 const python = "http://127.0.0.1:8000";
 
 export default defineConfig({
@@ -11,7 +11,7 @@ export default defineConfig({
   build: { outDir: "../northstar/web/spa", emptyOutDir: true },
   server: {
     proxy: Object.fromEntries(
-      ["/api", "/login", "/logout", "/static"].map((path) => [path, python]),
+      ["/api", "/static"].map((path) => [path, python]),
     ),
   },
   // A US timezone, where new Date("2026-10-30") would show as Oct 29: the tests prove we never rely on it.

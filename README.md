@@ -42,9 +42,9 @@ The build goes into `northstar/web/spa`, and the app serves it from the site roo
 python -m northstar.users create you@example.com "Your Name" --admin
 ```
 
-Open <http://localhost:8000>, which redirects to `/dashboard`. The sign-in page at `/login` is the one page the server renders.
+Open <http://localhost:8000>, which redirects to `/dashboard`. The sign-in page is at `/login`.
 
-To work on the frontend with live reload, keep the Python app running on port 8000, then run `npm run dev` in `frontend/` and open <http://127.0.0.1:5173/>. The dev server sends `/api` and the sign-in page to the Python app.
+To work on the frontend with live reload, keep the Python app running on port 8000, then run `npm run dev` in `frontend/` and open <http://127.0.0.1:5173/>. The dev server sends `/api` and `/static` to the Python app.
 
 Run the tests:
 

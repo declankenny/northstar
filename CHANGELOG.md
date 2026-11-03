@@ -6,6 +6,11 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Changed
+
+- The sign-in page is now a page of the React app (#65), and the app's files under `/assets/` are public so it can load. Signing in and signing out go through `/api/auth/login` and `/api/auth/logout`, which answer JSON, and the page goes on with a full page load. The look, the throttling, the cookie and the content security policy are unchanged. Signing in now needs JavaScript, as the rest of the app already did.
+- Two dependencies are gone: `jinja2`, which only rendered the old sign-in page, and `python-multipart`, which only read its form.
+
 ## [0.2.0] - 2026-11-03
 
 Import and export of balances as CSV, a change log with an admin register of imports and undo of an import, and a refusal when two people change the same balance. The runtime is now Python 3.15.

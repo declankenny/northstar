@@ -13,7 +13,7 @@ from northstar import users
 from northstar.web.app import create_app
 from northstar.web.auth_routes import LANDING, safe_next
 
-from conftest import sign_in, with_db, op
+from conftest import fake_spa, post_sign_in, sign_in, with_db, op
 
 # -- next --
 
@@ -39,9 +39,11 @@ def test_the_result_always_has_no_scheme_and_no_host():
         assert parts.scheme == "" and parts.netloc == ""
 
 
-def test_a_signed_in_visitor_is_not_sent_off_site_by_the_next_parameter(client):
+def test_a_signed_in_visitor_is_not_sent_off_site_by_the_next_parameter(tmp_path, monkeypatch):
+    fake_spa(tmp_path, monkeypatch)
+    client = sign_in(TestClient(create_app(tmp_path / "web.db"), follow_redirects=False))
     for target in ("//evil.com", "/\t/evil.com", "/\n/evil.com", "http://evil.com"):
-        response = TestClient(client.app, cookies=client.cookies, follow_redirects=False).get("/login", params={"next": target})
+        response = client.get("/login", params={"next": target})
         assert response.status_code == 303 and response.headers["location"] == LANDING
 
 
@@ -49,8 +51,8 @@ def test_signing_in_does_not_send_a_visitor_off_site(anon_client):
     with with_db(anon_client) as conn:
         users.create_user(op(conn), "a@example.com", "Test A", "synthetic-pass-123")
     for target in ("//evil.com", "/\t/evil.com", "/\r\nSet-Cookie: x=1", "https://evil.com"):
-        response = anon_client.post("/login", data={"email": "a@example.com", "password": "synthetic-pass-123", "next": target})
-        assert response.status_code == 303 and response.headers["location"] == LANDING
+        response = post_sign_in(anon_client, "a@example.com", "synthetic-pass-123", next=target)
+        assert response.status_code == 200 and response.json() == {"next": LANDING}
 
 
 # -- the page route and the file system --

@@ -81,3 +81,27 @@ def no_built_frontend(monkeypatch, tmp_path_factory):
     """Tests must not depend on whether the React bundle happens to be built on this machine.
     A test that wants a bundle sets SPA_DIR itself."""
     monkeypatch.setattr("northstar.web.app.SPA_DIR", tmp_path_factory.mktemp("no-spa") / "missing")
+
+
+def fake_spa(tmp_path, monkeypatch):
+    """A (fake) React build: an index page and one script. Set before the app is created, which is when it looks for the build."""
+    spa = tmp_path / "spa"
+    (spa / "assets").mkdir(parents=True)
+    (spa / "index.html").write_text("<!doctype html><title>Northstar</title>")
+    (spa / "assets" / "app.js").write_text("console.log('app')")
+    monkeypatch.setattr("northstar.web.app.SPA_DIR", spa)
+
+
+@pytest.fixture
+def anon_spa_client(tmp_path, monkeypatch):
+    """A client that is not signed in, for an app that has a React build (so it can serve the sign-in page)."""
+    fake_spa(tmp_path, monkeypatch)
+    return TestClient(create_app(tmp_path / "web.db"), follow_redirects=False)
+
+
+def post_sign_in(test_client, email, password, next=None):
+    """Sign in the way the sign-in page does: JSON to the sign-in endpoint."""
+    body = {"email": email, "password": password}
+    if next is not None:
+        body["next"] = next
+    return test_client.post("/api/auth/login", json=body)

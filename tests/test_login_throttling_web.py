@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from northstar import throttle, users
 
-from conftest import with_db, op
+from conftest import post_sign_in, with_db, op
 
 PASSWORD = "synthetic-pass-123"
 NOW = datetime(2026, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
@@ -41,11 +41,11 @@ def at(client, address, **headers):
 
 
 def fail(client, email="owner@example.com"):
-    return client.post("/login", data={"email": email, "password": "wrong-password-123"})
+    return post_sign_in(client, email, "wrong-password-123")
 
 
 def sign_in(client, email="owner@example.com", password=PASSWORD):
-    return client.post("/login", data={"email": email, "password": password})
+    return post_sign_in(client, email, password)
 
 
 # -- the sign-in page --
@@ -56,8 +56,7 @@ def test_the_sixth_wrong_password_from_one_address_is_throttled(app_client, cloc
     blocked = fail(home)
     assert blocked.status_code == 429
     assert blocked.headers["retry-after"] == "900"
-    assert "Too many sign-in attempts. Try again in about 15 minutes." in blocked.text
-    assert 'value="owner@example.com"' in blocked.text           # what was typed is kept
+    assert blocked.json() == {"detail": "Too many sign-in attempts. Try again in about 15 minutes."}
 
 
 def test_the_correct_password_is_refused_while_blocked_and_sets_no_cookie(app_client, clock):
@@ -73,14 +72,14 @@ def test_signing_in_works_again_once_the_window_has_passed(app_client, clock):
     for _ in range(5):
         fail(home)
     clock["now"] = NOW + timedelta(minutes=15, seconds=1)
-    assert sign_in(home).status_code == 303
+    assert sign_in(home).status_code == 200
 
 
 def test_a_successful_sign_in_resets_that_addresses_failures(app_client, clock):
     home = at(app_client, HOME)
     for _ in range(4):
         fail(home)
-    assert sign_in(home).status_code == 303
+    assert sign_in(home).status_code == 200
     assert [fail(home).status_code for _ in range(5)] == [400] * 5
     assert fail(home).status_code == 429
 
@@ -98,7 +97,7 @@ def test_an_attacker_at_another_address_does_not_stop_the_owner_signing_in(app_c
     for _ in range(6):
         fail(attacker)
     assert fail(attacker).status_code == 429
-    assert sign_in(home).status_code == 303
+    assert sign_in(home).status_code == 200
 
 
 def test_many_addresses_together_trip_the_account_limit(app_client, clock):
@@ -138,7 +137,7 @@ def test_behind_a_trusted_proxy_the_real_address_is_used(app_client, clock, capl
     with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
         assert [fail(first, f"user{i}@example.com").status_code for i in range(20)] == [400] * 20
         assert fail(first, "another@example.com").status_code == 429
-        assert sign_in(at(app_client, HOME, x_forwarded_for=HOME)).status_code == 303
+        assert sign_in(at(app_client, HOME, x_forwarded_for=HOME)).status_code == 200
     assert not [r for r in caplog.records if "FORWARDED_ALLOW_IPS" in r.getMessage()]
 
 
@@ -158,7 +157,7 @@ def test_behind_traefik_with_the_network_trusted_the_real_address_is_limited_and
     with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
         assert [fail(visitor, f"user{i}@example.com").status_code for i in range(20)] == [400] * 20
         assert fail(visitor, "another@example.com").status_code == 429          # the address limit works
-        assert sign_in(behind_traefik(app_client, HOME)).status_code == 303      # another visitor is unaffected
+        assert sign_in(behind_traefik(app_client, HOME)).status_code == 200      # another visitor is unaffected
     assert not [r for r in caplog.records if "FORWARDED_ALLOW_IPS" in r.getMessage()]
 
 
@@ -192,7 +191,7 @@ def test_starting_the_app_says_what_the_limits_are(anon_client, caplog):
 
 def signed_in(client, address=HOME):
     mine = at(client, address)
-    assert sign_in(mine).status_code == 303
+    assert sign_in(mine).status_code == 200
     return mine
 
 
@@ -223,4 +222,4 @@ def test_a_changed_password_works_and_clears_the_failures(app_client, clock):
         change(mine, "wrong-password-123")
     assert change(mine, PASSWORD).status_code == 204
     other = at(app_client, HOME)
-    assert sign_in(other, password="another-synthetic-pass-9").status_code == 303
+    assert sign_in(other, password="another-synthetic-pass-9").status_code == 200

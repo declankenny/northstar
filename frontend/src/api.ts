@@ -34,6 +34,25 @@ function signIn() {
   window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
 }
 
+/** Sign in. Resolves to the address to go to next, which the server has checked; a refusal (wrong email or password, or too
+ *  many attempts) is an Error whose message is fit to show. */
+export async function requestSignIn(email: string, password: string, next: string): Promise<string> {
+  return (await send<{ next: string }>("POST", "/api/auth/login", { email, password, next }))!.next;
+}
+
+/** End the session on the server, then go to the sign-in page. Throws if the server could not be asked, so the person is not
+ *  told they are signed out when they are not. An answer of 401 means the session had already ended. */
+export async function signOut(): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/logout", { method: "POST" });
+  } catch {
+    throw new Error("Could not sign out. Check the connection and try again.");
+  }
+  if (!response.ok && response.status !== 401) throw new Error("Could not sign out. Try again.");
+  window.location.assign("/login");
+}
+
 /** A refusal from the server. The message is fit to show the user. `errors` maps a row's id to its own
  *  message, for a save that is refused because of particular rows. */
 /** A balance that is no longer what the person opened (409 from an edit, a delete or an Update save). `kind` is `changed`, `deleted`,
