@@ -79,6 +79,7 @@ def test_saving_adds_updates_and_skips_blanks_and_answers_with_the_date_as_saved
         "date": "2026-10-27",
         "amounts": {str(household["checking"]): "9,000.00", str(household["savings"]): "100.50",
                     str(household["mortgage"]): ""},
+        "versions": {str(household["checking"]): 0, str(household["savings"]): None, str(household["mortgage"]): None},
     }).json()
     assert body["saved"] == {"added": 1, "updated": 1, "unchanged": 0}
     rows = rows_by_name(body)
@@ -87,14 +88,14 @@ def test_saving_adds_updates_and_skips_blanks_and_answers_with_the_date_as_saved
 
 
 def test_saving_the_same_amount_again_is_unchanged(client, household):
-    entry = {"date": "2026-10-27", "amounts": {str(household["checking"]): "8423.11"}}
+    entry = {"date": "2026-10-27", "amounts": {str(household["checking"]): "8423.11"}, "versions": {str(household["checking"]): 0}}
     body = client.post("/api/balances/update", json=entry).json()
     assert body["saved"] == {"added": 0, "updated": 0, "unchanged": 1}
 
 
 def test_a_zero_must_be_typed_and_is_saved(client, household):
     body = client.post("/api/balances/update", json={
-        "date": "2026-10-30", "amounts": {str(household["mortgage"]): "0"}}).json()
+        "date": "2026-10-30", "amounts": {str(household["mortgage"]): "0"}, "versions": {str(household["mortgage"]): None}}).json()
     assert body["saved"]["added"] == 1 and rows_by_name(body)["Mortgage"]["existing_cents"] == 0
 
 
@@ -104,6 +105,7 @@ def test_one_bad_amount_saves_nothing_and_names_each_bad_account(client, househo
         "date": "2026-10-30",
         "amounts": {str(household["checking"]): "5,000.00", str(household["savings"]): "12,3x",
                     str(household["mortgage"]): "1.234"},
+        "versions": {str(household["checking"]): None, str(household["savings"]): None, str(household["mortgage"]): None},
     })
     body = response.json()
     assert response.status_code == 422
@@ -116,7 +118,7 @@ def test_one_bad_amount_saves_nothing_and_names_each_bad_account(client, househo
 def test_a_future_date_is_refused_and_nothing_is_saved(client, household):
     before = count_balances(client)
     response = client.post("/api/balances/update", json={
-        "date": "2026-10-31", "amounts": {str(household["checking"]): "1.00"}})
+        "date": "2026-10-31", "amounts": {str(household["checking"]): "1.00"}, "versions": {str(household["checking"]): None}})
     assert response.status_code == 422 and "future" in response.json()["detail"]
     assert count_balances(client) == before
 
@@ -124,7 +126,7 @@ def test_a_future_date_is_refused_and_nothing_is_saved(client, household):
 def test_a_closed_account_is_ignored_even_if_its_id_is_sent(client, household):
     before = count_balances(client)
     body = client.post("/api/balances/update", json={
-        "date": "2026-10-30", "amounts": {str(household["old"]): "5.00"}}).json()
+        "date": "2026-10-30", "amounts": {str(household["old"]): "5.00"}, "versions": {str(household["old"]): None}}).json()
     assert body["saved"] == {"added": 0, "updated": 0, "unchanged": 0}
     assert count_balances(client) == before
 
@@ -133,7 +135,7 @@ def test_saving_leaves_existing_notes_alone(client, household):
     with with_db(client) as conn:
         conn.execute("UPDATE balances SET note = 'kept' WHERE account_id = ?", (household["checking"],))
     client.post("/api/balances/update", json={
-        "date": "2026-10-27", "amounts": {str(household["checking"]): "1.00"}})
+        "date": "2026-10-27", "amounts": {str(household["checking"]): "1.00"}, "versions": {str(household["checking"]): 0}})
     with with_db(client) as conn:
         note = conn.execute("SELECT note FROM balances WHERE account_id = ?", (household["checking"],)).fetchone()[0]
     assert note == "kept"

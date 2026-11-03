@@ -51,9 +51,20 @@ def undo(client, import_id):
     return client.post(f"/api/imports/{import_id}/undo")
 
 
+def version_of(client, bid):
+    with with_db(client) as conn:
+        return conn.execute("SELECT version FROM balances WHERE id = ?", (bid,)).fetchone()[0]
+
+
 def edit(client, account_id, day, amount):
-    response = client.patch(f"/api/balances/{balance_id(client, account_id, day)}", json={"date": day, "amount": amount})
+    bid = balance_id(client, account_id, day)
+    response = client.patch(f"/api/balances/{bid}", json={"date": day, "amount": amount, "version": version_of(client, bid)})
     assert response.status_code == 200
+
+
+def remove(client, account_id, day):
+    bid = balance_id(client, account_id, day)
+    return client.delete(f"/api/balances/{bid}", params={"version": version_of(client, bid)})
 
 
 def refused(client, import_id, kind):
@@ -164,7 +175,7 @@ def test_a_balance_edited_since_blocks_it(client, account):
 def test_a_balance_deleted_since_blocks_it_and_the_date_is_still_named(client, account):
     run_import(client, account)
     [import_id] = import_ids(client)
-    assert client.delete(f"/api/balances/{balance_id(client, account, '2026-03-31')}").status_code == 200
+    assert remove(client, account, "2026-03-31").status_code == 200
     answer = refused(client, import_id, "changed")
     assert answer["blocked"] == [{"date": "2026-03-31", "why": "Deleted since the import"}]
 
@@ -173,7 +184,7 @@ def test_a_replaced_balance_deleted_since_still_has_its_date_named(client, accou
     client.post(f"/api/accounts/{account}/balances", json={"date": "2026-02-28", "amount": "50.00"})
     run_import(client, account, text="Date,Balance\n2026-02-28,99.00\n", policy="replace")
     [import_id] = import_ids(client)
-    client.delete(f"/api/balances/{balance_id(client, account, '2026-02-28')}")
+    assert remove(client, account, "2026-02-28").status_code == 200
     assert refused(client, import_id, "changed")["blocked"] == [{"date": "2026-02-28", "why": "Deleted since the import"}]
 
 

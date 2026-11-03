@@ -149,8 +149,8 @@ def test_a_closed_account_refuses_balance_changes(client, household):
     client.post(url + "/close")
     assert client.post(url + "/balances", json={"date": "2026-10-30", "amount": "5"}).status_code == 422
     entry = client.get(url).json()["balances"][0]
-    assert client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-10-29", "amount": "5"}).status_code == 422
-    assert client.delete(f"/api/balances/{entry['id']}").status_code == 422
+    assert client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-10-29", "amount": "5", "version": entry["version"]}).status_code == 422
+    assert client.delete(f"/api/balances/{entry['id']}", params={"version": entry["version"]}).status_code == 422
 
 
 def test_delete_removes_the_account_and_its_balances_from_view_but_keeps_them(client, household):
@@ -195,23 +195,26 @@ def test_a_bad_balance_is_refused_with_422_and_saves_nothing(client, household, 
 
 def test_edit_a_balance_changes_its_date_amount_and_note(client, household):
     entry = client.get(f"/api/accounts/{household['checking']}").json()["balances"][1]    # 2026-03-15
-    body = client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-03-10", "amount": "1,010.00", "note": "fixed"}).json()
+    body = client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-03-10", "amount": "1,010.00", "note": "fixed", "version": entry["version"]}).json()
     assert [(b["as_of_date"], b["amount_cents"], b["note"]) for b in body["balances"]] == [
         ("2026-06-01", 150000, None), ("2026-03-10", 101000, "fixed")]
 
 
 def test_moving_a_balance_onto_another_date_is_refused(client, household):
     entry = client.get(f"/api/accounts/{household['checking']}").json()["balances"][1]
-    response = client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-06-01", "amount": "1"})
+    response = client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-06-01", "amount": "1", "version": entry["version"]})
     assert response.status_code == 422 and "already a balance" in response.text
 
 
 def test_delete_a_balance_returns_the_account_without_it(client, household):
     entry = client.get(f"/api/accounts/{household['checking']}").json()["balances"][0]
-    body = client.delete(f"/api/balances/{entry['id']}").json()
+    body = client.delete(f"/api/balances/{entry['id']}", params={"version": entry["version"]}).json()
     assert body["balance_count"] == 1 and body["last_cents"] == 100000
-    assert client.delete(f"/api/balances/{entry['id']}").status_code == 404
-    assert client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-01-01", "amount": "1"}).status_code == 404
+    # it is gone, so a second delete or an edit is a conflict (it was deleted since), and an id that never existed is not found
+    assert client.delete(f"/api/balances/{entry['id']}", params={"version": entry["version"]}).status_code == 409
+    assert client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-01-01", "amount": "1", "version": entry["version"]}).status_code == 409
+    assert client.delete("/api/balances/9999", params={"version": 0}).status_code == 404
+    assert client.patch("/api/balances/9999", json={"date": "2026-01-01", "amount": "1", "version": 0}).status_code == 404
 
 
 # ---- who may ----
@@ -219,7 +222,7 @@ def test_delete_a_balance_returns_the_account_without_it(client, household):
 def test_signed_out_requests_get_401(anon_client):
     assert anon_client.get("/api/accounts/1").status_code == 401
     assert anon_client.post("/api/accounts/1/balances", json={"date": "2026-01-01", "amount": "1"}).status_code == 401
-    assert anon_client.delete("/api/balances/1").status_code == 401
+    assert anon_client.delete("/api/balances/1", params={"version": 0}).status_code == 401
 
 
 def test_a_cross_site_change_is_refused(client, household):

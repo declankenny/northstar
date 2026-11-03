@@ -2,7 +2,8 @@
 
 Like the other routes, these call the plain functions in balances.py and add no rules of their own.
 Reading a date writes nothing. A save is all or nothing: if any amount is bad it is a 422 whose
-`errors` say which accounts, and nothing is saved.
+`errors` say which accounts, and if a balance has changed since the page loaded it is a 409 whose
+`conflicts` say which, and nothing is saved.
 """
 
 
@@ -26,6 +27,7 @@ class UpdateRow(BaseModel):
     days_since: int | None
     stale: bool
     existing_cents: int | None   # the balance already saved on the chosen date, if any
+    existing_version: int | None  # its version, which a save sends back
 
 
 class SavedCounts(BaseModel):
@@ -44,6 +46,7 @@ class UpdatePage(BaseModel):
 class UpdateEntries(BaseModel):
     date: str
     amounts: dict[int, str | None]   # account id to typed text; blank is skipped
+    versions: dict[int, int | None]  # for each account sent, the version of its balance on the date when loaded, or None for none
 
 
 def _page(conn, date_text: str | None, saved: dict[str, int] | None = None) -> dict:
@@ -63,7 +66,7 @@ def read_update(request: Request, date: str | None = None):
 def save_update(body: UpdateEntries, request: Request):
     """Save one date's amounts, then answer with that date as the server now holds it."""
     def action(conn):
-        counts = balances.save_update(operation(request, conn, "bulk_update", {"date": body.date}), body.date, body.amounts, clock.today())
+        counts = balances.save_update(operation(request, conn, "bulk_update", {"date": body.date}), body.date, body.amounts, clock.today(), body.versions)
         return _page(conn, body.date, counts)
 
     return run(request, action)

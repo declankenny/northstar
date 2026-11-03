@@ -36,17 +36,28 @@ function signIn() {
 
 /** A refusal from the server. The message is fit to show the user. `errors` maps a row's id to its own
  *  message, for a save that is refused because of particular rows. */
+/** A balance that is no longer what the person opened (409 from an edit, a delete or an Update save). `kind` is `changed`, `deleted`,
+ *  or `added` (a date that had no balance). The balance is as it is now: `amount_cents` is null once it is gone, and `version` is
+ *  what to send next. `by` and `on` say who changed it and on what UTC date. */
+export type Conflict = {
+  kind: "changed" | "deleted" | "added"; account_id: number; account_name: string; date: string | null; balance_id: number | null;
+  version: number | null; amount_cents: number | null; note: string | null; by: string | null; on: string | null;
+};
+
 export class RequestError extends Error {
   errors: Record<string, string>;
   status: number;
   dates: string[]; // the dates whose balance changed, when an import is refused because the account moved on (409)
   refusal: Omit<UndoRefusal, "refused"> | null; // why an import cannot be undone (409)
-  constructor(message: string, errors: Record<string, string> = {}, status = 0, dates: string[] = [], refusal: RequestError["refusal"] = null) {
+  conflicts: Conflict[]; // the balances that changed since the person opened them (409)
+  constructor(message: string, errors: Record<string, string> = {}, status = 0, dates: string[] = [], refusal: RequestError["refusal"] = null,
+    conflicts: Conflict[] = []) {
     super(message);
     this.errors = errors;
     this.status = status;
     this.dates = dates;
     this.refusal = refusal;
+    this.conflicts = conflicts;
   }
 }
 
@@ -67,8 +78,9 @@ async function send<T>(method: string, url: string, body: unknown, signal?: Abor
     const detail = answer?.detail;
     throw new RequestError(typeof detail === "string" ? detail : `The server answered ${response.status}`, answer?.errors ?? {},
       response.status, Array.isArray(answer?.dates) ? answer.dates : [],
-      typeof answer?.reason === "string"
-        ? { message: String(detail), reason: answer.reason, blocked: answer.blocked ?? [], more: answer.more ?? 0 } : null);
+      typeof answer?.reason === "string" && Array.isArray(answer.blocked)
+        ? { message: String(detail), reason: answer.reason, blocked: answer.blocked, more: answer.more ?? 0 } : null,
+      Array.isArray(answer?.conflicts) ? answer.conflicts : []);
   }
   return response.status === 204 ? null : response.json();
 }
@@ -159,7 +171,7 @@ export async function deleteUser(id: number): Promise<void> {
 }
 
 /** One balance of an account. as_of_date is a calendar date, YYYY-MM-DD. */
-export type BalanceRow = { id: number; as_of_date: string; amount_cents: number; note: string | null };
+export type BalanceRow = { id: number; as_of_date: string; amount_cents: number; note: string | null; version: number };
 export type TypeChoice = { id: number; name: string };
 
 /** Everything the account page shows. Every change below answers with a fresh copy of this. */
@@ -216,12 +228,13 @@ export async function addBalance(accountId: number, entry: BalanceEntry): Promis
   return (await send<AccountPage>("POST", `/api/accounts/${accountId}/balances`, entry))!;
 }
 
-export async function editBalance(balanceId: number, entry: BalanceEntry): Promise<AccountPage> {
-  return (await send<AccountPage>("PATCH", `/api/balances/${balanceId}`, entry))!;
+/** `version` is the balance's version when the page loaded it. A balance written since is a RequestError whose `conflicts` say so. */
+export async function editBalance(balanceId: number, entry: BalanceEntry, version: number): Promise<AccountPage> {
+  return (await send<AccountPage>("PATCH", `/api/balances/${balanceId}`, { ...entry, version }))!;
 }
 
-export async function deleteBalance(balanceId: number): Promise<AccountPage> {
-  return (await send<AccountPage>("DELETE", `/api/balances/${balanceId}`, undefined))!;
+export async function deleteBalance(balanceId: number, version: number): Promise<AccountPage> {
+  return (await send<AccountPage>("DELETE", `/api/balances/${balanceId}?version=${version}`, undefined))!;
 }
 
 /** One row of the Accounts list. last_* are the latest balance, null for an account with none. */
@@ -303,6 +316,7 @@ export type UpdateRow = {
   days_since: number | null;
   stale: boolean;
   existing_cents: number | null;
+  existing_version: number | null; // the version of that balance, which a save sends back
 };
 
 /** The open accounts for one date, grouped by class (assets first). `saved` is set only on the answer to a save. */
@@ -319,9 +333,11 @@ export async function fetchUpdate(date?: string, signal?: AbortSignal): Promise<
   return (await send<UpdatePage>("GET", `/api/balances/update${query}`, undefined, signal))!;
 }
 
-/** Amounts are typed text by account id. A bad amount is a RequestError whose `errors` say which, and nothing is saved. */
-export async function saveUpdate(date: string, amounts: Record<number, string>): Promise<UpdatePage> {
-  return (await send<UpdatePage>("POST", "/api/balances/update", { date, amounts }))!;
+/** Amounts are typed text by account id, and `versions` the version each account's balance on the date had when it was loaded
+ *  (null for none). A bad amount is a RequestError whose `errors` say which; a balance that changed since is one whose `conflicts`
+ *  say which. Either way nothing is saved. */
+export async function saveUpdate(date: string, amounts: Record<number, string>, versions: Record<number, number | null>): Promise<UpdatePage> {
+  return (await send<UpdatePage>("POST", "/api/balances/update", { date, amounts, versions }))!;
 }
 
 /** The version of the running app, for the footer of the navigation. */
