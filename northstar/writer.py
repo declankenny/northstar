@@ -38,6 +38,9 @@ VERSION = "version"
 SOFT_DELETED = frozenset({"accounts", "users"})
 # A table the application writes for itself (sign-in sessions, failed-login tracking, the change log) is prefixed sys_.
 # It holds no household data, has no audit columns, and a write to it needs no operation.
+# A table loaded by a migration and never written at run time (the lists a setting is checked against) is prefixed ref_.
+# It has no audit columns and is not logged, and the writer refuses it.
+REFERENCE_PREFIX = "ref_"
 
 _CONDITIONS = {"=": "= ?", "!=": "!= ?", "<=": "<= ?", "IS": "IS ?"}
 
@@ -90,7 +93,7 @@ def _refuse_owned(values) -> None:
 
 def _columns(conn: sqlite3.Connection, table: str, *, system: bool) -> list[str]:
     """The columns of a table that exists and is of the right kind, in order, or an error."""
-    if _is_system(table) != system:
+    if _is_system(table) != system or table.startswith(REFERENCE_PREFIX):
         raise ValueError(f"{table} cannot be written this way.")
     columns = [row[0] for row in conn.execute("SELECT name FROM pragma_table_info(?) ORDER BY cid", (table,))]
     if not columns:

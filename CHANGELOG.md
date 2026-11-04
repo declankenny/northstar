@@ -6,8 +6,17 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Added
+
+- System properties (#124): an admin page, System properties under Admin in the sidebar, for settings that belong to the whole installation. Properties are listed by group on the left and edited one at a time on the right, with a hint beside each name, Save and Revert on a changed value, and the reason shown when a value is refused. Every change is in the change log. The first properties are `ui.theme.default`, which sets the theme every new user starts with (whether added from the page, the command line or by reactivating a deleted user), `balance.stale`, which sets the stale-after days the Add type form starts at, and `system.currency`, which nothing reads yet.
+
+### Breaking
+
+- Migrations: four new tables hold the system properties, and the first three properties are added. A checked backup is made first. Nothing else changes for an existing installation, and there are no new environment variables and no change to the backup format.
+
 ### Changed
 
+- The Add type form starts a new account type at the `balance.stale` system property, 35 days until an admin changes it, where the 35 was fixed in the form. Existing types keep their own days, and any number of at least 1 can still be typed.
 - The sidebar and the sign-in page show the new brand mark in place of the plain star (#76), as a pair of images that follows the theme you chose in Northstar, not the operating system's: a white road on a blue tile on the light theme, and a blue road on a white tile on the dark one. The browser tab icon is unchanged.
 - The sign-in page is now a page of the React app (#65), and the app's files under `/assets/` are public so it can load. Signing in and signing out go through `/api/auth/login` and `/api/auth/logout`, which answer JSON, and the page goes on with a full page load. The look, the throttling, the cookie and the content security policy are unchanged. Signing in now needs JavaScript, as the rest of the app already did.
 - Two dependencies are gone: `jinja2`, which only rendered the old sign-in page, and `python-multipart`, which only read its form.

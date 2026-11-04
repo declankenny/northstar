@@ -16,7 +16,8 @@ AUDIT = ("created_at", "created_by", "updated_at", "updated_by")
 
 def household_tables(conn):
     return sorted(row[0] for row in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sys\\_%' ESCAPE '\\'"))
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sys\\_%' ESCAPE '\\' "
+        "AND name NOT LIKE 'ref\\_%' ESCAPE '\\'"))
 
 
 def system_id(conn):
@@ -26,13 +27,22 @@ def system_id(conn):
 # -- the schema rules --
 
 def test_every_table_is_either_a_sys_table_or_a_household_table_with_audit_columns(conn):
-    assert household_tables(conn) == ["account_classes", "account_types", "accounts", "balances", "users"]
+    assert household_tables(conn) == ["account_classes", "account_types", "accounts", "balances", "system_properties", "users"]
     for table in household_tables(conn):
         columns = {row["name"]: row for row in conn.execute(f"PRAGMA table_info({table})")}
         assert set(AUDIT) <= set(columns), table
         assert columns["created_by"]["notnull"] and columns["updated_by"]["notnull"], table
         targets = {row["from"]: row["table"] for row in conn.execute(f"PRAGMA foreign_key_list({table})")}
         assert targets["created_by"] == targets["updated_by"] == "users", table
+
+
+def test_ref_tables_carry_no_audit_columns(conn):
+    names = [row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'ref\\_%' ESCAPE '\\'")]
+    assert sorted(names) == ["ref_property_data_types", "ref_property_lookups", "ref_property_validators"]
+    for name in names:
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({name})")}
+        assert not columns & set(AUDIT), name
 
 
 def test_sys_tables_carry_no_audit_columns(conn):

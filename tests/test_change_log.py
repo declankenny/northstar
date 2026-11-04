@@ -64,7 +64,7 @@ def checking(conn):
 
 def test_every_column_of_every_household_table_has_a_registry_row_and_nothing_else_does(conn):
     tables = [row[0] for row in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sys\\_%' ESCAPE '\\'")]
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sys\\_%' ESCAPE '\\' AND name NOT LIKE 'ref\\_%' ESCAPE '\\'")]
     columns = {(table, row["name"]) for table in tables for row in conn.execute(f"PRAGMA table_info({table})")}
     registry = {(row[0], row[1]) for row in conn.execute("SELECT tablename, fieldname FROM sys_audited_fields")}
     assert columns == registry, f"missing {sorted(columns - registry)}, stale {sorted(registry - columns)}"

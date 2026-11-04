@@ -2,9 +2,17 @@
 
 import sqlite3
 
-from northstar import writer
+from northstar import system_properties, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
+
+
+STALE_DAYS_PROPERTY = "balance.stale"   # the system property that says how many stale-after days a new type starts with
+
+
+def default_stale_after_days(conn: sqlite3.Connection) -> int:
+    """What the Add type form starts the stale-after days at: the system's setting, not a number in the code."""
+    return system_properties.get_value(conn, STALE_DAYS_PROPERTY)
 
 
 def list_types(conn: sqlite3.Connection) -> list[sqlite3.Row]:

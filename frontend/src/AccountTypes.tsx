@@ -20,7 +20,7 @@ function TypeDialog(props: { list: TypeList; editing: TypeRow | null; onSave: (t
   const { editing } = props;
   const [name, setName] = useState(editing?.name ?? "");
   const [classId, setClassId] = useState(editing?.class_id ?? props.list.classes[0].id);
-  const [days, setDays] = useState(String(editing?.stale_after_days ?? 35));
+  const [days, setDays] = useState(String(editing?.stale_after_days ?? props.list.default_stale_after_days));
   const { busy, error, run } = useAction();
   const locked = editing !== null && editing.account_count + editing.deleted_account_count > 0;
 

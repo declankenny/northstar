@@ -9,6 +9,7 @@ import { ImportBalances } from "./ImportBalances";
 import { Imports } from "./Imports";
 import { Profile } from "./Profile";
 import { SignIn } from "./SignIn";
+import { SystemProperties } from "./SystemProperties";
 import { Link, usePath } from "./router";
 import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
@@ -85,6 +86,7 @@ function Shell() {
             <Link className={route === "types" ? "active" : ""} to={PATHS.types}>Account types</Link>
             <Link className={route === "users" ? "active" : ""} to={PATHS.users}>Users</Link>
             <Link className={route === "imports" ? "active" : ""} to={PATHS.imports}>Imports</Link>
+            <Link className={route === "properties" ? "active" : ""} to={PATHS.properties}>System properties</Link>
           </>
         )}
         <div className="spacer" />
@@ -110,6 +112,8 @@ function Shell() {
           me.is_admin ? <AccountTypes /> : <p className="empty">Only admins can manage account types.</p>
         ) : route === "imports" ? (
           me.is_admin ? <Imports /> : <p className="empty">Only admins can see imports.</p>
+        ) : route === "properties" ? (
+          me.is_admin ? <SystemProperties /> : <p className="empty">Only admins can manage system properties.</p>
         ) : route === "profile" ? (
           <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
         ) : me.is_admin ? (

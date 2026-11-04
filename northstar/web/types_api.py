@@ -32,6 +32,7 @@ class ClassRow(BaseModel):
 class TypeList(BaseModel):
     types: list[TypeRow]     # ordered by class, then creation
     classes: list[ClassRow]
+    default_stale_after_days: int    # what the Add type form starts at: the balance.stale system property
 
 
 class NewType(BaseModel):
@@ -48,7 +49,8 @@ class TypeChange(BaseModel):
 
 def _list(conn) -> dict:
     return {"types": [dict(row) for row in account_types.list_types(conn)],
-            "classes": [dict(row) for row in account_types.list_classes(conn)]}
+            "classes": [dict(row) for row in account_types.list_classes(conn)],
+            "default_stale_after_days": account_types.default_stale_after_days(conn)}
 
 
 @router.get("", response_model=TypeList)
