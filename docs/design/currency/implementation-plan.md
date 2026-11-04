@@ -42,8 +42,8 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 2. System Properties (#124)
 
-- Scope: the settings table and the System Properties screen where all system properties live. v0.3 settings: the system currency, the default locale for new users and the rate staleness threshold. A control to set the system currency while it is unset.
-- Tests: audited changes by admins; the currency settable only while unset; migration on a copy of a database.
+- Scope: the settings table, the setting service with its data type checks and feature validators, and the System Properties screen where all system properties live. A property is added by the feature that reads it, so the system currency (and its control while unset) arrives with the catalog, the default locale with the locale feature, and the rate staleness threshold with fetching rates. The design is `docs/design/system-properties/design.md`.
+- Tests: audited changes by admins; refused values through the service against a migrated database; the seeded state; migration on a copy of a database.
 - Docs: a mockup first, the table shape drafted on the issue, a decisions entry and `docs/schema.md`.
 
 ### 3. Catalog, account currency and migration (#125)

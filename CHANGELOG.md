@@ -6,6 +6,14 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Added
+
+- System properties (#124): an admin page, System properties under Admin in the sidebar, for settings that belong to the whole installation. Properties are listed by group on the left and edited one at a time on the right, with a hint beside each name, Save and Revert on a changed value, and the reason shown when a value is refused. Every change is in the change log. The first properties are `ui.theme.default`, `balance.stale` and `system.currency.default`. Nothing reads them yet.
+
+### Breaking
+
+- Migrations: four new tables hold the system properties, and the first three properties are added. A checked backup is made first. Nothing else changes for an existing installation, and there are no new environment variables and no change to the backup format.
+
 ### Changed
 
 - The sidebar and the sign-in page show the new brand mark in place of the plain star (#76), as a pair of images that follows the theme you chose in Northstar, not the operating system's: a white road on a blue tile on the light theme, and a blue road on a white tile on the dark one. The browser tab icon is unchanged.

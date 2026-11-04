@@ -9,6 +9,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/types")).toBe("types");
     expect(routeFromPath("/users")).toBe("users");
     expect(routeFromPath("/imports")).toBe("imports");
+    expect(routeFromPath("/system-properties")).toBe("properties");
     expect(routeFromPath("/profile")).toBe("profile");
     expect(routeFromPath("/login")).toBe("login");
   });
@@ -57,6 +58,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath(PATHS.update)).toBe("update");
     expect(routeFromPath(PATHS.types)).toBe("types");
     expect(routeFromPath(PATHS.users)).toBe("users");
+    expect(routeFromPath(PATHS.properties)).toBe("properties");
     expect(routeFromPath(PATHS.profile)).toBe("profile");
   });
 });

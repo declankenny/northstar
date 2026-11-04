@@ -14,6 +14,10 @@ erDiagram
     users ||--o{ accounts : "created_by, updated_by"
     users ||--o{ balances : "created_by, updated_by"
     users ||--o{ users : "created_by, updated_by"
+    users ||--o{ system_properties : "created_by, updated_by"
+    ref_property_data_types ||--o{ system_properties : "data_type_id"
+    system_properties ||--o{ ref_property_lookups : "property_id"
+    system_properties ||--o{ ref_property_validators : "property_id"
     users ||--o{ sys_operations : "user_id"
     sys_operation_kinds ||--o{ sys_operations : "kind"
     sys_operations |o--o{ sys_operations : "undoes_operation_id"
@@ -77,6 +81,35 @@ erDiagram
         integer updated_by FK "who last changed it"
         integer deleted "0 or 1"
     }
+    system_properties {
+        integer id PK
+        text name UK "lowercase dotted, such as currency.exchangerate.staleness_days"
+        integer data_type_id FK
+        text value "always text, null means unset"
+        integer allow_null "0 or 1"
+        text hint "what the setting does and accepts"
+        integer read_only "0 or 1"
+        text created_at "UTC"
+        integer created_by FK "who created it"
+        text updated_at "UTC"
+        integer updated_by FK "who last changed it"
+    }
+    ref_property_data_types {
+        integer id PK
+        text name UK "String, Integer or Lookup"
+    }
+    ref_property_lookups {
+        integer id PK
+        integer property_id FK
+        text value "what the property stores"
+        text label "what a person sees"
+    }
+    ref_property_validators {
+        integer id PK
+        integer property_id FK
+        text validator "the name of a validation function"
+        integer position "run order"
+    }
     sys_sessions {
         text token_hash PK "SHA-256 of the cookie token"
         integer user_id FK
@@ -125,7 +158,8 @@ erDiagram
 - Money is integer cents. A balance date is a calendar date, `YYYY-MM-DD`, with no timezone. Row timestamps are UTC text, `YYYY-MM-DDTHH:MM:SSZ`.
 - `is_open` and `is_admin` are 0 or 1, because SQLite has no boolean type.
 - `sys_schema_migrations` is created by the migration runner in `northstar/db.py`, not by a migration file. Releases before 0.2 called it `schema_migrations`, and the runner renames it (keeping its rows) the first time a newer version starts, after a backup.
-- A table that starts with `sys_` is written by the application for itself: it has no audit columns and is never logged. Every other table has the four audit columns, and `created_by` and `updated_by` point at `users`. Rows that existed before the audit columns were added, and rows made by the command line, are authored by the system user: the one `users` row with `is_system = 1`, which nobody can sign in as.
+- A table that starts with `sys_` is written by the application for itself: it has no audit columns and is never logged. Every other table has the four audit columns (except a `ref_` table, below), and `created_by` and `updated_by` point at `users`. Rows that existed before the audit columns were added, and rows made by the command line, are authored by the system user: the one `users` row with `is_system = 1`, which nobody can sign in as.
+- A table that starts with `ref_` is loaded by a migration and never written at run time: it has no audit columns, is never logged, and the writer refuses it. `account_classes` is the same kind of table but predates the prefix, so it keeps its audit columns.
 - `live_accounts` and `live_balances` are views: the accounts that are not deleted, and the balances of those accounts. All reads go through them, and a test fails on a direct read of `accounts` or `balances`. Anything that rebuilds either table must drop both views first and create them again afterwards, because SQLite cannot rename a table while a view refers to it.
 - Every household table uses `AUTOINCREMENT`, so the id of a deleted row is never given to another row.
 - The change log is `sys_operations` (one row per user action that makes a logged change), `sys_record_changes` (one row per record it changed, with the logged fields as JSON) and `sys_audited_fields` (which fields are logged). `sys_record_changes.record_id` and `tablename` name any household record, so there is no foreign key to it. See "Change log" in `spec.md`.
@@ -143,5 +177,8 @@ A person checks these against the migrations, because the test cannot read them 
 | `accounts` (name) | Unique index `accounts_name_unique` on `name COLLATE NOCASE`, only `WHERE deleted = 0`: a name is unique ignoring ASCII case among accounts that are not deleted, open or closed. A deleted account frees its name. |
 | `balances` | `UNIQUE (account_id, as_of_date)`: one balance per account per date. `as_of_date` must be a valid date. Deleting an account cascades to its balances. |
 | `users` | `deleted` is 1 for a user who was deleted: the row stays, so the author columns that name them keep working, and adding their email again reactivates it. `is_system` is 1 for exactly one row, enforced by the partial unique index `users_one_system`. The `created_by` and `updated_by` columns of every household table reference it. |
+| `system_properties` | `name` is lowercase dotted segments, at least two, each starting with a letter (a `CHECK`). `value` is null or 1 to 256 characters, and `hint` is 1 to 256. The rows are loaded by migrations: no endpoint adds or deletes one. |
+| `ref_property_lookups` | `UNIQUE (property_id, value)`. At most 20 rows per property, checked by a test. Deleting a property deletes its rows. |
+| `ref_property_validators` | `UNIQUE (property_id, validator)` and `UNIQUE (property_id, position)`. `validator` is a key of `VALIDATORS` in `northstar/system_properties.py`, checked by a test. Deleting a property deletes its rows. |
 | `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. |
 | `sys_login_attempts` | Indexes on `(email_hash, attempted_at)` and `(address_hash, attempted_at)`. |

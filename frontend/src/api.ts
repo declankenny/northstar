@@ -323,6 +323,25 @@ export async function deleteType(id: number): Promise<TypeList> {
   return (await send<TypeList>("DELETE", `/api/types/${id}`, undefined))!;
 }
 
+/** One system property. The first segment of its name is the group the page lists it under. `value` is always text, null when unset.
+ *  `options` are the allowed values of a Lookup, else empty. */
+export type PropertyOption = { value: string; label: string };
+export type PropertyRow = {
+  name: string; type: "String" | "Integer" | "Lookup"; value: string | null; allow_null: boolean; hint: string;
+  read_only: boolean; options: PropertyOption[];
+};
+export type PropertyList = { properties: PropertyRow[] };
+
+export async function fetchProperties(signal?: AbortSignal): Promise<PropertyList> {
+  return (await send<PropertyList>("GET", "/api/system-properties", undefined, signal))!;
+}
+
+/** Save one property from the text typed (blank means unset). Answers with the whole list as it now is; a refused value is a
+ *  RequestError whose message is fit to show beside the property. */
+export async function saveProperty(name: string, value: string): Promise<PropertyList> {
+  return (await send<PropertyList>("PUT", `/api/system-properties/${encodeURIComponent(name)}`, { value }))!;
+}
+
 /** One open account on the Update balances screen. existing_cents is what is already saved on the chosen date. */
 export type UpdateRow = {
   id: number;
