@@ -170,12 +170,12 @@ def test_a_formerly_admin_user_re_added_without_an_admin_request_is_a_regular_us
     assert row(conn, target)["is_admin"] == 1                              # and an explicit request is honoured
 
 
-def test_the_theme_goes_back_to_the_default(conn, admin):
+def test_the_theme_goes_back_to_the_systems_default(conn, admin):
     target = make(conn)
     users.set_theme(op(conn, target), target, "light")
     users.delete_user(op(conn, admin), target, admin)
     users.add_user(op(conn, admin), "a@example.com", "A", PASSWORD)
-    assert row(conn, target)["theme"] == users.DEFAULT_THEME == "dark"
+    assert row(conn, target)["theme"] == "dark"            # the seeded value of ui.theme.default
 
 
 def test_old_passwords_and_sessions_stay_unusable_after_reactivation(conn, admin):

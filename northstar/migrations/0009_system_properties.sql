@@ -57,10 +57,10 @@ SELECT p.name, (SELECT id FROM ref_property_data_types WHERE name = p.type), p.v
        (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1)
 FROM (
     SELECT 'ui.theme.default' AS name, 'Lookup' AS type, 'dark' AS value,
-           'The theme new users start with. Each user can change theirs.' AS hint
+           'The theme every new user starts with. Each user can change theirs.' AS hint
     UNION ALL SELECT 'balance.stale', 'Integer', '30',
-           'Days without a new balance before it counts as stale. Enter 1 or more.'
-    UNION ALL SELECT 'system.currency.default', 'String', 'USD',
+           'Days before an account is flagged stale, as filled in for a new account type. Enter 1 or more.'
+    UNION ALL SELECT 'system.currency', 'String', 'USD',
            'The currency code amounts are shown in: three capital letters, such as USD.'
 ) AS p;
 
@@ -72,7 +72,7 @@ INSERT INTO ref_property_validators (property_id, validator, position)
 SELECT (SELECT id FROM system_properties WHERE name = v.name), v.validator, 1
 FROM (
     SELECT 'balance.stale' AS name, 'positive_integer' AS validator
-    UNION ALL SELECT 'system.currency.default', 'three_capital_letters'
+    UNION ALL SELECT 'system.currency', 'three_capital_letters'
 ) AS v;
 
 -- Which fields are logged. The id and the two columns that say who last changed it and when are not.

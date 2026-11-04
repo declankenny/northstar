@@ -51,7 +51,7 @@ def test_the_first_properties_are_seeded_by_the_system_user(conn):
         "JOIN ref_property_data_types t ON t.id = p.data_type_id")}
     assert {name: (row["type"], row["value"]) for name, row in rows.items()} == {
         "ui.theme.default": ("Lookup", "dark"), "balance.stale": ("Integer", "30"),
-        "system.currency.default": ("String", "USD")}
+        "system.currency": ("String", "USD")}
     system_user = conn.execute("SELECT id FROM users WHERE is_system = 1").fetchone()[0]
     assert {row["created_by"] for row in rows.values()} == {system_user}
 
@@ -145,7 +145,7 @@ def test_the_writer_refuses_a_reference_table(conn, table):
 
 def test_get_value_returns_the_typed_value(conn):
     assert sp.get_value(conn, "balance.stale") == 30
-    assert sp.get_value(conn, "system.currency.default") == "USD"
+    assert sp.get_value(conn, "system.currency") == "USD"
     assert sp.get_value(conn, "ui.theme.default") == "dark"
 
 
@@ -182,8 +182,8 @@ def test_a_valid_lookup_option_is_stored(conn):
 
 
 def test_a_valid_string_is_stored_trimmed(conn):
-    assert sp.set_property(op(conn), "system.currency.default", "  EUR ") == "EUR"
-    assert stored(conn, "system.currency.default") == "EUR"
+    assert sp.set_property(op(conn), "system.currency", "  EUR ") == "EUR"
+    assert stored(conn, "system.currency") == "EUR"
 
 
 # -- setting: rejected values, through the service against the migrated database --
@@ -197,9 +197,9 @@ def test_a_valid_string_is_stored_trimmed(conn):
     ("balance.stale", "-3", "Enter a whole number of 1 or more."),
     ("ui.theme.default", "purple", "Choose one of the listed options."),
     ("ui.theme.default", "Dark", "Choose one of the listed options."),
-    ("system.currency.default", "usd", "Enter a currency code of three capital letters, such as USD."),
-    ("system.currency.default", "US", "Enter a currency code of three capital letters, such as USD."),
-    ("system.currency.default", "x" * 257, "Use 256 characters or fewer."),
+    ("system.currency", "usd", "Enter a currency code of three capital letters, such as USD."),
+    ("system.currency", "US", "Enter a currency code of three capital letters, such as USD."),
+    ("system.currency", "x" * 257, "Use 256 characters or fewer."),
 ])
 def test_a_bad_value_is_refused_with_its_message_and_nothing_is_written(conn, name, text, message):
     before = stored(conn, name)

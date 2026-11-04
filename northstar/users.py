@@ -19,14 +19,14 @@ import sys
 import threading
 from contextlib import closing
 
-from northstar import config, db, sessions, writer
+from northstar import config, db, sessions, system_properties, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
 MIN_PASSWORD_LENGTH = 12
 MAX_NAME_LENGTH = 100
 THEMES = ("light", "dark")
-DEFAULT_THEME = "dark"              # also the schema's default, and what a reactivated user goes back to
+THEME_PROPERTY = "ui.theme.default"  # the system property that says what theme a new or reactivated user starts with
 # What a deleted user's password hash is replaced with. It is not a well-formed hash, so no password verifies against it.
 UNUSABLE_HASH = "!"
 # The cost of one hash: OWASP's first-listed scrypt setting, N=2^17 (128 MiB of memory), r=8, p=1. It takes
@@ -141,7 +141,7 @@ def add_user(op: Operation, email: str, display_name: str, password: str,
 
     Reactivation is an explicit update of the deleted row, not an insert: the id and the creation metadata are kept, and
     the display name, password and admin flag come from this request (an admin flag left out is a regular user, whatever
-    they were before). The theme goes back to the default. Their old password and sessions stay dead: the password is
+    they were before). The theme is the system's default theme, for a reactivated user as for a new one. Their old password and sessions stay dead: the password is
     replaced and a session exists only once they sign in. The system user is never deleted, so it never comes back.
     """
     email = _clean_email(email)
@@ -152,9 +152,13 @@ def add_user(op: Operation, email: str, display_name: str, password: str,
     new_hash = hash_password(password)           # slow, so before the write lock is taken
     values = {"display_name": display_name, "password_hash": new_hash, "is_admin": 1 if is_admin else 0}
     with db.write_transaction(op.conn):
+        values["theme"] = system_properties.get_value(op.conn, THEME_PROPERTY)
+        if values["theme"] not in THEMES:
+            raise ValidationError(f"The default theme setting ({THEME_PROPERTY}) is not light or dark, so a user cannot be "
+                                  "added. Correct the setting first.")
         old = op.conn.execute("SELECT id FROM users WHERE email = ? AND deleted = 1 AND is_system = 0", (email,)).fetchone()
         if old is not None:
-            writer.update(op, "users", old["id"], {**values, "theme": DEFAULT_THEME, "deleted": 0})
+            writer.update(op, "users", old["id"], {**values, "deleted": 0})
             return old["id"], True
         try:
             return writer.insert(op, "users", {"email": email, **values}), False
