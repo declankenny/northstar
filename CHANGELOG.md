@@ -16,7 +16,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Changed
 
-- A new account type now starts at 30 stale-after days in the Add type form, taken from the `balance.stale` system property, where it was a fixed 35. Existing types keep their own days, and any number of at least 1 can still be typed.
+- The Add type form starts a new account type at the `balance.stale` system property, 35 days until an admin changes it, where the 35 was fixed in the form. Existing types keep their own days, and any number of at least 1 can still be typed.
 - The sidebar and the sign-in page show the new brand mark in place of the plain star (#76), as a pair of images that follows the theme you chose in Northstar, not the operating system's: a white road on a blue tile on the light theme, and a blue road on a white tile on the dark one. The browser tab icon is unchanged.
 - The sign-in page is now a page of the React app (#65), and the app's files under `/assets/` are public so it can load. Signing in and signing out go through `/api/auth/login` and `/api/auth/logout`, which answer JSON, and the page goes on with a full page load. The look, the throttling, the cookie and the content security policy are unchanged. Signing in now needs JavaScript, as the rest of the app already did.
 - Two dependencies are gone: `jinja2`, which only rendered the old sign-in page, and `python-multipart`, which only read its form.

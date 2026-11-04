@@ -76,7 +76,7 @@ def test_a_theme_the_users_table_does_not_know_is_refused_and_says_why(conn):
 # -- balance.stale: what a new account type starts at --
 
 def test_the_types_list_says_what_a_new_type_starts_at(client):
-    assert client.get("/api/types").json()["default_stale_after_days"] == 30
+    assert client.get("/api/types").json()["default_stale_after_days"] == 35
 
 
 def test_the_start_follows_the_property(client):
@@ -87,7 +87,7 @@ def test_the_start_follows_the_property(client):
 
 def test_the_answer_to_adding_a_type_carries_the_start_too(client):
     answer = client.post("/api/types", json={"name": "Crypto", "class_id": 1, "stale_after_days": 10}).json()
-    assert answer["default_stale_after_days"] == 30
+    assert answer["default_stale_after_days"] == 35
 
 
 def test_existing_types_keep_their_own_days_when_the_property_changes(client):

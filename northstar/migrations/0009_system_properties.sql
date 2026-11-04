@@ -58,7 +58,7 @@ SELECT p.name, (SELECT id FROM ref_property_data_types WHERE name = p.type), p.v
 FROM (
     SELECT 'ui.theme.default' AS name, 'Lookup' AS type, 'dark' AS value,
            'The theme every new user starts with. Each user can change theirs.' AS hint
-    UNION ALL SELECT 'balance.stale', 'Integer', '30',
+    UNION ALL SELECT 'balance.stale', 'Integer', '35',
            'Days before an account is flagged stale, as filled in for a new account type. Enter 1 or more.'
     UNION ALL SELECT 'system.currency', 'String', 'USD',
            'The currency code amounts are shown in: three capital letters, such as USD.'

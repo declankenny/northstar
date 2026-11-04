@@ -14,7 +14,7 @@ def test_the_list_has_each_property_with_its_type_hint_and_options(client):
     props = by_name(body)
     assert [p["name"] for p in body["properties"]] == sorted(props)
     stale = props["balance.stale"]
-    assert (stale["type"], stale["value"], stale["allow_null"], stale["read_only"], stale["options"]) == ("Integer", "30", False, False, [])
+    assert (stale["type"], stale["value"], stale["allow_null"], stale["read_only"], stale["options"]) == ("Integer", "35", False, False, [])
     assert stale["hint"]
     assert [o["value"] for o in props["ui.theme.default"]["options"]] == ["light", "dark"]
     assert props["ui.theme.default"]["options"][0] == {"value": "light", "label": "Light"}
@@ -67,7 +67,7 @@ def test_a_locked_property_is_a_422(client):
 
 
 def test_a_save_of_the_same_value_changes_nothing(client):
-    assert client.put(f"{URL}/balance.stale", json={"value": " 30 "}).status_code == 200
+    assert client.put(f"{URL}/balance.stale", json={"value": " 35 "}).status_code == 200
     with with_db(client) as conn:
         assert conn.execute("SELECT COUNT(*) FROM sys_record_changes WHERE tablename = 'system_properties'").fetchone()[0] == 0
 

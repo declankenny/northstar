@@ -50,7 +50,7 @@ def test_the_first_properties_are_seeded_by_the_system_user(conn):
         "SELECT p.name, t.name AS type, p.value, p.created_by FROM system_properties p "
         "JOIN ref_property_data_types t ON t.id = p.data_type_id")}
     assert {name: (row["type"], row["value"]) for name, row in rows.items()} == {
-        "ui.theme.default": ("Lookup", "dark"), "balance.stale": ("Integer", "30"),
+        "ui.theme.default": ("Lookup", "dark"), "balance.stale": ("Integer", "35"),
         "system.currency": ("String", "USD")}
     system_user = conn.execute("SELECT id FROM users WHERE is_system = 1").fetchone()[0]
     assert {row["created_by"] for row in rows.values()} == {system_user}
@@ -144,7 +144,7 @@ def test_the_writer_refuses_a_reference_table(conn, table):
 # -- reading --
 
 def test_get_value_returns_the_typed_value(conn):
-    assert sp.get_value(conn, "balance.stale") == 30
+    assert sp.get_value(conn, "balance.stale") == 35
     assert sp.get_value(conn, "system.currency") == "USD"
     assert sp.get_value(conn, "ui.theme.default") == "dark"
 
@@ -217,7 +217,7 @@ def test_the_largest_integer_is_accepted(conn):
 def test_a_blank_submission_is_refused_when_the_property_does_not_allow_null(conn, blank):
     with pytest.raises(ValidationError, match="This setting is required."):
         sp.set_property(op(conn), "balance.stale", blank)
-    assert stored(conn, "balance.stale") == "30"
+    assert stored(conn, "balance.stale") == "35"
 
 
 # -- unset --
@@ -266,8 +266,8 @@ def test_a_save_that_changes_nothing_writes_nothing_and_runs_no_validator(conn, 
         raise AssertionError("a validator ran on a no-change save")
 
     monkeypatch.setitem(sp.VALIDATORS, "positive_integer", refuse)
-    assert sp.set_property(op(conn), "balance.stale", " 30 ") == "30"
-    assert sp.set_property(op(conn), "balance.stale", "030") == "30"
+    assert sp.set_property(op(conn), "balance.stale", " 35 ") == "35"
+    assert sp.set_property(op(conn), "balance.stale", "035") == "35"
     assert changes(conn) == [] and headers(conn) == []
 
 
@@ -279,7 +279,7 @@ def test_a_value_that_has_become_invalid_is_not_flagged_by_a_no_change_save(conn
 def test_a_no_change_save_on_a_read_only_property_is_still_refused(conn):
     conn.execute("UPDATE system_properties SET read_only = 1 WHERE name = 'balance.stale'")
     with pytest.raises(ValidationError, match="locked"):
-        sp.set_property(op(conn), "balance.stale", "30")
+        sp.set_property(op(conn), "balance.stale", "35")
 
 
 # -- read-only and locking --
@@ -288,7 +288,7 @@ def test_a_read_only_property_cannot_be_changed(conn):
     conn.execute("UPDATE system_properties SET read_only = 1 WHERE name = 'balance.stale'")
     with pytest.raises(ValidationError, match="This setting is locked and can't be changed."):
         sp.set_property(op(conn), "balance.stale", "31")
-    assert stored(conn, "balance.stale") == "30"
+    assert stored(conn, "balance.stale") == "35"
 
 
 def test_a_validator_can_lock_the_property_in_the_same_audited_change(conn, monkeypatch):
@@ -359,7 +359,7 @@ def test_a_change_is_logged_with_who_made_it_and_the_old_and_new_value(conn):
     assert headers(conn)[-1]["kind"] == "ui_edit" and headers(conn)[-1]["user_id"] == user
     (change,) = [c for c in changes(conn) if c["tablename"] == "system_properties"]
     assert change["change"] == "UPDATE"
-    assert change["old_json"] == '{"value": "30"}' and change["new_json"] == '{"value": "45"}'
+    assert change["old_json"] == '{"value": "35"}' and change["new_json"] == '{"value": "45"}'
     row = conn.execute("SELECT updated_by FROM system_properties WHERE name = 'balance.stale'").fetchone()
     assert row["updated_by"] == user
 
