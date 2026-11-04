@@ -8,7 +8,7 @@ exactly what the server now holds. A broken rule is a 422 and an unknown account
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
-from northstar import accounts, balance_export, balances, clock, networth
+from northstar import accounts, balance_export, balances, clock, currencies, networth
 from northstar.web.auth_routes import operation, run
 
 router = APIRouter(prefix="/api")
@@ -78,7 +78,14 @@ class Totals(BaseModel):
     liabilities: int
 
 
+class CurrencyOut(BaseModel):
+    code: str
+    name: str
+    minor_units: int
+
+
 class AccountList(BaseModel):
+    currency: CurrencyOut | None     # the system currency; null while it is unset, when no account can be added
     closed: bool
     accounts: list[ListedAccount]    # grouped by class, then type, then name
     totals: Totals | None            # as of today, from net_worth_on; only for the open list
@@ -123,7 +130,8 @@ def _page(conn, account_id: int) -> dict:
 def _list(conn, closed: bool) -> dict:
     today = clock.today()
     totals = None if closed else networth.net_worth_on(conn, today)
-    return {"closed": closed, "accounts": accounts.account_rows(conn, today, closed),
+    return {"currency": currencies.system_currency_dict(conn), "closed": closed,
+            "accounts": accounts.account_rows(conn, today, closed),
             "totals": totals, "classes": accounts.classes_with_types(conn), "today": today.isoformat()}
 
 

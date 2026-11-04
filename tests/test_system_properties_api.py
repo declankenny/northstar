@@ -44,7 +44,6 @@ def test_a_lookup_can_be_saved_and_the_change_is_logged_to_the_signed_in_admin(c
     ("balance.stale", "", "This setting is required."),
     ("balance.stale", None, "This setting is required."),
     ("ui.theme.default", "purple", "Choose one of the listed options."),
-    ("system.currency", "usd", "three capital letters"),
 ])
 def test_a_refused_value_is_a_422_with_its_message_and_nothing_changes(client, name, value, message):
     before = by_name(client.get(URL).json())[name]["value"]

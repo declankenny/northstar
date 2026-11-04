@@ -117,7 +117,9 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
 
       <div className="stack">
         {groups.length === 0 ? (
-          <div className="gcard"><p className="empty pad">{closed ? "No closed accounts." : "No open accounts yet. Use Add account to create one."}</p></div>
+          <div className="gcard"><p className="empty pad">{closed ? "No closed accounts."
+            : list.currency === null ? "The system currency is not set yet. Set it before adding the first account."
+              : "No open accounts yet. Use Add account to create one."}</p></div>
         ) : (
           groups.map((g) => (
             <div key={g.cls} className={`gcard ${g.cls.toLowerCase()}`}>

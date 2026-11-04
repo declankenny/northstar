@@ -11,11 +11,18 @@ def op(conn, actor_id=None, kind="ui_edit"):
     return Operation(conn, actor_id, kind)
 
 
+def use_dollars(conn):
+    """Set the system currency to US dollars, as an administrator would before the first account. A fresh database has it
+    unset, and no account can be created until it is set; most tests are about accounts, so their fixtures set it."""
+    conn.execute("UPDATE system_properties SET value = 'USD', read_only = 1 WHERE name = 'system.currency'")
+
+
 @pytest.fixture
 def conn(tmp_path):
-    """A fresh, migrated database in a temporary folder. Synthetic data only."""
+    """A fresh, migrated database in a temporary folder, with the system currency set to US dollars. Synthetic data only."""
     connection = db.connect(tmp_path / "test.db")
     db.migrate(connection)
+    use_dollars(connection)
     yield connection
     connection.close()
 
@@ -29,6 +36,7 @@ def anon_client(tmp_path):
 def sign_in(test_client, email="test@example.com", name="Test User", is_admin=True):
     """Create a synthetic user (an admin unless said otherwise) and sign the client in as them."""
     with db.connect(test_client.app.state.db_path) as connection:
+        use_dollars(connection)
         user_id = users.create_user(op(connection), email, name, "test-password-123", is_admin=is_admin)
         test_client.cookies.set("northstar_session", sessions.create_session(connection, user_id))
     return test_client
@@ -56,7 +64,7 @@ def type_id(conn, name):
 
 def add_account(conn, name, class_id, type_name):
     cur = conn.execute(
-        "INSERT INTO accounts (name, class_id, type_id, created_by, updated_by) VALUES (?, ?, ?, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",
+        "INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES (?, ?, ?, (SELECT id FROM currencies WHERE code = 'USD'), (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",
         (name, class_id, type_id(conn, type_name)),
     )
     return cur.lastrowid

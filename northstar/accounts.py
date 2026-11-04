@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import date
 
-from northstar import db, staleness, writer
+from northstar import currencies, db, staleness, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -163,14 +163,22 @@ def _check_name_free(conn: sqlite3.Connection, name: str, own_id: int | None = N
 
 
 def add_account(op: Operation, name: str | None, class_id: int,
-                type_id: int | None, notes: str | None = None) -> int:
+                type_id: int | None, notes: str | None = None, currency_id: int | None = None) -> int:
+    """Add an account. Its currency is chosen here and never changes: the one given, which must be usable (the system
+    currency or an enabled one), or the system currency. While the system currency is unset no account can be added."""
     conn = op.conn
     with db.write_transaction(conn):
+        currency = currencies.require_system_currency(conn)
+        if currency_id is not None and currency_id != currency.id:
+            if not currencies.is_usable(conn, currency_id):
+                raise ValidationError("Choose a currency that is enabled.")
+            currency = currencies.get(conn, currency_id)
         name = _clean_name(name)
         type_id = _check_type(conn, type_id, class_id)
         _check_name_free(conn, name)
         return writer.insert(op, "accounts", {
-            "name": name, "class_id": class_id, "type_id": type_id, "notes": _clean_notes(notes)})
+            "name": name, "class_id": class_id, "type_id": type_id, "currency_id": currency.id,
+            "notes": _clean_notes(notes)})
 
 
 def update_account(op: Operation, account_id: int, name: str | None,

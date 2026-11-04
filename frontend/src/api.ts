@@ -1,3 +1,5 @@
+import type { Currency } from "./money";
+
 /** One point of the series: the totals on a date, in integer cents. */
 export type Point = { date: string; assets: number; liabilities: number; net_worth: number };
 
@@ -27,7 +29,10 @@ export async function fetchNetWorth(
 export type Theme = "light" | "dark";
 
 /** The signed-in user. The email and is_admin are read-only here. */
-export type Me = { id: number; email: string; display_name: string; is_admin: boolean; theme: Theme };
+export type Me = {
+  id: number; email: string; display_name: string; is_admin: boolean; theme: Theme;
+  currency: Currency | null; // the system currency every amount is in; null until an admin sets it
+};
 
 /** Go to the sign-in page, which brings the person back to this page afterwards. */
 function signIn() {
@@ -273,6 +278,7 @@ export type ListedAccount = {
 export type ClassTypes = { id: number; name: string; types: TypeChoice[] };
 
 export type AccountList = {
+  currency: Currency | null; // the system currency; null while it is unset, when no account can be added
   closed: boolean;
   accounts: ListedAccount[]; // grouped by class, then type, then name
   totals: { assets: number; liabilities: number } | null; // as of today; only for the open list
@@ -331,7 +337,7 @@ export type PropertyRow = {
   name: string; type: "String" | "Integer" | "Lookup"; value: string | null; allow_null: boolean; hint: string;
   read_only: boolean; options: PropertyOption[];
 };
-export type PropertyList = { properties: PropertyRow[] };
+export type PropertyList = { properties: PropertyRow[]; currencies: Currency[] }; // the catalog feeds the system currency's search box
 
 export async function fetchProperties(signal?: AbortSignal): Promise<PropertyList> {
   return (await send<PropertyList>("GET", "/api/system-properties", undefined, signal))!;

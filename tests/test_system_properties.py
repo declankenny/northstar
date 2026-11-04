@@ -182,6 +182,7 @@ def test_a_valid_lookup_option_is_stored(conn):
 
 
 def test_a_valid_string_is_stored_trimmed(conn):
+    conn.execute("UPDATE system_properties SET value = NULL, read_only = 0 WHERE name = 'system.currency'")
     assert sp.set_property(op(conn), "system.currency", "  EUR ") == "EUR"
     assert stored(conn, "system.currency") == "EUR"
 
@@ -197,11 +198,11 @@ def test_a_valid_string_is_stored_trimmed(conn):
     ("balance.stale", "-3", "Enter a whole number of 1 or more."),
     ("ui.theme.default", "purple", "Choose one of the listed options."),
     ("ui.theme.default", "Dark", "Choose one of the listed options."),
-    ("system.currency", "usd", "Enter a currency code of three capital letters, such as USD."),
-    ("system.currency", "US", "Enter a currency code of three capital letters, such as USD."),
+    ("system.currency", "usd", "Choose a currency from the list."),
     ("system.currency", "x" * 257, "Use 256 characters or fewer."),
 ])
 def test_a_bad_value_is_refused_with_its_message_and_nothing_is_written(conn, name, text, message):
+    conn.execute("UPDATE system_properties SET value = NULL, read_only = 0 WHERE name = 'system.currency'")   # a fresh installation
     before = stored(conn, name)
     with pytest.raises(ValidationError, match=re.escape(message)):
         sp.set_property(op(conn), name, text)

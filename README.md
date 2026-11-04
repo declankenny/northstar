@@ -36,7 +36,7 @@ cd frontend && npm ci && npm run build && cd ..
 uvicorn --factory northstar.web.app:create_app
 ```
 
-The build goes into `northstar/web/spa`, and the app serves it from the site root. The first start creates `data/northstar.db`, with its folder. With the app running, open a second terminal and create the first admin, which asks for the password. The command refuses to run before the app has set up the database:
+The build goes into `northstar/web/spa`, and the app serves it from the site root. The first start creates `data/northstar.db`, with its folder. With the app running, open a second terminal and create the first admin, which asks for the password. After signing in, an admin chooses the system currency under Admin, System properties before the first account can be added. The command refuses to run before the app has set up the database:
 
 ```
 python -m northstar.users create you@example.com "Your Name" --admin

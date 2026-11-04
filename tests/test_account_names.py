@@ -94,8 +94,8 @@ def test_names_that_differ_only_in_non_ascii_case_are_different(conn):
 def test_the_database_refuses_a_duplicate_even_when_the_application_is_bypassed(conn):
     add(conn, "Test account")
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO accounts (name, class_id, type_id, created_by, updated_by) VALUES ('TEST ACCOUNT', 1, 1, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))")
-    conn.execute("INSERT INTO accounts (name, class_id, type_id, created_by, updated_by) VALUES ('Other', 1, 1, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))")
+        conn.execute("INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES ('TEST ACCOUNT', 1, 1, (SELECT id FROM currencies WHERE code = 'USD'), (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))")
+    conn.execute("INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES ('Other', 1, 1, (SELECT id FROM currencies WHERE code = 'USD'), (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))")
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("UPDATE accounts SET name = 'test ACCOUNT' WHERE name = 'Other'")
 

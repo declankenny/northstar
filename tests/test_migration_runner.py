@@ -28,6 +28,7 @@ CREATE TABLE accounts_new (
     name       TEXT NOT NULL,
     class_id   INTEGER NOT NULL REFERENCES account_classes (id),
     type_id    INTEGER NOT NULL,
+    currency_id INTEGER NOT NULL REFERENCES currencies (id),
     is_open    INTEGER NOT NULL DEFAULT 1 CHECK (is_open IN (0, 1)),
     notes      TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
@@ -39,11 +40,16 @@ CREATE TABLE accounts_new (
     FOREIGN KEY (type_id, class_id) REFERENCES account_types (id, class_id)
         ON UPDATE RESTRICT ON DELETE RESTRICT
 );
-INSERT INTO accounts_new (id, name, class_id, type_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted)
-    SELECT id, name, class_id, type_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted FROM accounts;
+INSERT INTO accounts_new (id, name, class_id, type_id, currency_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted)
+    SELECT id, name, class_id, type_id, currency_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted FROM accounts;
 DROP TABLE accounts;
 ALTER TABLE accounts_new RENAME TO accounts;
 CREATE UNIQUE INDEX accounts_name_unique ON accounts (name COLLATE NOCASE) WHERE deleted = 0;
+CREATE TRIGGER accounts_currency_fixed BEFORE UPDATE OF currency_id ON accounts
+WHEN NEW.currency_id IS NOT OLD.currency_id
+BEGIN
+    SELECT RAISE(ABORT, 'The currency of an account cannot be changed.');
+END;
 """ + VIEWS
 
 
@@ -61,7 +67,10 @@ def fill(conn):
     audited = any(row[1] == "created_by" for row in conn.execute("PRAGMA table_info(accounts)"))
     by = ", created_by, updated_by" if audited else ""
     system = ", (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1)" if audited else ""
-    conn.execute(f"INSERT INTO accounts (name, class_id, type_id{by}) VALUES ('Test account', 1, 1{system})")
+    has_currency = any(row[1] == "currency_id" for row in conn.execute("PRAGMA table_info(accounts)"))
+    currency_column = ", currency_id" if has_currency else ""
+    currency = ", (SELECT id FROM currencies WHERE code = 'USD')" if has_currency else ""
+    conn.execute(f"INSERT INTO accounts (name, class_id, type_id{currency_column}{by}) VALUES ('Test account', 1, 1{currency}{system})")
     conn.execute(f"INSERT INTO balances (account_id, as_of_date, amount_cents{by}) VALUES (1, '2026-01-31', 12345{system})")
 
 
@@ -382,7 +391,7 @@ def test_a_database_from_a_newer_version_with_a_stray_ledger_is_refused_without_
     db.upgrade(path)
     stray(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0010_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0011_from_the_future')")
     conn.commit()
     conn.close()
     before = path.read_bytes()

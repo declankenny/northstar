@@ -20,7 +20,7 @@ const listed = (id: number, name: string): ListedAccount => ({
 });
 
 const list = (closed: boolean): AccountList => ({
-  closed, accounts: [listed(7, "Demo Savings")], totals: closed ? null : { assets: 0, liabilities: 0 }, classes: [], today: "2026-10-30",
+  currency: { code: "USD", name: "US Dollar", minor_units: 2 }, closed, accounts: [listed(7, "Demo Savings")], totals: closed ? null : { assets: 0, liabilities: 0 }, classes: [], today: "2026-10-30",
 });
 
 beforeEach(() => window.history.replaceState(null, "", "/"));

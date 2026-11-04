@@ -48,15 +48,21 @@ def positive_integer(ctx: Context) -> str:
     return ACCEPT
 
 
-def three_capital_letters(ctx: Context) -> str:
-    if ctx.proposed is not None and not re.fullmatch(r"[A-Z]{3}", ctx.proposed):
-        raise ValidationError("Enter a currency code of three capital letters, such as USD.")
-    return ACCEPT
+def catalog_currency(ctx: Context) -> str:
+    """The system currency: a code in the currency catalog, chosen before any account exists, and locked as soon as it is
+    saved. Deleted accounts count, because they keep their currency."""
+    if ctx.proposed is None:
+        return ACCEPT
+    if ctx.conn.execute("SELECT 1 FROM currencies WHERE code = ?", (ctx.proposed,)).fetchone() is None:
+        raise ValidationError("Choose a currency from the list. Search it by code or name, such as USD or US Dollar.")
+    if ctx.conn.execute("SELECT 1 FROM accounts LIMIT 1").fetchone() is not None:
+        raise ValidationError("The system currency can't be changed once an account exists.")
+    return ACCEPT_AND_LOCK
 
 
 VALIDATORS = {
     "positive_integer": positive_integer,
-    "three_capital_letters": three_capital_letters,
+    "catalog_currency": catalog_currency,
 }
 
 

@@ -136,7 +136,7 @@ def test_the_name_rule_is_partial_in_the_database_too(conn, household):
     assert "WHERE deleted = 0" in sql and "NOCASE" in sql
     accounts.delete_account(op(conn), household["checking"])
     system = "(SELECT id FROM users WHERE is_system = 1)"
-    insert = f"INSERT INTO accounts (name, class_id, type_id, created_by, updated_by) VALUES (?, 1, 1, {system}, {system})"
+    insert = f"INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES (?, 1, 1, (SELECT id FROM currencies WHERE code = 'USD'), {system}, {system})"
     conn.execute(insert, ("TEST CHECKING",))                                   # the name is free
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(insert, ("test checking",))                                # but still unique among live accounts
@@ -219,9 +219,11 @@ SOURCE = Path(__file__).resolve().parent.parent / "northstar"
 READS = re.compile(r"\b(FROM|JOIN)\s+(accounts|balances)\b", re.I)
 # Files that may read the tables directly, and why: the backup tool counts every row, the account types module has to
 # see deleted accounts because they still hold their type, and the imports register has to name the account of an import
-# even when it has been deleted, and its undo has to find the balances of a deleted account to refuse and say why. No
-# other file may read balances directly.
-EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}, "import_register.py": {"accounts", "balances"}}
+# even when it has been deleted, and its undo has to find the balances of a deleted account to refuse and say why. The
+# system properties module has to see deleted accounts too, because they keep their currency and so lock the system
+# currency. No other file may read balances directly.
+EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}, "import_register.py": {"accounts", "balances"},
+          "system_properties.py": {"accounts"}}
 
 
 def direct_reads(source: str) -> set[str]:
