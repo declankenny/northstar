@@ -51,7 +51,7 @@ def test_the_first_properties_are_seeded_by_the_system_user(conn):
         "JOIN ref_property_data_types t ON t.id = p.data_type_id")}
     assert {name: (row["type"], row["value"]) for name, row in rows.items()} == {
         "ui.theme.default": ("Lookup", "dark"), "balance.stale": ("Integer", "35"),
-        "system.currency": ("String", "USD")}
+        "system.currency": ("String", "USD"), "ui.locale.default": ("String", "en-US")}
     system_user = conn.execute("SELECT id FROM users WHERE is_system = 1").fetchone()[0]
     assert {row["created_by"] for row in rows.values()} == {system_user}
 

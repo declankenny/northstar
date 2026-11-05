@@ -5,7 +5,7 @@ import re
 import sqlite3
 from datetime import date
 
-from northstar import accounts, currencies, db, staleness, writer
+from northstar import accounts, currencies, db, locales, staleness, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.money import parse_amount
 from northstar.writer import Operation
@@ -25,9 +25,10 @@ class EntryErrors(ValidationError):
         return {"errors": self.by_account}
 
 
-def parse_for(currency: currencies.Currency, text: str | None) -> int:
-    """Typed text as a count of the currency's minor units. A leading '$' is accepted only for US dollars."""
-    return parse_amount(text, currency.minor_units, dollar_sign=currency.code == "USD")
+def parse_for(currency: currencies.Currency, text: str | None, locale: locales.Locale | None = None) -> int:
+    """Typed text as a count of the currency's minor units, read in the person's locale (US English when none is given). A
+    leading '$' is accepted only for US dollars."""
+    return parse_amount(text, currency.minor_units, locale, dollar_sign=currency.code == "USD")
 
 
 # What a caller loaded a balance as: the `version` it carried (the id of the operation that last wrote it), or None for a date
@@ -176,7 +177,7 @@ def add_balance(op: Operation, account_id: int, date_text: str | None,
                 amount_text: str | None, note: str | None, today: date) -> str:
     """The detail page's Add a balance form: typed text in, 'added', 'updated' or 'unchanged' out."""
     as_of = parse_date(date_text, today)
-    cents = parse_for(currencies.account_currency(op.conn, account_id), amount_text)
+    cents = parse_for(currencies.account_currency(op.conn, account_id), amount_text, locales.for_user(op.conn, op.actor_id))
     return record_balance(op, account_id, as_of, cents, note)
 
 
@@ -193,7 +194,8 @@ def add_account_with_balance(op: Operation, class_slug: str | None, name: str | 
     currency = currencies.require_system_currency(conn)        # refused before anything is read from the form
     entry = None
     if (amount_text or "").strip():
-        entry = (parse_date((date_text or "").strip() or today.isoformat(), today), parse_for(currency, amount_text))
+        entry = (parse_date((date_text or "").strip() or today.isoformat(), today),
+                 parse_for(currency, amount_text, locales.for_user(conn, op.actor_id)))
     with db.write_transaction(conn):
         account_id = accounts.add_account(op, name, cls["id"], type_id, notes, currency.id)
         if entry:
@@ -229,7 +231,7 @@ def update_balance(op: Operation, balance_id: int, date_text: str | None,
     refuses with ConflictingEdit, before anything else, if the balance has been written since (or deleted)."""
     conn = op.conn
     as_of = parse_date(date_text, today)
-    cents = parse_for(_balance_currency(conn, balance_id), amount_text)
+    cents = parse_for(_balance_currency(conn, balance_id), amount_text, locales.for_user(conn, op.actor_id))
     new_note = clean_note(note)
     with db.write_transaction(conn):
         if expected_version is not UNCHECKED:
@@ -304,6 +306,7 @@ def save_update(op: Operation, date_text: str | None,
     conn = op.conn
     as_of = parse_date(date_text, today)
     open_ids = [r["id"] for r in update_rows(conn, as_of, today)]
+    locale = locales.for_user(conn, op.actor_id)
     entered: dict[int, int] = {}
     errors: dict[int, str] = {}
     for account_id in open_ids:
@@ -311,7 +314,7 @@ def save_update(op: Operation, date_text: str | None,
         if not text:
             continue
         try:
-            entered[account_id] = parse_for(currencies.account_currency(conn, account_id), text)
+            entered[account_id] = parse_for(currencies.account_currency(conn, account_id), text, locale)
         except ValidationError as err:
             errors[account_id] = str(err)
     if errors:

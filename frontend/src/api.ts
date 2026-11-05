@@ -1,3 +1,4 @@
+import type { Locale } from "./locale";
 import type { Currency } from "./money";
 
 /** One point of the series: the totals on a date, in integer cents. */
@@ -32,6 +33,7 @@ export type Theme = "light" | "dark";
 export type Me = {
   id: number; email: string; display_name: string; is_admin: boolean; theme: Theme;
   currency: Currency | null; // the system currency every amount is in; null until an admin sets it
+  locale: Locale; // how this person's numbers and dates are shown and typed
 };
 
 /** Go to the sign-in page, which brings the person back to this page afterwards. */
@@ -337,7 +339,8 @@ export type PropertyRow = {
   name: string; type: "String" | "Integer" | "Lookup"; value: string | null; allow_null: boolean; hint: string;
   read_only: boolean; options: PropertyOption[];
 };
-export type PropertyList = { properties: PropertyRow[]; currencies: Currency[] }; // the catalog feeds the system currency's search box
+/** The catalogs feed the search boxes of the system currency and of the default number and date format. */
+export type PropertyList = { properties: PropertyRow[]; currencies: Currency[]; locales: { tag: string; label: string }[] };
 
 export async function fetchProperties(signal?: AbortSignal): Promise<PropertyList> {
   return (await send<PropertyList>("GET", "/api/system-properties", undefined, signal))!;

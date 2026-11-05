@@ -9,7 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from northstar import clock, currencies, db, throttle, users
+from northstar import clock, currencies, db, locales, throttle, users
 from northstar.errors import ValidationError
 from northstar.web.auth_routes import COOKIE, current_user, operation, run
 
@@ -22,6 +22,16 @@ class CurrencyOut(BaseModel):
     minor_units: int       # digits after the decimal point: 0, 2 or 3
 
 
+class LocaleOut(BaseModel):
+    tag: str                       # BCP 47, such as en-US
+    label: str
+    decimal_mark: str
+    group_mark: str
+    date_template: str             # {year} {month} {month2} {month_short} {day} {day2} and literal text
+    currency_position: str         # "prefix" or "suffix"
+    currency_code_spacing: str     # the exact text between a currency code and the number
+
+
 class Me(BaseModel):
     id: int
     email: str
@@ -29,6 +39,7 @@ class Me(BaseModel):
     is_admin: bool
     theme: Literal["light", "dark"]
     currency: CurrencyOut | None = None    # the system currency every amount is shown in; null until an admin sets it
+    locale: LocaleOut                      # how this person's numbers and dates are shown and typed
 
 
 class ProfileChange(BaseModel):
@@ -45,7 +56,7 @@ class PasswordChange(BaseModel):
 def _me(conn, user_id: int) -> dict:
     row = users.get_user(conn, user_id)
     return {**{key: row[key] for key in ("id", "email", "display_name", "theme")}, "is_admin": bool(row["is_admin"]),
-            "currency": currencies.system_currency_dict(conn)}
+            "currency": currencies.system_currency_dict(conn), "locale": locales.get(conn, row["locale"]).as_dict()}
 
 
 @router.get("", response_model=Me)

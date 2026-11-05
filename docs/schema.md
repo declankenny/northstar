@@ -18,6 +18,7 @@ erDiagram
     users ||--o{ users : "created_by, updated_by"
     users ||--o{ system_properties : "created_by, updated_by"
     ref_property_data_types ||--o{ system_properties : "data_type_id"
+    ref_locales ||--o{ users : "locale"
     system_properties ||--o{ ref_property_lookups : "property_id"
     system_properties ||--o{ ref_property_validators : "property_id"
     users ||--o{ sys_operations : "user_id"
@@ -94,6 +95,7 @@ erDiagram
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
         integer deleted "0 or 1"
+        text locale FK "number and date format, a tag in ref_locales"
     }
     system_properties {
         integer id PK
@@ -107,6 +109,16 @@ erDiagram
         integer created_by FK "who created it"
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
+    }
+    ref_locales {
+        text tag PK "BCP 47, such as en-US"
+        text label "English, for a choice list"
+        text decimal_mark "one character"
+        text group_mark "one character, not the decimal mark"
+        text date_template "pieces such as {day2} and literal text"
+        text currency_position "prefix or suffix"
+        text currency_code_spacing "text between a currency code and the number"
+        text cldr_version "the CLDR version the row came from"
     }
     ref_property_data_types {
         integer id PK

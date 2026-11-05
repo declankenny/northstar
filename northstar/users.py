@@ -19,7 +19,7 @@ import sys
 import threading
 from contextlib import closing
 
-from northstar import config, db, sessions, system_properties, writer
+from northstar import config, db, locales, sessions, system_properties, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -141,7 +141,7 @@ def add_user(op: Operation, email: str, display_name: str, password: str,
 
     Reactivation is an explicit update of the deleted row, not an insert: the id and the creation metadata are kept, and
     the display name, password and admin flag come from this request (an admin flag left out is a regular user, whatever
-    they were before). The theme is the system's default theme, for a reactivated user as for a new one. Their old password and sessions stay dead: the password is
+    they were before). The theme and the number and date format are the system's defaults, for a reactivated user as for a new one. Their old password and sessions stay dead: the password is
     replaced and a session exists only once they sign in. The system user is never deleted, so it never comes back.
     """
     email = _clean_email(email)
@@ -156,6 +156,7 @@ def add_user(op: Operation, email: str, display_name: str, password: str,
         if values["theme"] not in THEMES:
             raise ValidationError(f"The default theme setting ({THEME_PROPERTY}) is not light or dark, so a user cannot be "
                                   "added. Correct the setting first.")
+        values["locale"] = locales.default_tag(op.conn)
         old = op.conn.execute("SELECT id FROM users WHERE email = ? AND deleted = 1 AND is_system = 0", (email,)).fetchone()
         if old is not None:
             writer.update(op, "users", old["id"], {**values, "deleted": 0})
@@ -187,7 +188,7 @@ def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3
 
 def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT id, email, display_name, is_admin, theme FROM users WHERE id = ? AND is_system = 0 AND deleted = 0",
+        "SELECT id, email, display_name, is_admin, theme, locale FROM users WHERE id = ? AND is_system = 0 AND deleted = 0",
         (user_id,)
     ).fetchone()
     if row is None:

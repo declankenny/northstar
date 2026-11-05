@@ -1,4 +1,5 @@
 import type { ImportColumn, ImportMapping, ImportOutcome, ImportRead } from "./api";
+import { formatInteger } from "./locale";
 
 // What each column of the file is used as. The page keeps one choice per column and turns it into the mapping the server
 // takes (a column for each target), so a column can only have one use, and a use can only be on one column.
@@ -61,7 +62,7 @@ export function writeCount(counts: Record<ImportOutcome, number>): number {
   return counts.add + counts.replace;
 }
 
-export const plural = (n: number, word: string) => `${n.toLocaleString("en-US")} ${word}${n === 1 ? "" : "s"}`;
+export const plural = (n: number, word: string) => `${formatInteger(n)} ${word}${n === 1 ? "" : "s"}`;
 
 /** "6 balances will be added and 2 replaced", or why nothing will be written. */
 export function writeSummary(counts: Record<ImportOutcome, number>): string {
@@ -69,7 +70,7 @@ export function writeSummary(counts: Record<ImportOutcome, number>): string {
   if (add === 0 && replace === 0) return "Nothing will be written: every date is already in the account the same, or is being skipped.";
   if (replace === 0) return `${plural(add, "balance")} will be added`;
   if (add === 0) return `${plural(replace, "balance")} will be replaced`;
-  return `${plural(add, "balance")} will be added and ${replace.toLocaleString("en-US")} replaced`;
+  return `${plural(add, "balance")} will be added and ${formatInteger(replace)} replaced`;
 }
 
 /** What is not listed on the review: "250 more to add, 3 more to skip". */
@@ -77,6 +78,6 @@ export function hiddenSummary(hidden: Partial<Record<ImportOutcome, number>>): s
   const words: Record<string, string> = { add: "to add", replace: "to replace", skip: "to skip" };
   return (Object.keys(words) as ImportOutcome[])
     .filter((outcome) => (hidden[outcome] ?? 0) > 0)
-    .map((outcome) => `${(hidden[outcome] as number).toLocaleString("en-US")} more ${words[outcome]}`)
+    .map((outcome) => `${formatInteger(hidden[outcome] as number)} more ${words[outcome]}`)
     .join(", ");
 }

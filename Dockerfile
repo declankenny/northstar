@@ -24,6 +24,9 @@ COPY northstar /build/northstar
 COPY --from=frontend /northstar/web/spa /build/northstar/web/spa
 RUN pip install /build && rm -rf /build
 
+# The notices that go with what is in the image: Northstar's own licence, and the Unicode CLDR notice for the locale data.
+COPY LICENSE THIRD_PARTY_NOTICES.md /licenses/
+
 # pip is only needed to install the app. It vendors its own copies of libraries (msgpack, urllib3,
 # setuptools) that the app never uses, which image scanners report with known vulnerabilities until pip
 # itself ships updated copies. Removing it clears those findings and means nothing can be installed into

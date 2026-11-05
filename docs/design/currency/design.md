@@ -56,11 +56,15 @@ Northstar stays a balance-based tracker. Useful historical context matters more 
 
 **What locale controls** (decided). How numbers and dates are shown and typed. Stored dates stay `YYYY-MM-DD` and stored amounts stay integers.
 
-**Entry** (proposed). One shared server-side parser turns a typed amount in the user's locale into minor units, used by every route that takes money. The frontend assists but does not decide validity. The currency's precision is a natural safeguard: in a locale where `,` is the decimal mark, `1,234` for a two-decimal currency has three decimals and is refused, not read as 1,234. Currencies with three decimals need extra care. Test vectors per supported locale, not heuristics.
+**Entry** (decided). One shared server-side parser turns typed text in the user's locale into minor units, used by every route that takes money. It reads with the user's locale and the account's currency, and never guesses another locale. The frontend repeats the rules so a change can show as it is typed, and the server stays authoritative. More decimals than the currency has is refused, never rounded.
 
-**Dates** (open). Showing a date in a locale's order collides with the frontend rule that it never creates a JavaScript `Date`. The options are a small formatter that reorders the `YYYY-MM-DD` string by numeric pattern, or one tested UTC-pinned exception. Leaning toward the formatter, with a short list of patterns. Entry stays on the native date input, which always yields an ISO value. Record the choice in `decisions.md` with the code. The supported locale list is open.
+**Dates** (decided). Shown by a small function that fills a locale's template from the `YYYY-MM-DD` text, with English month names. The frontend never creates a JavaScript `Date`. Entry stays on the native date input, which always yields an ISO value.
 
-**Symbols and codes** (open). Whether amounts show a code or symbol, and how to separate `$` for USD and CAD.
+**Locales** (decided). The conventions are CLDR-derived data held in a read-only reference table, `ref_locales`, generated into a migration by a developer tool. The first six are `en-US`, `en-GB`, `de-DE`, `fr-FR`, `de-CH` and `ja-JP`.
+
+**Symbols and codes** (decided). `$` is shown only for US dollars in `en-US`. Every other case shows the currency code, placed and spaced by the locale.
+
+The detail is in [locale.md](../locale.md).
 
 ## CSV
 
@@ -82,7 +86,7 @@ Steps (proposed): choose a catalog currency and see the permanent system currenc
 
 ## Migration and recovery
 
-An existing installation gets the catalog and no change to any amount. Its system currency is USD, and USD is on every account, if it has at least one account; otherwise the system currency is unset and an admin sets it on the System Properties screen before an account can be created. Users get the default locale. The money columns keep the name `amount_cents` and now hold integers in the account currency's minor unit (decided, see the implementation plan). Test upgrade from v0.2, a backup before the upgrade, and restore after it. Update `docs/schema.md`, the audited-field registry and the operator guide with the code.
+An existing installation gets the catalog and no change to any amount. Its system currency is USD, and USD is on every account, if it has at least one account; otherwise the system currency is unset and an admin sets it on the System Properties screen before an account can be created. Users get the default locale, `en-US`. The money columns keep the name `amount_cents` and now hold integers in the account currency's minor unit (decided, see the implementation plan). Test upgrade from v0.2, a backup before the upgrade, and restore after it. Update `docs/schema.md`, the audited-field registry and the operator guide with the code.
 
 ## Validation
 
@@ -92,7 +96,6 @@ The acceptance list from the interview carries over: existing USD results unchan
 
 - Missing-coverage presentation (truncated series or hidden graph).
 - Rate table shape and precision, and whether conversion sits behind a view.
-- The date formatter, the supported locales and symbols versus codes.
 - Whether the export gains a Currency column.
 - Catalog policy for withdrawn and special codes, and for precision changes.
 - Provider terms, publication time and range limits.

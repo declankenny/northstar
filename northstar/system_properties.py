@@ -60,9 +60,19 @@ def catalog_currency(ctx: Context) -> str:
     return ACCEPT_AND_LOCK
 
 
+def catalog_locale(ctx: Context) -> str:
+    """The default number and date format: a tag in the locale catalog. It does not lock, so it can be changed later."""
+    if ctx.proposed is not None and ctx.conn.execute(
+            "SELECT 1 FROM ref_locales WHERE tag = ?", (ctx.proposed,)).fetchone() is None:
+        raise ValidationError("Choose a number and date format from the list. Search it by name or tag, such as "
+                              "English (United States) or en-US.")
+    return ACCEPT
+
+
 VALIDATORS = {
     "positive_integer": positive_integer,
     "catalog_currency": catalog_currency,
+    "catalog_locale": catalog_locale,
 }
 
 

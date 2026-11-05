@@ -3,6 +3,7 @@ import type { ImportOutcome, ImportPolicy, ImportRead, ImportResult, ImportRevie
 import { formatDate } from "./dates";
 import { hiddenSummary, plural, readiness, type Readiness, TARGETS, type Use, USE_LABEL, writeCount, writeSummary } from "./importLogic";
 import { formatCents } from "./money";
+import { formatInteger } from "./locale";
 
 // The four screens of the import, one component each. They show what they are given and report what the person does; the page
 // (ImportBalances) owns every choice and every request.
@@ -217,17 +218,17 @@ export function ReviewStep(props: {
                   <li key={index}>{problem.record !== null ? `Record ${problem.record}: ` : ""}{problem.message}</li>
                 ))}
               </ul>
-              {problems.length > PROBLEMS_SHOWN && <p className="imp-more">and {(problems.length - PROBLEMS_SHOWN).toLocaleString("en-US")} more.</p>}
+              {problems.length > PROBLEMS_SHOWN && <p className="imp-more">and {formatInteger(problems.length - PROBLEMS_SHOWN)} more.</p>}
             </>
           ) : (
             <>
               <p>Nothing has been saved yet. Dates are shown as read, and all balances are treated as US dollars.</p>
               {counts && (
                 <div className="imp-counts" aria-label="What will happen">
-                  <div><b>{counts.add.toLocaleString("en-US")}</b><small>will be added</small></div>
-                  <div><b>{counts.replace.toLocaleString("en-US")}</b><small>will replace a balance</small></div>
-                  <div><b>{counts.unchanged.toLocaleString("en-US")}</b><small>already the same</small></div>
-                  <div><b>{counts.skip.toLocaleString("en-US")}</b><small>left alone (skipped)</small></div>
+                  <div><b>{formatInteger(counts.add)}</b><small>will be added</small></div>
+                  <div><b>{formatInteger(counts.replace)}</b><small>will replace a balance</small></div>
+                  <div><b>{formatInteger(counts.unchanged)}</b><small>already the same</small></div>
+                  <div><b>{formatInteger(counts.skip)}</b><small>left alone (skipped)</small></div>
                 </div>
               )}
               <fieldset className="imp-policy">
@@ -296,10 +297,10 @@ export function ResultStep(props: { fileName: string; result: ImportResult; onEx
       <div className="imp-card">
         <p className="notice ok" role="status">Imported from {props.fileName}.</p>
         <div className="imp-counts" aria-label="What was imported">
-          <div><b>{result.added.toLocaleString("en-US")}</b><small>added</small></div>
-          <div><b>{result.updated.toLocaleString("en-US")}</b><small>updated</small></div>
-          <div><b>{result.unchanged.toLocaleString("en-US")}</b><small>unchanged</small></div>
-          <div><b>{result.skipped.toLocaleString("en-US")}</b><small>skipped</small></div>
+          <div><b>{formatInteger(result.added)}</b><small>added</small></div>
+          <div><b>{formatInteger(result.updated)}</b><small>updated</small></div>
+          <div><b>{formatInteger(result.unchanged)}</b><small>unchanged</small></div>
+          <div><b>{formatInteger(result.skipped)}</b><small>skipped</small></div>
         </div>
         <div className="imp-actions">
           <button className="btn" onClick={props.onExit}>Exit</button>
