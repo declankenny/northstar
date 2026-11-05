@@ -9,10 +9,11 @@ import { RowMenu } from "./RowMenu";
 import { Link, navigate } from "./router";
 import { accountPath, importPath } from "./routes";
 import { useRequest } from "./useRequest";
+import { formatInteger } from "./locale";
 
 function ago(days: number | null): string {
   if (days === null) return "";
-  return days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`;
+  return days === 0 ? "today" : `${formatInteger(days)} day${days === 1 ? "" : "s"} ago`;
 }
 
 type RowActions = { onEdit: (a: ListedAccount) => void; onAddBalance: (a: ListedAccount) => void };
@@ -44,7 +45,7 @@ function Row({ account, showStale, actions }: { account: ListedAccount; showStal
           <>{formatDate(account.last_date)} <span className={stale ? "w" : "m"}>· {ago(account.days_since)}</span></>
         )}
       </td>
-      <td className="r">{account.balance_count}</td>
+      <td className="r">{formatInteger(account.balance_count)}</td>
       <td className="note" title={account.notes ?? undefined}>{account.notes}</td>
       <td className="k"><RowMenu label={`Actions for ${account.name}`} items={items} /></td>
     </tr>

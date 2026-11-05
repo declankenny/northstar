@@ -127,7 +127,7 @@ def test_update_balance_refuses_a_date_another_balance_uses(conn):
     add_balance(conn, acct, "2026-10-01", 100)
     add_balance(conn, acct, "2026-09-01", 200)
     bid = balance_id(conn, acct, "2026-10-01")
-    with pytest.raises(ValidationError, match="already a balance on 2026-09-01"):
+    with pytest.raises(ValidationError, match="already a balance on Sep 1, 2026"):
         balances.update_balance(op(conn), bid, "2026-09-01", "1", None, TODAY)
     assert balances.get_balance(conn, bid)["as_of_date"] == "2026-10-01"
 

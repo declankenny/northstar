@@ -104,8 +104,8 @@ def test_an_unknown_policy_is_refused(conn, account):
 def test_every_record_with_a_shared_date_is_an_error_naming_the_others(conn, account):
     plan = plan_import(conn, account, [row(2, "2026-01-31", 1), row(3, "2026-02-28", 2), row(4, "2026-01-31", 3)])
     assert [(e.record, e.message) for e in plan.errors] == [
-        (2, "Records 2 and 4 all have the date 2026-01-31. Each date may appear once in the file."),
-        (4, "Records 2 and 4 all have the date 2026-01-31. Each date may appear once in the file.")]
+        (2, "Records 2 and 4 all have the date Jan 31, 2026. Each date may appear once in the file."),
+        (4, "Records 2 and 4 all have the date Jan 31, 2026. Each date may appear once in the file.")]
     assert not plan.can_commit and len(plan.rows) == 3                          # the rows are still classified for the screen
 
 
@@ -118,8 +118,8 @@ def test_three_in_a_group_and_two_groups_are_each_named(conn, account):
     plan = plan_import(conn, account, [row(2, "2026-01-31", 1), row(3, "2026-01-31", 2), row(4, "2026-02-28", 3),
                                        row(5, "2026-01-31", 4), row(6, "2026-02-28", 5), row(7, "2026-03-31", 6)])
     assert [e.record for e in plan.errors] == [2, 3, 4, 5, 6]
-    assert plan.errors[0].message.startswith("Records 2, 3 and 5 all have the date 2026-01-31")
-    assert plan.errors[2].message.startswith("Records 4 and 6 all have the date 2026-02-28")
+    assert plan.errors[0].message.startswith("Records 2, 3 and 5 all have the date Jan 31, 2026")
+    assert plan.errors[2].message.startswith("Records 4 and 6 all have the date Feb 28, 2026")
 
 
 def test_distinct_dates_have_no_errors(conn, account):

@@ -115,6 +115,7 @@ describe("the system currency on the System properties page", () => {
     const { container } = render(<SystemProperties />);
     const box = await screen.findByLabelText("system.currency");
     expect(box.getAttribute("list")).toBe("sp-currencies");
+    expect(box.getAttribute("spellcheck")).toBe("false");        // a code is not prose, so no red squiggle
     const options = [...container.querySelectorAll("datalist#sp-currencies option")];
     expect(options.map((o) => [o.getAttribute("value"), o.textContent])).toEqual([["USD", "US Dollar"], ["JPY", "Yen"], ["KWD", "Kuwaiti Dinar"]]);
   });
@@ -143,11 +144,11 @@ describe("the system currency on the System properties page", () => {
   it("shows the refusal beside the box when the code is not in the catalog", async () => {
     const { RequestError } = await import("./api");
     vi.mocked(fetchProperties).mockResolvedValue(page());
-    vi.mocked(saveProperty).mockRejectedValue(new RequestError("Choose a currency from the list.", {}, 422, [], null, []));
+    vi.mocked(saveProperty).mockRejectedValue(new RequestError("That isn't a currency in the catalog.", {}, 422, [], null, []));
     render(<SystemProperties />);
     fireEvent.change(await screen.findByLabelText("system.currency"), { target: { value: "ZZZ" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Choose a currency from the list.");
+    expect((await screen.findByRole("alert")).textContent).toBe("That isn't a currency in the catalog.");
   });
 });
 
@@ -160,30 +161,36 @@ describe("the default number and date format on the System properties page", () 
     locales: [{ tag: "de-DE", label: "German (Germany)" }, { tag: "en-US", label: "English (United States)" }],
   });
 
-  it("is a search box over the supported formats, one option per tag with its label", async () => {
+  it("is a dropdown of the supported formats by name, set to the stored one, with nothing to type", async () => {
     vi.mocked(fetchProperties).mockResolvedValue(page());
     const { container } = render(<SystemProperties />);
-    const box = await screen.findByLabelText("ui.locale.default");
-    expect(box.getAttribute("list")).toBe("sp-locales");
-    const options = [...container.querySelectorAll("datalist#sp-locales option")];
-    expect(options.map((o) => [o.getAttribute("value"), o.textContent])).toEqual([
+    const box = (await screen.findByLabelText("ui.locale.default")) as HTMLSelectElement;
+    expect(box.tagName).toBe("SELECT");
+    expect([...box.options].map((o) => [o.value, o.textContent])).toEqual([
       ["de-DE", "German (Germany)"], ["en-US", "English (United States)"]]);
+    expect(box.value).toBe("en-US");
+    expect(container.querySelector("datalist#sp-locales")).toBeNull();
   });
 
-  it("saves the tag that was chosen, stays editable, and shows the refusal beside the box", async () => {
-    const { RequestError } = await import("./api");
+  it("saves the format that was chosen and stays editable", async () => {
     vi.mocked(fetchProperties).mockResolvedValue(page());
-    vi.mocked(saveProperty).mockRejectedValueOnce(new RequestError("Choose a number and date format from the list.", {}, 422, [], null, []));
+    vi.mocked(saveProperty).mockResolvedValue(page({ value: "de-DE" }));
     render(<SystemProperties />);
     const box = await screen.findByLabelText("ui.locale.default");
-    fireEvent.change(box, { target: { value: "xx-XX" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Choose a number and date format from the list.");
-    vi.mocked(saveProperty).mockResolvedValue(page({ value: "de-DE" }));
     fireEvent.change(box, { target: { value: "de-DE" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Saved");
     expect(saveProperty).toHaveBeenLastCalledWith("ui.locale.default", "de-DE");
-    expect((screen.getByLabelText("ui.locale.default") as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText("ui.locale.default") as HTMLSelectElement).disabled).toBe(false);
+  });
+
+  it("shows a refusal from the server beside the dropdown", async () => {
+    const { RequestError } = await import("./api");
+    vi.mocked(fetchProperties).mockResolvedValue(page());
+    vi.mocked(saveProperty).mockRejectedValue(new RequestError("That isn't a supported number and date format.", {}, 422, [], null, []));
+    render(<SystemProperties />);
+    fireEvent.change(await screen.findByLabelText("ui.locale.default"), { target: { value: "de-DE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("That isn't a supported number and date format.");
   });
 });

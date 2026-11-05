@@ -256,7 +256,7 @@ def test_review_names_every_record_of_a_duplicate_date(client, account):
     body = review(client, account, text=text, mapping=SENT).json()
     assert body["can_commit"] is False
     assert sorted(e["record"] for e in body["errors"]) == [2, 3]
-    assert "2026-01-31" in body["errors"][0]["message"]
+    assert "Jan 31, 2026" in body["errors"][0]["message"]
 
 
 def test_review_blocks_a_currency_that_is_not_dollars_and_lists_it(client, account):

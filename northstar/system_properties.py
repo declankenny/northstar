@@ -54,7 +54,7 @@ def catalog_currency(ctx: Context) -> str:
     if ctx.proposed is None:
         return ACCEPT
     if ctx.conn.execute("SELECT 1 FROM currencies WHERE code = ?", (ctx.proposed,)).fetchone() is None:
-        raise ValidationError("Choose a currency from the list. Search it by code or name, such as USD or US Dollar.")
+        raise ValidationError("That isn't a currency in the catalog. Search by code or name, such as USD or US Dollar.")
     if ctx.conn.execute("SELECT 1 FROM accounts LIMIT 1").fetchone() is not None:
         raise ValidationError("The system currency can't be changed once an account exists.")
     return ACCEPT_AND_LOCK
@@ -64,8 +64,7 @@ def catalog_locale(ctx: Context) -> str:
     """The default number and date format: a tag in the locale catalog. It does not lock, so it can be changed later."""
     if ctx.proposed is not None and ctx.conn.execute(
             "SELECT 1 FROM ref_locales WHERE tag = ?", (ctx.proposed,)).fetchone() is None:
-        raise ValidationError("Choose a number and date format from the list. Search it by name or tag, such as "
-                              "English (United States) or en-US.")
+        raise ValidationError("That isn't a supported number and date format.")
     return ACCEPT
 
 

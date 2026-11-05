@@ -27,6 +27,7 @@ class NewUser(BaseModel):
     display_name: str
     password: str
     is_admin: bool = False
+    locale: str | None = None    # a tag in the catalog; left out, the system default
 
 
 class UserChange(BaseModel):
@@ -58,7 +59,7 @@ def list_users(request: Request):
 def add_user(body: NewUser, request: Request):
     def action(conn):
         user_id, reactivated = users.add_user(operation(request, conn), body.email, body.display_name, body.password,
-                                              body.is_admin)
+                                              body.is_admin, body.locale)
         return {**_listed(conn, user_id), "reactivated": reactivated}
     return run(request, action)
 

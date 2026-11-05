@@ -78,9 +78,9 @@ svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 .panel h2 { margin: 0; font-size: 16px; font-weight: 650; }
 .panel label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
-.panel input { font: inherit; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; }
+.panel input, .panel select { font: inherit; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; }
 .panel input[readonly] { color: var(--muted); }
-.panel input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.panel input:focus, .panel select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 .panel .ranges { align-self: flex-start; }
 /* Profile: two columns, one when the window is narrow */
 .panels.two { display: grid; grid-template-columns: repeat(2, minmax(0, 440px)); max-width: none; gap: 20px; align-items: start; }
@@ -377,3 +377,9 @@ a.btn { display: inline-block; text-decoration: none; }
 
 /* The signed-in shell while it waits for the person's locale, or after that failed. */
 .app-wait { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; max-width: 480px; margin: 0 auto; padding: 64px 24px; }
+
+/* The line under an amount box that says how what is typed is read. It keeps its height so the form does not jump. */
+.reads { font-size: 13px; min-height: 18px; margin: 4px 0 0; }
+.reads.ok { color: var(--pos); }
+.reads.bad { color: var(--neg); }
+.ub-in.code input { padding-left: 46px; }

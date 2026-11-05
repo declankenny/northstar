@@ -1,6 +1,6 @@
 # Locale: design
 
-Status: the agreed design for #126 (the locale core) and #127 (the places a locale is chosen), dated November 5, 2026. It is part of the v0.3 multi-currency work described in [currency/design.md](currency/design.md), but is its own design because locale is not only about currency. Nothing here is built. It is not the spec or the decisions log, which change only with the code. Everything is agreed unless marked **TODO**, which means unverified or unresolved: do not guess it.
+Status: the agreed design for #126 (the locale core) and #127 (the places a locale is chosen), dated November 5, 2026. It is part of the v0.3 multi-currency work described in [currency/design.md](currency/design.md), but is its own design because locale is not only about currency. #126 is built, and #127 is built with it as the second pull request. It is not the spec or the decisions log, which change only with the code. Everything is agreed unless marked **TODO**, which means unverified or unresolved: do not guess it.
 
 ## Outcome
 
@@ -95,7 +95,7 @@ A String system property, seeded `en-US`, not nullable, editable by an admin. Hi
 
 - A validator `catalog_locale` is registered in `VALIDATORS` and linked in `ref_property_validators` at position 1. After the generic checks it requires an exact match against `ref_locales.tag` through a parameterised query, refuses anything else with a clear message, and accepts without locking, so the default can change later.
 - There are no `ref_property_lookups` rows. `ref_locales` is the single source of supported tags and labels, so adding a locale needs no duplicate property data.
-- The System properties page receives the catalog with its response and offers the locales as a search box, as it does for the system currency, so the value is never free text.
+- The System properties page receives the catalog with its response and offers the locales as a dropdown of their names, because there are few of them, so the value is never free text. The system currency, with 155 entries, is a search box instead.
 - Using a String property and a foreign key on `users.locale` is intentional: one lives in a generic property table and the other in a dedicated column, so they are enforced by different mechanisms.
 - A reactivated user takes the current default, as the theme does. Active users are never changed by a new default.
 - There are no properties for separators, templates or currency placement. Those are application conventions.
@@ -134,6 +134,10 @@ Display does not round-trip, because it includes a currency code that the parser
 
 A small function fills the date template from the `YYYY-MM-DD` text. The frontend never creates a JavaScript `Date`, so the no-timezone rule holds. `Intl.DateTimeFormat` could do this only on a `Date` pinned to UTC, whose text varies by browser and version and would put a French month name in an English screen. The native date input keeps showing the browser's own order, with an ISO value, and cannot follow the Northstar locale. A decisions entry records this with the code.
 
+## Messages
+
+Every message the application writes for a person says its dates and numbers in that person's locale, on the page and on the server. The page formats what it writes with the same functions as everything else. The server writes some sentences itself (a refusal that names a date, a count of balances or file rows), so it has the same two operations on the locale, `date` and `integer`, built from the same template and group mark. A message is written deep in the rules, far from the request, so the request sets the signed-in person's locale once and a message reads it with `locales.speaking()`. Outside a request it is US English. Data that is not prose, such as a date in an API field, stays `YYYY-MM-DD` for the page to format. The shared vectors test both implementations.
+
 ## Loading the user's locale
 
 `/api/me` returns the selected tag and the formatting fields from `ref_locales`: the decimal and group marks, the date template, the currency position and the spacing.
@@ -144,7 +148,7 @@ A small function fills the date template from the `YYYY-MM-DD` text. The fronten
 
 ## Locale changes while a form is open
 
-A money form sends the locale tag it was initialised under. The server compares it with the saved preference in the same transaction as the balance write. On a mismatch it writes nothing, the page keeps the draft and says what changed, and nothing is retried under the new locale. This includes a preference changed in another tab. It is built with #127, where a locale can first change.
+A money form sends the tag of the format the page is using, which changes only when the page loads the person's details again. The server compares it with the saved preference in the same transaction as the balance write. On a mismatch it writes nothing, the page keeps the draft and says what changed, and nothing is retried under the new locale. This includes a preference changed in another tab. It is built with #127, where a locale can first change.
 
 ## Screens (#127)
 

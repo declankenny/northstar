@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { addUser, deleteUser, fetchUsers, type Me, resetPassword, type UserRow, updateUser } from "./api";
+import { addUser, deleteUser, fetchLocales, fetchUsers, type Me, resetPassword, type UserRow, updateUser } from "./api";
 import { ConfirmDialog, Modal, useAction } from "./Dialogs";
 import { RowMenu } from "./RowMenu";
 import { useRequest } from "./useRequest";
@@ -12,16 +12,20 @@ function AddUserForm({ onAdded }: { onAdded: (user: UserRow) => void }) {
   const [password, setPassword] = useState("");
   const [admin, setAdminFlag] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const { data: choices } = useRequest(fetchLocales, []);
+  const [chosen, setChosen] = useState<string | null>(null);      // null until the admin changes it: then the system default
+  const locale = chosen ?? choices?.default;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    addUser({ email, display_name: name, password, is_admin: admin }).then(
+    addUser({ email, display_name: name, password, is_admin: admin, locale }).then(
       (user) => {
         onAdded(user);
         setEmail("");
         setName("");
         setPassword("");
         setAdminFlag(false);
+        setChosen(null);
         setNotice({
           ok: true,
           text: user.reactivated
@@ -47,6 +51,11 @@ function AddUserForm({ onAdded }: { onAdded: (user: UserRow) => void }) {
           <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
       </div>
+      <label>Number and date format
+        <select value={locale ?? ""} onChange={(e) => setChosen(e.target.value)} disabled={!choices}>
+          {(choices?.locales ?? []).map((choice) => <option key={choice.tag} value={choice.tag}>{choice.label}</option>)}
+        </select>
+      </label>
       <label className="check">
         <input type="checkbox" checked={admin} onChange={(e) => setAdminFlag(e.target.checked)} /> Admin
       </label>

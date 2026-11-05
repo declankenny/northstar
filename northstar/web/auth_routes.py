@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from northstar import clock, config, db, sessions, throttle, users
+from northstar import clock, config, db, locales, sessions, throttle, users
 from northstar.writer import Operation
 
 router = APIRouter(prefix="/api/auth")
@@ -30,7 +30,10 @@ def run(request: Request, action):
     """Run `action(conn)` on a connection that is closed afterwards. A broken rule it raises becomes an error response
     (see northstar.web.errors), so callers do not catch it."""
     with closing(db.connect(request.app.state.db_path)) as conn:
-        return action(conn)
+        user = getattr(request.state, "user", None)
+        # Every message the rules write for this person says its dates and numbers in their own format.
+        with locales.speak_as(locales.for_user(conn, user["id"]) if user else None):
+            return action(conn)
 
 
 def operation(request: Request, conn, kind: str = "ui_edit", detail: dict | None = None) -> Operation:

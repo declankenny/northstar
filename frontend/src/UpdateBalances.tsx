@@ -1,12 +1,16 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useContext, useEffect, useRef, useState } from "react";
 import { fetchUpdate, RequestError, saveUpdate, type UpdatePage, type UpdateRow } from "./api";
 import { dayNumber, formatDate, isoFromDay } from "./dates";
 import { Modal } from "./Dialogs";
-import { formatCents } from "./money";
+import { AmountReading } from "./AmountReading";
+import { getLocale } from "./locale";
+import { currencyMark, formatCents } from "./money";
+import { RefreshMe } from "./session";
 import { useLeaveGuard } from "./router";
 import { useLatest } from "./useRequest";
 import { conflictBanner, rowConflictNote } from "./conflicts";
 import { baselineText, changedAmounts, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
+import { formatInteger } from "./locale";
 
 type Banner = { kind: "ok" | "bad"; text: string };
 
@@ -14,7 +18,7 @@ const LEAVE = "You have amounts that are not saved. Leave this page and lose the
 
 function ago(days: number | null): string {
   if (days === null) return "";
-  return days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`;
+  return days === 0 ? "today" : `${formatInteger(days)} day${days === 1 ? "" : "s"} ago`;
 }
 
 function Change({ row, text }: { row: UpdateRow; text: string }) {
@@ -56,6 +60,22 @@ export function UpdateBalances() {
   const latestRequest = useRef<(date: string) => void>(() => {});
 
   const rows = page?.rows ?? [];
+  const refreshMe = useContext(RefreshMe);
+  // When the person's format changes under the page, the boxes still holding what was loaded are written again in the new
+  // format, and what the person typed is left as it is.
+  const locale = getLocale();
+  const seenLocale = useRef(locale);
+  useEffect(() => {
+    const before = seenLocale.current;
+    if (before.tag === locale.tag) return;
+    seenLocale.current = locale;
+    setValues((now) => Object.fromEntries(rows.map((row) => {
+      const text = now[row.id] ?? "";
+      return [row.id, text === baselineText(row, before) ? baselineText(row) : text];
+    })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the format changes
+  }, [locale.tag]);
+
   const dirty = rows.some((row) => isTyped(row, values[row.id] ?? ""));
   const toSend = changedAmounts(rows, values);
   // While a request runs the form cannot be edited, so an answer can never replace what was just typed.
@@ -143,10 +163,16 @@ export function UpdateBalances() {
       setValues(Object.fromEntries(saved.rows.map((row) => [row.id, baselineText(row)])));
       setErrors({});
       const c = saved.saved!;
-      setBanner({ kind: "ok", text: `Saved for ${formatDate(saved.date)}: ${c.added} added, ${c.updated} updated, ${c.unchanged} unchanged.` });
+      setBanner({ kind: "ok", text: `Saved for ${formatDate(saved.date)}: ${formatInteger(c.added)} added, ${formatInteger(c.updated)} updated, ${formatInteger(c.unchanged)} unchanged.` });
       body.current?.scrollTo({ top: 0 });
     } catch (e) {
       const refused = e as RequestError;
+      if (refused.localeChanged) {
+        // Nothing was saved. The page loads the new format, what was typed stays, and it is read in the new format.
+        refreshMe();
+        setBanner({ kind: "bad", text: refused.message });
+        return;
+      }
       if (refused.conflicts?.length) {
         // Nothing was saved. Show the balances as they are now, keep what was typed, and mark the rows that moved on.
         setBanner({ kind: "bad", text: conflictBanner(refused.conflicts.length) });
@@ -228,14 +254,15 @@ export function UpdateBalances() {
                           {row.last_date && <div className="m ub-sub">{formatDate(row.last_date)} · {ago(row.days_since)}</div>}
                         </td>
                         <td className="r">
-                          <div className="ub-in">
-                            <i>$</i>
+                          <div className={currencyMark() === "$" ? "ub-in" : "ub-in code"}>
+                            <i>{currencyMark()}</i>
                             <input data-id={row.id} className="num" inputMode="decimal" autoComplete="off" disabled={busy}
                               aria-label={`New balance for ${row.name}`} aria-invalid={errors[row.id] !== undefined}
                               placeholder={row.class_name === "Asset" ? "balance" : "amount owed"}
                               autoFocus={row.id === first} value={text}
                               onChange={(e) => type(row.id, e.target.value)} onKeyDown={move} />
                           </div>
+                          {errors[row.id] === undefined && <AmountReading text={text} />}
                           <RowNote row={row} text={text} error={errors[row.id]} />
                         </td>
                         <td className="r"><Change row={row} text={text} /></td>
@@ -255,11 +282,11 @@ export function UpdateBalances() {
             <>Nothing entered for {formatDate(page.date)}. Blank accounts are skipped.</>
           ) : (
             <>
-              <b>{summary.entered}</b> of {rows.length} entered
-              {summary.added > 0 && <> · {summary.added} new</>}
-              {summary.replacing > 0 && <> · <span className="w">{summary.replacing} will replace existing</span></>}
-              {summary.same > 0 && <> · {summary.same} already saved, unchanged</>}
-              {summary.invalid > 0 && <> · <span className="n">{summary.invalid} not an amount</span></>}
+              <b>{formatInteger(summary.entered)}</b> of {formatInteger(rows.length)} entered
+              {summary.added > 0 && <> · {formatInteger(summary.added)} new</>}
+              {summary.replacing > 0 && <> · <span className="w">{formatInteger(summary.replacing)} will replace existing</span></>}
+              {summary.same > 0 && <> · {formatInteger(summary.same)} already saved, unchanged</>}
+              {summary.invalid > 0 && <> · <span className="n">{formatInteger(summary.invalid)} not an amount</span></>}
               . Blanks are skipped.
             </>
           )}

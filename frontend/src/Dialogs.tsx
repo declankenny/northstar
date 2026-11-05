@@ -1,5 +1,6 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useContext, useEffect, useState } from "react";
 import { type Conflict, RequestError } from "./api";
+import { RefreshMe } from "./session";
 
 /** A box over the page. Escape or a click outside it closes it. */
 export function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
@@ -26,6 +27,7 @@ export function Modal(props: { title: string; subtitle?: string; onClose: () => 
 /** Runs an action that may be refused by the server, and keeps its message to show in the dialog. `conflict` is set when the
  *  refusal is that a balance changed since the person opened it, and `clear` forgets a refusal. */
 export function useAction() {
+  const refreshMe = useContext(RefreshMe);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<Conflict | null>(null);
@@ -36,6 +38,7 @@ export function useAction() {
     try {
       await action();
     } catch (e) {
+      if (e instanceof RequestError && e.localeChanged) refreshMe(); // the draft stays, and is read in the new format
       const first = e instanceof RequestError ? e.conflicts[0] : undefined;
       if (first) setConflict(first);
       else setError((e as Error).message);

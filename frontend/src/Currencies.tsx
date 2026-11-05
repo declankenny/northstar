@@ -72,7 +72,7 @@ export function Currencies() {
               </tbody>
             </table>
           </div>
-          <p className="sub cur-count">{rows.length} of {all.length} shown</p>
+          <p className="sub cur-count">{formatInteger(rows.length)} of {formatInteger(all.length)} shown</p>
         </>
       )}
     </div>

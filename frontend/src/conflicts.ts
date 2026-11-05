@@ -1,6 +1,7 @@
 import type { Conflict } from "./api";
 import { formatDate } from "./dates";
 import { formatCents } from "./money";
+import { formatInteger } from "./locale";
 
 /** "Sam Example on Nov 2, 2026": who changed a balance and when, as far as the server could tell. */
 function whoWhen(conflict: Conflict): string {
@@ -29,5 +30,5 @@ export function rowConflictNote(conflict: Conflict): string {
 export function conflictBanner(count: number): string {
   return count === 1
     ? "Nothing was saved. 1 balance changed since you opened this date. Check the marked row: pressing Save again replaces it with what you typed."
-    : `Nothing was saved. ${count} balances changed since you opened this date. Check the marked rows: pressing Save again replaces them with what you typed.`;
+    : `Nothing was saved. ${formatInteger(count)} balances changed since you opened this date. Check the marked rows: pressing Save again replaces them with what you typed.`;
 }

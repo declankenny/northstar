@@ -130,18 +130,19 @@ def _check_password(password: str) -> None:
 
 
 def create_user(op: Operation, email: str, display_name: str, password: str,
-                is_admin: bool = False) -> int:
+                is_admin: bool = False, locale: str | None = None) -> int:
     """Add a user and return their id. If the email belonged to a deleted user, that person is reactivated."""
-    return add_user(op, email, display_name, password, is_admin)[0]
+    return add_user(op, email, display_name, password, is_admin, locale)[0]
 
 
 def add_user(op: Operation, email: str, display_name: str, password: str,
-             is_admin: bool = False) -> tuple[int, bool]:
+             is_admin: bool = False, locale: str | None = None) -> tuple[int, bool]:
     """Add a user, or reactivate a deleted one with the same email. Returns (id, reactivated).
 
     Reactivation is an explicit update of the deleted row, not an insert: the id and the creation metadata are kept, and
     the display name, password and admin flag come from this request (an admin flag left out is a regular user, whatever
-    they were before). The theme and the number and date format are the system's defaults, for a reactivated user as for a new one. Their old password and sessions stay dead: the password is
+    they were before). The theme is the system's default, for a reactivated user as for a new one. So is the number and date format,
+    unless one is given (the admin's form offers a choice, starting at the default). Their old password and sessions stay dead: the password is
     replaced and a session exists only once they sign in. The system user is never deleted, so it never comes back.
     """
     email = _clean_email(email)
@@ -156,7 +157,7 @@ def add_user(op: Operation, email: str, display_name: str, password: str,
         if values["theme"] not in THEMES:
             raise ValidationError(f"The default theme setting ({THEME_PROPERTY}) is not light or dark, so a user cannot be "
                                   "added. Correct the setting first.")
-        values["locale"] = locales.default_tag(op.conn)
+        values["locale"] = locales.default_tag(op.conn) if locale is None else locales.get(op.conn, locale).tag
         old = op.conn.execute("SELECT id FROM users WHERE email = ? AND deleted = 1 AND is_system = 0", (email,)).fetchone()
         if old is not None:
             writer.update(op, "users", old["id"], {**values, "deleted": 0})
@@ -241,6 +242,12 @@ def set_display_name(op: Operation, user_id: int, display_name: str) -> None:
     display_name = _clean_name(display_name)
     get_user(op.conn, user_id)
     writer.update(op, "users", user_id, {"display_name": display_name})
+
+
+def set_locale(op: Operation, user_id: int, tag: str) -> None:
+    """Choose the number and date format a person reads and types in: a tag in the catalog. Not logged, like the theme."""
+    locales.get(op.conn, tag)
+    writer.update(op, "users", user_id, {"locale": tag})
 
 
 def set_theme(op: Operation, user_id: int, theme: str) -> None:

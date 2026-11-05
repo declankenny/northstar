@@ -1,12 +1,13 @@
 import type { UpdateRow } from "./api";
+import type { Locale } from "./locale";
 import { centsToInput, parseCents } from "./money";
 
 // What the Update balances screen decides about a row from its text box. Display only: the server
 // checks and saves every amount, and the frontend holds no net worth rule.
 
 /** The text a row starts with for the date shown: what is saved on it, or nothing. */
-export function baselineText(row: UpdateRow): string {
-  return row.existing_cents === null ? "" : centsToInput(row.existing_cents);
+export function baselineText(row: UpdateRow, locale?: Locale): string {
+  return row.existing_cents === null ? "" : centsToInput(row.existing_cents, locale);
 }
 
 /** Whether the box differs from what is saved on the date, so it is the user's own typing. */

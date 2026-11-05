@@ -46,6 +46,17 @@ class ProfileChange(BaseModel):
     """Only the fields that are sent change."""
     display_name: str | None = None
     theme: Literal["light", "dark"] | None = None
+    locale: str | None = None      # a tag in the catalog
+
+
+class LocaleChoice(BaseModel):
+    tag: str
+    label: str
+
+
+class LocaleChoices(BaseModel):
+    locales: list[LocaleChoice]    # every number and date format a person can choose, by label
+    default: str                   # the tag a new user starts with, the system default
 
 
 class PasswordChange(BaseModel):
@@ -65,6 +76,12 @@ def read_me(request: Request):
     return run(request, lambda conn: _me(conn, user["id"]))
 
 
+@router.get("/locales", response_model=LocaleChoices)
+def list_locales(request: Request):
+    current_user(request)
+    return run(request, lambda conn: {"locales": locales.catalog(conn), "default": locales.default_tag(conn)})
+
+
 @router.patch("", response_model=Me)
 def change_me(body: ProfileChange, request: Request):
     user = current_user(request)
@@ -76,6 +93,8 @@ def change_me(body: ProfileChange, request: Request):
                 users.set_display_name(op, user["id"], body.display_name)
             if body.theme is not None:
                 users.set_theme(op, user["id"], body.theme)
+            if body.locale is not None:
+                users.set_locale(op, user["id"], body.locale)
         return _me(conn, user["id"])
 
     return run(request, action)
