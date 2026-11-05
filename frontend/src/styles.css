@@ -383,3 +383,6 @@ a.btn { display: inline-block; text-decoration: none; }
 .reads.ok { color: var(--pos); }
 .reads.bad { color: var(--neg); }
 .ub-in.code input { padding-left: 46px; }
+
+/* A box that suggests values as you type (a datalist) is a text box, so the browser's drop-down arrow, which says "pick from a list", is hidden. */
+.sp-row input[list]::-webkit-calendar-picker-indicator { display: none !important; }

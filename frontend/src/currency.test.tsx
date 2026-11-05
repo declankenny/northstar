@@ -115,6 +115,7 @@ describe("the system currency on the System properties page", () => {
     const { container } = render(<SystemProperties />);
     const box = await screen.findByLabelText("system.currency");
     expect(box.getAttribute("list")).toBe("sp-currencies");
+    expect(box.getAttribute("spellcheck")).toBe("false");        // a code is not prose, so no red squiggle
     const options = [...container.querySelectorAll("datalist#sp-currencies option")];
     expect(options.map((o) => [o.getAttribute("value"), o.textContent])).toEqual([["USD", "US Dollar"], ["JPY", "Yen"], ["KWD", "Kuwaiti Dinar"]]);
   });
@@ -165,6 +166,7 @@ describe("the default number and date format on the System properties page", () 
     const { container } = render(<SystemProperties />);
     const box = await screen.findByLabelText("ui.locale.default");
     expect(box.getAttribute("list")).toBe("sp-locales");
+    expect(box.getAttribute("spellcheck")).toBe("false");
     const options = [...container.querySelectorAll("datalist#sp-locales option")];
     expect(options.map((o) => [o.getAttribute("value"), o.textContent])).toEqual([
       ["de-DE", "German (Germany)"], ["en-US", "English (United States)"]]);

@@ -145,7 +145,7 @@ export function SystemProperties({ onCurrencyChange }: { onCurrencyChange?: () =
                     <>
                       {/* The browser's own search box: it filters the catalog by code or name as you type. The server
                           checks the code against the catalog, so text that is not in the list is refused. */}
-                      <input aria-label={p.name} list="sp-currencies" value={text} disabled={p.read_only} autoComplete="off"
+                      <input aria-label={p.name} list="sp-currencies" value={text} disabled={p.read_only} autoComplete="off" spellCheck={false}
                         placeholder="Search by code or name" onChange={(e) => edit(p, e.target.value)} />
                       <datalist id="sp-currencies">
                         {list.currencies.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
@@ -155,7 +155,7 @@ export function SystemProperties({ onCurrencyChange }: { onCurrencyChange?: () =
                     <>
                       {/* The browser's own search box over the supported formats, as for the currency. The server checks the tag
                           against the catalog, so text that is not in the list is refused. */}
-                      <input aria-label={p.name} list="sp-locales" value={text} disabled={p.read_only} autoComplete="off"
+                      <input aria-label={p.name} list="sp-locales" value={text} disabled={p.read_only} autoComplete="off" spellCheck={false}
                         placeholder="Search by name or tag" onChange={(e) => edit(p, e.target.value)} />
                       <datalist id="sp-locales">
                         {list.locales.map((l) => <option key={l.tag} value={l.tag}>{l.label}</option>)}
