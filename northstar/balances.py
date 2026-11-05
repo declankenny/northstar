@@ -43,7 +43,7 @@ class ConflictingEdit(ValidationError):
 
     def __init__(self, conflicts: list[dict]):
         many = len(conflicts) > 1
-        super().__init__(f"{len(conflicts)} balances changed since you opened this date. Nothing was saved." if many
+        super().__init__(f"{locales.speaking().integer(len(conflicts))} balances changed since you opened this date. Nothing was saved." if many
                          else "That balance changed since you opened it. Nothing was saved.")
         self.conflicts = conflicts
 
@@ -254,7 +254,7 @@ def update_balance(op: Operation, balance_id: int, date_text: str | None,
             (balance["account_id"], as_of.isoformat(), balance_id),
         ).fetchone():
             raise ValidationError(
-                f"There is already a balance on {as_of.isoformat()}. Edit that one instead.")
+                f"There is already a balance on {locales.speaking().date(as_of)}. Edit that one instead.")
         if (balance["as_of_date"], balance["amount_cents"], balance["note"]) == (
                 as_of.isoformat(), cents, new_note):
             return "unchanged"

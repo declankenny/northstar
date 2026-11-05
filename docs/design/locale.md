@@ -134,6 +134,10 @@ Display does not round-trip, because it includes a currency code that the parser
 
 A small function fills the date template from the `YYYY-MM-DD` text. The frontend never creates a JavaScript `Date`, so the no-timezone rule holds. `Intl.DateTimeFormat` could do this only on a `Date` pinned to UTC, whose text varies by browser and version and would put a French month name in an English screen. The native date input keeps showing the browser's own order, with an ISO value, and cannot follow the Northstar locale. A decisions entry records this with the code.
 
+## Messages
+
+Every message the application writes for a person says its dates and numbers in that person's locale, on the page and on the server. The page formats what it writes with the same functions as everything else. The server writes some sentences itself (a refusal that names a date, a count of balances or file rows), so it has the same two operations on the locale, `date` and `integer`, built from the same template and group mark. A message is written deep in the rules, far from the request, so the request sets the signed-in person's locale once and a message reads it with `locales.speaking()`. Outside a request it is US English. Data that is not prose, such as a date in an API field, stays `YYYY-MM-DD` for the page to format. The shared vectors test both implementations.
+
 ## Loading the user's locale
 
 `/api/me` returns the selected tag and the formatting fields from `ref_locales`: the decimal and group marks, the date template, the currency position and the spacing.

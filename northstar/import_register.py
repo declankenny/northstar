@@ -14,7 +14,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 
-from northstar import db, writer
+from northstar import db, locales, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -102,7 +102,7 @@ def _why_changed(conn: sqlite3.Connection, version: int) -> str:
     """Why a balance no longer carries the import's version, from the operation that wrote it last."""
     row = conn.execute("SELECT kind, created_at FROM sys_operations WHERE id = ?", (version,)).fetchone()
     if row is not None and row["kind"] == "import":
-        return f"Replaced by a later import ({row['created_at'][:10]})"
+        return f"Replaced by a later import ({locales.speaking().date(row['created_at'][:10])})"
     return "Edited since the import"
 
 
@@ -115,7 +115,7 @@ def undo_plan(conn: sqlite3.Connection, import_id: int) -> UndoPlan:
         raise NotFoundError("That import no longer exists.")
     reverted = conn.execute("SELECT created_at FROM sys_operations WHERE undoes_operation_id = ?", (import_id,)).fetchone()
     if reverted is not None:
-        raise UndoBlocked(f"This import was already undone on {reverted['created_at'][:10]}.", "reverted")
+        raise UndoBlocked(f"This import was already undone on {locales.speaking().date(reverted['created_at'][:10])}.", "reverted")
     detail = json.loads(header["detail"] or "{}")
     changes = conn.execute(
         "SELECT c.record_id, c.change, c.old_json, b.id AS found, b.version, b.as_of_date, "

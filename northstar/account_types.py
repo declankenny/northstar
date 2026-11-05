@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from northstar import system_properties, writer
+from northstar import locales, system_properties, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -52,12 +52,13 @@ def count_deleted_accounts(conn: sqlite3.Connection, type_id: int) -> int:
 
 def _in_use_message(live: int, deleted: int) -> str:
     """Why a type in use cannot be deleted, saying so when only deleted accounts are holding it."""
+    say = locales.speaking()
     if not deleted:
-        return f"{live} {'account uses' if live == 1 else 'accounts use'} this type. Change their type first."
+        return f"{say.integer(live)} {'account uses' if live == 1 else 'accounts use'} this type. Change their type first."
     if not live:
-        return (f"{deleted} deleted {'account uses' if deleted == 1 else 'accounts use'} this type. "
+        return (f"{say.integer(deleted)} deleted {'account uses' if deleted == 1 else 'accounts use'} this type. "
                 "Restoring deleted accounts isn't possible yet.")
-    return (f"{live + deleted} accounts use this type, {deleted} of them deleted. "
+    return (f"{say.integer(live + deleted)} accounts use this type, {say.integer(deleted)} of them deleted. "
             "Restoring deleted accounts isn't possible yet.")
 
 

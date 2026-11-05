@@ -14,6 +14,7 @@ import { Link, navigate } from "./router";
 import { importPath, PATHS } from "./routes";
 import { WHEN } from "./Tile";
 import { useRequest } from "./useRequest";
+import { formatInteger } from "./locale";
 
 type Dialog =
   | { kind: "balance"; editing: BalanceRow | null }
@@ -166,7 +167,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
           <div className="label">Balances recorded</div>
           <div className="val num">{view ? inRange : "—"}</div>
           <div className="delta num m">
-            {view && `since ${formatDate(view.data.start)} · ${account.balance_count} in all`}
+            {view && `since ${formatDate(view.data.start)} · ${formatInteger(account.balance_count)} in all`}
           </div>
         </div>
       </div>
@@ -203,7 +204,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
         <div className="acct-panel">
           <div className="panelhead">
             <span className="label">Entries</span>
-            {hasBalances && <span className="label num">{account.balance_count} total</span>}
+            {hasBalances && <span className="label num">{formatInteger(account.balance_count)} total</span>}
           </div>
           <div className="hist">
             {hasBalances && (

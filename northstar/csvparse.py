@@ -17,7 +17,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
 
-from northstar import money
+from northstar import locales, money
 from northstar.balances import clean_note
 from northstar.errors import ValidationError
 
@@ -125,7 +125,7 @@ def read_table(data: bytes, delimiter: str | None = None) -> Table:
             else:
                 rows.append(Record(number, cells))
                 if len(rows) > MAX_ROWS:
-                    raise CsvError(f"The file has more than {MAX_ROWS:,} rows. Split it and import the parts one at a time.")
+                    raise CsvError(f"The file has more than {locales.speaking().integer(MAX_ROWS)} rows. Split it and import the parts one at a time.")
     except csv.Error as error:
         raise CsvError(f"The file is not valid CSV: {error}.") from None
     if header is None:
@@ -442,7 +442,7 @@ def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: d
     good = []
     for row in table.rows:
         if len(row.cells) != width:
-            errors.append(RowError(row.number, None, f"This record has {len(row.cells)} fields and the header has {width}."))
+            errors.append(RowError(row.number, None, f"This record has {locales.speaking().integer(len(row.cells))} fields and the header has {locales.speaking().integer(width)}."))
         else:
             good.append(row)
     column = lambda index: [(row.number, row.cells[index]) for row in good]

@@ -5,7 +5,10 @@ The conventions are the rows of `ref_locales`, loaded by a migration from CLDR a
 reads CLDR. Three rules are not columns: groups of three digits, grouping from four digits and an ASCII minus.
 """
 
+import contextvars
+import re
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 
 from northstar import system_properties
@@ -27,6 +30,49 @@ class Locale:
 
     def as_dict(self) -> dict:
         return asdict(self)
+
+    def date(self, value) -> str:
+        """A calendar date, a `date` or its `YYYY-MM-DD` text, as this locale writes it: "May 7, 2026", "07.05.2026". Month
+        names are English, like the rest of the interface. The same template the page fills, from the same text."""
+        year, month, day = (int(part) for part in (value.isoformat() if hasattr(value, "isoformat") else str(value))[:10].split("-"))
+        pieces = {"{year}": str(year), "{month}": str(month), "{month2}": f"{month:02d}", "{month_short}": MONTHS[month - 1],
+                  "{day}": str(day), "{day2}": f"{day:02d}"}
+        return re.sub(r"\{[a-z_0-9]+\}", lambda found: pieces.get(found.group(0), found.group(0)), self.date_template)
+
+    def integer(self, n: int) -> str:
+        """A whole number grouped from four digits with this locale's group mark: 1234567 is "1,234,567" or "1.234.567"."""
+        digits = str(abs(int(n)))
+        groups = []
+        for end in range(len(digits), 0, -3):
+            groups.insert(0, digits[max(0, end - 3):end])
+        return ("-" if n < 0 else "") + self.group_mark.join(groups)
+
+
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+# US English without a database, for text written where nobody is signed in (the command line, a test). It is the en-US row of
+# ref_locales, and a test says so.
+US_ENGLISH = Locale("en-US", "English (United States)", ".", ",", "{month_short} {day}, {year}", "prefix", "\u00a0")
+
+# The locale of the person a request is for. Every message written for a person says its dates and numbers in it, and a
+# message is written deep in the rules, far from the request, so the request sets it once (see web/auth_routes.run) and a
+# message reads it with `speaking()`. Outside a request it is US English.
+_speaking: contextvars.ContextVar[Locale | None] = contextvars.ContextVar("speaking", default=None)
+
+
+def speaking() -> Locale:
+    """The locale to write a message in: the signed-in person's during a request, US English otherwise."""
+    return _speaking.get() or US_ENGLISH
+
+
+@contextmanager
+def speak_as(locale: Locale | None):
+    """Write the messages inside the block in `locale` (nobody's, with None, leaves US English)."""
+    token = _speaking.set(locale)
+    try:
+        yield
+    finally:
+        _speaking.reset(token)
 
 
 _COLUMNS = "tag, label, decimal_mark, group_mark, date_template, currency_position, currency_code_spacing"

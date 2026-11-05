@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Iterable
 
-from northstar import accounts, balances, currencies, db, writer
+from northstar import accounts, balances, currencies, db, locales, writer
 from northstar.csvparse import Mapping, ParsedRow, RowError
 from northstar.errors import ValidationError
 from northstar.writer import Operation
@@ -125,9 +125,10 @@ def _duplicate_errors(rows: list[ParsedRow]) -> list[RowError]:
     for day, records in sorted(by_date.items()):
         if len(records) < 2:
             continue
-        named = ", ".join(str(record) for record in records[:-1]) + f" and {records[-1]}"
+        say = locales.speaking()
+        named = ", ".join(say.integer(record) for record in records[:-1]) + f" and {say.integer(records[-1])}"
         for record in records:
-            errors.append(RowError(record, None, f"Records {named} all have the date {day.isoformat()}. "
+            errors.append(RowError(record, None, f"Records {named} all have the date {say.date(day)}. "
                                                  "Each date may appear once in the file."))
     return sorted(errors, key=lambda error: error.record)
 
@@ -216,14 +217,17 @@ def commit_import(conn: sqlite3.Connection, actor_id: int | None, account_id: in
     with db.write_transaction(conn):
         plan = plan_import(conn, account_id, rows, policy)
         if plan.errors:
-            raise ValidationError(f"The file has {len(plan.errors)} problem(s) that must be fixed first, starting at "
-                                  f"record {plan.errors[0].record}.")
+            say = locales.speaking()
+            raise ValidationError(f"The file has {say.integer(len(plan.errors))} problem(s) that must be fixed first, starting at "
+                                  f"record {say.integer(plan.errors[0].record)}.")
         if reviewed.fingerprint != plan.fingerprint:
             raise StaleImport("This is not the import that was reviewed: the file, the settings or the account changed. "
                               "Review it again before importing.")
         differing = _differing_dates(reviewed.expectations, plan.expectations)
         if differing:
-            shown = ", ".join(differing[:10]) + (f" and {len(differing) - 10} more" if len(differing) > 10 else "")
+            say = locales.speaking()
+            shown = ", ".join(say.date(day) for day in differing[:10]) + (
+                f" and {say.integer(len(differing) - 10)} more" if len(differing) > 10 else "")
             raise StaleImport(f"Balances changed since you reviewed this import ({shown}). Nothing was imported. "
                               "Review it again before importing.", differing)
         counts = plan.counts

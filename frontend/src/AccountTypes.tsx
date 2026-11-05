@@ -3,6 +3,7 @@ import { addType, deleteType, editType, fetchTypes, type TypeList, type TypeRow 
 import { useRequest } from "./useRequest";
 import { ConfirmDialog, Modal, useAction } from "./Dialogs";
 import { RowMenu } from "./RowMenu";
+import { formatInteger } from "./locale";
 
 type Dialog = { kind: "edit"; type: TypeRow | null } | { kind: "delete"; type: TypeRow };
 
@@ -10,8 +11,8 @@ type Dialog = { kind: "edit"; type: TypeRow | null } | { kind: "delete"; type: T
 function inUseNote(t: TypeRow): string | undefined {
   const { account_count: live, deleted_account_count: deleted } = t;
   if (live + deleted === 0) return undefined;
-  if (deleted === 0) return `${live} ${live === 1 ? "account uses" : "accounts use"} this type. Change ${live === 1 ? "its" : "their"} type first.`;
-  if (live === 0) return `${deleted} deleted ${deleted === 1 ? "account uses" : "accounts use"} this type. Restoring deleted accounts isn't possible yet.`;
+  if (deleted === 0) return `${formatInteger(live)} ${live === 1 ? "account uses" : "accounts use"} this type. Change ${live === 1 ? "its" : "their"} type first.`;
+  if (live === 0) return `${formatInteger(deleted)} deleted ${deleted === 1 ? "account uses" : "accounts use"} this type. Restoring deleted accounts isn't possible yet.`;
   return `${live + deleted} accounts use this type, ${deleted} of them deleted. Restoring deleted accounts isn't possible yet.`;
 }
 
@@ -98,7 +99,7 @@ export function AccountTypes() {
                       <tr key={t.id} className="row">
                         <td className="name">{t.name}</td>
                         <td className="r">{t.stale_after_days}</td>
-                        <td className={t.account_count ? "r" : "r m"}>{t.account_count}</td>
+                        <td className={t.account_count ? "r" : "r m"}>{formatInteger(t.account_count)}</td>
                         <td className="k">
                           <RowMenu label={`Actions for ${t.name}`} items={[
                             { label: "Edit", onClick: () => setDialog({ kind: "edit", type: t }) },

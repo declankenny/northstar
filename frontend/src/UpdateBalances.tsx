@@ -10,6 +10,7 @@ import { useLeaveGuard } from "./router";
 import { useLatest } from "./useRequest";
 import { conflictBanner, rowConflictNote } from "./conflicts";
 import { baselineText, changedAmounts, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
+import { formatInteger } from "./locale";
 
 type Banner = { kind: "ok" | "bad"; text: string };
 
@@ -17,7 +18,7 @@ const LEAVE = "You have amounts that are not saved. Leave this page and lose the
 
 function ago(days: number | null): string {
   if (days === null) return "";
-  return days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`;
+  return days === 0 ? "today" : `${formatInteger(days)} day${days === 1 ? "" : "s"} ago`;
 }
 
 function Change({ row, text }: { row: UpdateRow; text: string }) {
@@ -162,7 +163,7 @@ export function UpdateBalances() {
       setValues(Object.fromEntries(saved.rows.map((row) => [row.id, baselineText(row)])));
       setErrors({});
       const c = saved.saved!;
-      setBanner({ kind: "ok", text: `Saved for ${formatDate(saved.date)}: ${c.added} added, ${c.updated} updated, ${c.unchanged} unchanged.` });
+      setBanner({ kind: "ok", text: `Saved for ${formatDate(saved.date)}: ${formatInteger(c.added)} added, ${formatInteger(c.updated)} updated, ${formatInteger(c.unchanged)} unchanged.` });
       body.current?.scrollTo({ top: 0 });
     } catch (e) {
       const refused = e as RequestError;
@@ -281,11 +282,11 @@ export function UpdateBalances() {
             <>Nothing entered for {formatDate(page.date)}. Blank accounts are skipped.</>
           ) : (
             <>
-              <b>{summary.entered}</b> of {rows.length} entered
-              {summary.added > 0 && <> · {summary.added} new</>}
-              {summary.replacing > 0 && <> · <span className="w">{summary.replacing} will replace existing</span></>}
-              {summary.same > 0 && <> · {summary.same} already saved, unchanged</>}
-              {summary.invalid > 0 && <> · <span className="n">{summary.invalid} not an amount</span></>}
+              <b>{formatInteger(summary.entered)}</b> of {formatInteger(rows.length)} entered
+              {summary.added > 0 && <> · {formatInteger(summary.added)} new</>}
+              {summary.replacing > 0 && <> · <span className="w">{formatInteger(summary.replacing)} will replace existing</span></>}
+              {summary.same > 0 && <> · {formatInteger(summary.same)} already saved, unchanged</>}
+              {summary.invalid > 0 && <> · <span className="n">{formatInteger(summary.invalid)} not an amount</span></>}
               . Blanks are skipped.
             </>
           )}

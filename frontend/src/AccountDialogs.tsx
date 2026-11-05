@@ -7,6 +7,7 @@ import { amountPlaceholder, centsToInput } from "./money";
 import { Modal, useAction } from "./Dialogs";
 import { Link } from "./router";
 import { PATHS } from "./routes";
+import { formatInteger } from "./locale";
 
 /** Add a balance, or edit one. The server checks every field, so a refusal shows here and nothing is lost. */
 export function BalanceDialog(props: {
@@ -154,7 +155,7 @@ export function ChangeClassDialog(props: {
       <p className="sub">
         {count === 0
           ? "This account has no balances, so past net worth does not change."
-          : `This account has ${count} balance${count === 1 ? "" : "s"}, the earliest on ${formatDate(account.earliest_date!)}. Net worth changes from that date onward.`}
+          : `This account has ${formatInteger(count)} balance${count === 1 ? "" : "s"}, the earliest on ${formatDate(account.earliest_date!)}. Net worth changes from that date onward.`}
       </p>
       {target.types.length === 0 ? (
         <p className="sub">There are no {target.name.toLowerCase()} types yet. {props.isAdmin ? <><Link to={PATHS.types}>Add one on the Account types page</Link> first.</> : "Ask an admin to add one."}</p>
