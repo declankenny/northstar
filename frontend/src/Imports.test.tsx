@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ImportEntry, ImportRegister, UndoPlan, UndoRefusal } from "./api";
 import { Imports } from "./Imports";
+import { setLocale, US_ENGLISH } from "./locale";
 
 vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchImports: vi.fn(), fetchUndoPlan: vi.fn(), undoImport: vi.fn() }));
 
@@ -27,7 +28,7 @@ describe("the Imports page", () => {
     render(<Imports />);
     const row = (await screen.findByText("savings-2026.csv")).closest("tr") as HTMLElement;
     const cells = within(row).getAllByRole("cell").map((cell) => cell.textContent);
-    expect(cells).toEqual(["2026-11-02", "Demo Admin", "Demo Savings", "savings-2026.csv", "297", "3", "Undo…"]);
+    expect(cells).toEqual(["Nov 2, 2026", "Demo Admin", "Demo Savings", "savings-2026.csv", "297", "3", "Undo…"]);
     expect(within(row).getByRole("link", { name: "Demo Savings" }).getAttribute("href")).toBe("/accounts/7");
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent))
       .toEqual(["Import Date", "Import By", "Account", "File Name", "Added", "Replaced", "Status"]);
@@ -47,10 +48,25 @@ describe("the Imports page", () => {
     expect(within(await rowOf("c.csv")).getByText("Unknown account")).toBeTruthy();
   });
 
+  it("shows every date in the person's own format, in the register and in the undo dialog", async () => {
+    setLocale({ ...US_ENGLISH, tag: "de-DE", label: "German (Germany)", date_template: "{day2}.{month2}.{year}" });
+    try {
+      vi.mocked(fetchImports).mockResolvedValue(register([entry({ reverted_on: "2026-11-05" })]));
+      render(<Imports />);
+      const row = (await screen.findByText("savings-2026.csv")).closest("tr") as HTMLElement;
+      const cells = within(row).getAllByRole("cell").map((cell) => cell.textContent);
+      expect(cells[0]).toBe("02.11.2026");
+      expect(within(row).getByText("Reverted on 05.11.2026")).toBeTruthy();
+      expect(screen.queryByText(/2026-11/)).toBeNull();
+    } finally {
+      setLocale(null);
+    }
+  });
+
   it("says when an import was reverted, and offers no Undo for it", async () => {
     vi.mocked(fetchImports).mockResolvedValue(register([entry({ reverted_on: "2026-11-05" })]));
     render(<Imports />);
-    expect(await screen.findByText("Reverted on 2026-11-05")).toBeTruthy();
+    expect(await screen.findByText("Reverted on Nov 5, 2026")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Undo/ })).toBeNull();
   });
 
@@ -103,7 +119,7 @@ describe("Undo on the Imports page", () => {
     await openUndo();
     await screen.findByRole("button", { name: "Undo import" });
     const dialog = screen.getByRole("dialog", { name: "Undo this import?" });
-    expect(dialog.textContent).toContain("savings-2026.csv, imported into Demo Savings on 2026-11-02 by Demo Admin.");
+    expect(dialog.textContent).toContain("savings-2026.csv, imported into Demo Savings on Nov 2, 2026 by Demo Admin.");
     expect(dialog.textContent).toContain("297 balances the import added will be deleted.");
     expect(dialog.textContent).toContain("3 balances it replaced will get their old amounts, notes and sources back.");
     expect(dialog.textContent).toContain("An undo cannot be undone");
@@ -133,7 +149,7 @@ describe("Undo on the Imports page", () => {
     vi.mocked(undoImport).mockResolvedValue({ deleted: 297, restored: 3, after: register([entry({ reverted_on: "2026-11-05" })]) });
     await openUndo();
     fireEvent.click(await screen.findByRole("button", { name: "Undo import" }));
-    expect(await screen.findByText("Reverted on 2026-11-05")).toBeTruthy();
+    expect(await screen.findByText("Reverted on Nov 5, 2026")).toBeTruthy();
     expect(undoImport).toHaveBeenCalledWith(1);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("status").textContent).toBe("Undid savings-2026.csv: 297 balances deleted and 3 restored.");
@@ -144,7 +160,7 @@ describe("Undo on the Imports page", () => {
     await openUndo();
     const dialog = await screen.findByRole("dialog", { name: "This import can’t be undone yet" });
     expect(within(dialog).getAllByRole("row").map((row) => row.textContent)).toEqual([
-      "2026-03-31Edited since the import", "2026-04-30Deleted since the import"]);
+      "Mar 31, 2026Edited since the import", "Apr 30, 2026Deleted since the import"]);
     expect(dialog.textContent).toContain("and 4 more.");
     expect(dialog.textContent).toContain("Nothing was changed. Fix these balances by hand, then try Undo again.");
     expect(within(dialog).queryByRole("button", { name: "Undo import" })).toBeNull();
@@ -167,7 +183,7 @@ describe("Undo on the Imports page", () => {
     await openUndo();
     fireEvent.click(await screen.findByRole("button", { name: "Undo import" }));
     const dialog = await screen.findByRole("dialog", { name: "This import can’t be undone yet" });
-    expect(dialog.textContent).toContain("2026-02-28");
+    expect(dialog.textContent).toContain("Feb 28, 2026");
     vi.mocked(fetchImports).mockClear();
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     await vi.waitFor(() => expect(fetchImports).toHaveBeenCalledTimes(1));

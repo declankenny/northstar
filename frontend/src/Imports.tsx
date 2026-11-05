@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fetchImports, fetchUndoPlan, type ImportEntry, undoImport, type UndoDone, type UndoPlan, type UndoRefusal } from "./api";
+import { formatDate } from "./dates";
 import { Modal, useAction } from "./Dialogs";
 import { plural } from "./importLogic";
 import { Link } from "./router";
@@ -21,7 +22,7 @@ function AccountCell({ entry }: { entry: ImportEntry }) {
 /** Which import, in words: "savings.csv, imported into Demo Savings on 2026-11-02 by Demo Admin." */
 function describe(entry: ImportEntry): string {
   const where = entry.account_name === null ? "" : ` into ${entry.account_name}`;
-  return `${entry.file ?? "An unnamed file"}, imported${where} on ${entry.date} by ${entry.by}.`;
+  return `${entry.file ?? "An unnamed file"}, imported${where} on ${formatDate(entry.date)} by ${entry.by}.`;
 }
 
 function Refused({ entry, refusal, onClose }: { entry: ImportEntry; refusal: UndoRefusal; onClose: () => void }) {
@@ -34,7 +35,7 @@ function Refused({ entry, refusal, onClose }: { entry: ImportEntry; refusal: Und
             <table>
               <tbody>
                 {refusal.blocked.map((item) => (
-                  <tr key={item.date}><td className="num">{item.date}</td><td>{item.why}</td></tr>
+                  <tr key={item.date}><td className="num">{formatDate(item.date)}</td><td>{item.why}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -131,7 +132,7 @@ export function Imports() {
               <tbody>
                 {data.imports.map((entry) => (
                   <tr key={entry.id}>
-                    <td className="num">{entry.date}</td>
+                    <td className="num">{formatDate(entry.date)}</td>
                     <td>{entry.by}</td>
                     <td><AccountCell entry={entry} /></td>
                     <td>{entry.file ?? "Unnamed file"}</td>
@@ -139,7 +140,7 @@ export function Imports() {
                     <td className="num r">{formatInteger(entry.replaced)}</td>
                     <td>
                       {entry.reverted_on !== null
-                        ? <span className="reverted">Reverted on {entry.reverted_on}</span>
+                        ? <span className="reverted">Reverted on {formatDate(entry.reverted_on)}</span>
                         : <button className="btn ghost small" onClick={() => { setNotice(null); setUndoing(entry); }}>Undo&hellip;</button>}
                     </td>
                   </tr>
