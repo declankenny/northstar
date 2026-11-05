@@ -195,7 +195,7 @@ def test_a_supported_tag_is_accepted_and_does_not_lock_the_default(conn):
 
 @pytest.mark.parametrize("text", ["xx-XX", "de-de", "German", "en_US", "en-US; DROP TABLE users", "' OR '1'='1"])
 def test_an_unsupported_tag_is_refused_and_nothing_changes(conn, text):
-    with pytest.raises(ValidationError, match="Choose a number and date format from the list"):
+    with pytest.raises(ValidationError, match="isn't a supported number and date format"):
         sp.set_property(op(conn), "ui.locale.default", text)
     assert sp.get_value(conn, "ui.locale.default") == "en-US"
 
@@ -288,7 +288,7 @@ def test_the_properties_page_lists_the_locales_for_its_search_box(client):
 
 def test_an_admin_sets_the_default_from_the_page_and_a_bad_tag_is_a_422(client):
     refused = client.put("/api/system-properties/ui.locale.default", json={"value": "nope"})
-    assert refused.status_code == 422 and "Choose a number and date format" in refused.json()["detail"]
+    assert refused.status_code == 422 and "isn't a supported number and date format" in refused.json()["detail"]
     saved = client.put("/api/system-properties/ui.locale.default", json={"value": "fr-FR"})
     row = {p["name"]: p for p in saved.json()["properties"]}["ui.locale.default"]
     assert (row["value"], row["read_only"], row["options"]) == ("fr-FR", False, [])

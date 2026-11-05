@@ -173,7 +173,7 @@ def test_it_is_validated_by_the_catalog_not_by_its_shape(conn):
     assert names == ["catalog_currency"]
     unset_currency(conn)
     for text in ("ZZZ", "usd", "US", "XAU", "BGN"):
-        with pytest.raises(ValidationError, match="Choose a currency from the list"):
+        with pytest.raises(ValidationError, match="isn't a currency in the catalog"):
             sp.set_property(op(conn), "system.currency", text)
     assert sp.get_value(conn, "system.currency") is None
 
@@ -218,7 +218,7 @@ def test_an_admin_sets_it_through_the_page_endpoint_and_a_bad_code_is_a_422(clie
     with with_db(client) as conn:
         unset_currency(conn)
     refused = client.put("/api/system-properties/system.currency", json={"value": "usd"})
-    assert refused.status_code == 422 and "Choose a currency from the list" in refused.json()["detail"]
+    assert refused.status_code == 422 and "isn't a currency in the catalog" in refused.json()["detail"]
     saved = client.put("/api/system-properties/system.currency", json={"value": "CHF"})
     assert saved.status_code == 200
     row = {p["name"]: p for p in saved.json()["properties"]}["system.currency"]

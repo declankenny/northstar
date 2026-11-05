@@ -152,15 +152,9 @@ export function SystemProperties({ onCurrencyChange }: { onCurrencyChange?: () =
                       </datalist>
                     </>
                   ) : p.name === LOCALE_DEFAULT ? (
-                    <>
-                      {/* The browser's own search box over the supported formats, as for the currency. The server checks the tag
-                          against the catalog, so text that is not in the list is refused. */}
-                      <input aria-label={p.name} list="sp-locales" value={text} disabled={p.read_only} autoComplete="off" spellCheck={false}
-                        placeholder="Search by name or tag" onChange={(e) => edit(p, e.target.value)} />
-                      <datalist id="sp-locales">
-                        {list.locales.map((l) => <option key={l.tag} value={l.tag}>{l.label}</option>)}
-                      </datalist>
-                    </>
+                    <select aria-label={p.name} value={text} disabled={p.read_only} onChange={(e) => edit(p, e.target.value)}>
+                      {list.locales.map((l) => <option key={l.tag} value={l.tag}>{l.label}</option>)}
+                    </select>
                   ) : (
                     <input aria-label={p.name} value={text} disabled={p.read_only} placeholder={p.allow_null ? "Not set" : ""}
                       onChange={(e) => edit(p, e.target.value)} />

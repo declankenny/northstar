@@ -198,7 +198,7 @@ def test_a_valid_string_is_stored_trimmed(conn):
     ("balance.stale", "-3", "Enter a whole number of 1 or more."),
     ("ui.theme.default", "purple", "Choose one of the listed options."),
     ("ui.theme.default", "Dark", "Choose one of the listed options."),
-    ("system.currency", "usd", "Choose a currency from the list."),
+    ("system.currency", "usd", "That isn't a currency in the catalog."),
     ("system.currency", "x" * 257, "Use 256 characters or fewer."),
 ])
 def test_a_bad_value_is_refused_with_its_message_and_nothing_is_written(conn, name, text, message):

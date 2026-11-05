@@ -95,7 +95,7 @@ A String system property, seeded `en-US`, not nullable, editable by an admin. Hi
 
 - A validator `catalog_locale` is registered in `VALIDATORS` and linked in `ref_property_validators` at position 1. After the generic checks it requires an exact match against `ref_locales.tag` through a parameterised query, refuses anything else with a clear message, and accepts without locking, so the default can change later.
 - There are no `ref_property_lookups` rows. `ref_locales` is the single source of supported tags and labels, so adding a locale needs no duplicate property data.
-- The System properties page receives the catalog with its response and offers the locales as a search box, as it does for the system currency, so the value is never free text.
+- The System properties page receives the catalog with its response and offers the locales as a dropdown of their names, because there are few of them, so the value is never free text. The system currency, with 155 entries, is a search box instead.
 - Using a String property and a foreign key on `users.locale` is intentional: one lives in a generic property table and the other in a dedicated column, so they are enforced by different mechanisms.
 - A reactivated user takes the current default, as the theme does. Active users are never changed by a new default.
 - There are no properties for separators, templates or currency placement. Those are application conventions.
