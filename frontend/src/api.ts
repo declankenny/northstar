@@ -504,3 +504,10 @@ export async function fetchImportReview(accountId: number, settings: ImportSetti
 export async function commitImport(accountId: number, settings: ImportSettings, reviewed: ImportReviewed): Promise<ImportResult> {
   return (await send<ImportResult>("POST", importUrl(accountId, "commit"), { ...importBody(settings), reviewed }))!;
 }
+
+/** One row of the admin Currencies page: the catalog entry as stored, and how many accounts use it. */
+export type CurrencyRow = { code: string; name: string; minor_units: number; is_enabled: boolean; account_count: number };
+
+export async function fetchCurrencies(signal?: AbortSignal): Promise<{ currencies: CurrencyRow[] }> {
+  return (await send<{ currencies: CurrencyRow[] }>("GET", "/api/currencies", undefined, signal))!;
+}

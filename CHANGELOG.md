@@ -12,6 +12,8 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 - A currency for every account (#125). The ISO 4217 catalog of 155 currencies is built in, every account has a currency that is set when it is created and never changes, and the installation has one system currency, set on the System properties page with a search box over the catalog (by code or name). It is chosen once before the first account and locked as soon as it is saved. An upgraded installation with any account is set to US dollars and locked. One with none starts unset, and the Add account dialog says to set the currency first (the server refuses too). Amounts are entered and shown in the currency's own digits (whole yen, three places for dinars), and an export writes an account's own digits. Accounts in different currencies, exchange rates and locale formatting come later in 0.3.
 
+- A Currencies page for admins (#141), under Admin in the sidebar: the currency catalog as a searchable list with each currency's code, name, decimal places, whether it is enabled and how many accounts use it, and filters for all, in use and enabled. It is read-only.
+
 ### Breaking
 
 - Migrations: `0010_currencies` adds the `currencies` table and rebuilds `accounts` to add `currency_id`, and `system.currency` is now checked against the catalog. A checked backup is made first. No amount changes: the money column keeps its name and now holds the minor unit of the account's currency, which is cents for every existing account. No new environment variables and no change to the backup format. A fresh installation, or an upgraded one with no accounts, must set the system currency on the System properties page before adding the first account.

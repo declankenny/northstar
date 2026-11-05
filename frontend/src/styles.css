@@ -367,3 +367,10 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 /* The system currency is not set: the Add account dialog says so instead of showing the form. */
 .notice.warn { background: var(--warn-soft); color: var(--warn); border-radius: 9px; padding: 10px 12px; margin: 0 0 12px; }
 a.btn { display: inline-block; text-decoration: none; }
+
+/* The admin Currencies page: a search box beside the filter pills. */
+.cur-bar { display: flex; gap: 12px; align-items: center; margin: 20px 0 14px; flex-wrap: wrap; }
+.cur-bar input { flex: 1; min-width: 220px; }
+.cur-code { font-weight: 600; }
+.cur-yes { color: var(--pos); }
+.cur-count { margin-top: 10px; }

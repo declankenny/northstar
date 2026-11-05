@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 
 from northstar import config, db, sessions, throttle, users
-from northstar.web import (account_api, api_routes, auth_routes, errors, import_api, imports_api, profile_api, security_headers,
+from northstar.web import (account_api, api_routes, auth_routes, currencies_api, errors, import_api, imports_api, profile_api, security_headers,
                            system_properties_api, types_api, update_api, users_api, version_api)
 
 WEB_DIR = Path(__file__).parent
@@ -84,6 +84,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.include_router(auth_routes.router)
     app.include_router(types_api.router)
     app.include_router(system_properties_api.router)
+    app.include_router(currencies_api.router)
     app.include_router(api_routes.router)
     app.include_router(account_api.router)
     app.include_router(update_api.router)

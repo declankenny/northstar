@@ -10,6 +10,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/users")).toBe("users");
     expect(routeFromPath("/imports")).toBe("imports");
     expect(routeFromPath("/system-properties")).toBe("properties");
+    expect(routeFromPath("/currencies")).toBe("currencies");
     expect(routeFromPath("/profile")).toBe("profile");
     expect(routeFromPath("/login")).toBe("login");
   });
@@ -59,6 +60,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath(PATHS.types)).toBe("types");
     expect(routeFromPath(PATHS.users)).toBe("users");
     expect(routeFromPath(PATHS.properties)).toBe("properties");
+    expect(routeFromPath(PATHS.currencies)).toBe("currencies");
     expect(routeFromPath(PATHS.profile)).toBe("profile");
   });
 });

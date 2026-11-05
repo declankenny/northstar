@@ -72,6 +72,18 @@ def catalog(conn: sqlite3.Connection) -> list[dict]:
     return [dict(row) for row in conn.execute("SELECT code, name, minor_units FROM currencies ORDER BY code")]
 
 
+def list_with_counts(conn: sqlite3.Connection) -> list[dict]:
+    """Every currency with its stored `is_enabled` flag and how many accounts use it, open or closed but not deleted, for the
+    admin Currencies page. It reads only the catalog and the accounts: it does not know which currency is the system currency."""
+    return [
+        {"code": row["code"], "name": row["name"], "minor_units": row["minor_units"],
+         "is_enabled": bool(row["is_enabled"]), "account_count": row["account_count"]}
+        for row in conn.execute(
+            "SELECT c.code, c.name, c.minor_units, c.is_enabled, "
+            "       (SELECT COUNT(*) FROM live_accounts a WHERE a.currency_id = c.id) AS account_count "
+            "FROM currencies c ORDER BY c.code")]
+
+
 def account_currency(conn: sqlite3.Connection, account_id: int) -> Currency:
     """The currency of an account that is not deleted."""
     row = conn.execute(

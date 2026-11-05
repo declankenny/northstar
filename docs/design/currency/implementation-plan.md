@@ -14,6 +14,7 @@ Steps with the same number can be done in any order or in parallel.
 | 1 | New brand mark, light and dark | none | [#76](https://github.com/declankenny/northstar/issues/76) | none (best after #65) |
 | 2 | System Properties | none | [#124](https://github.com/declankenny/northstar/issues/124) | none |
 | 3 | Currency catalog, account currency and USD migration | #56 | [#125](https://github.com/declankenny/northstar/issues/125) | #124 |
+| 3 | Admin Currencies page: the catalog as a read-only list | #56 | [#141](https://github.com/declankenny/northstar/issues/141) | #125 |
 | 4 | Locale core: per-user locale, parser, date formatter | #56 | [#126](https://github.com/declankenny/northstar/issues/126) | #125 |
 | 4 | Importer and exporter on account currency | #56 | [#128](https://github.com/declankenny/northstar/issues/128) | #125 |
 | 4 | Rates and conversion | #56 | [#130](https://github.com/declankenny/northstar/issues/130) | #125 |
@@ -51,6 +52,12 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 - Scope: the currencies table and catalog, `currency` on accounts set at creation and never edited, the migration rule for the system currency, the Add Account guard, and the single-currency interface.
 - Tests: precision and entry limits per currency; an account's currency cannot change; migration from v0.2 for both the USD and the unset cases; the guard refuses on the server as well as in the UI; backup, restore and upgrade.
 - Docs: a mockup of the currency choice first; the minor-unit decisions entry above.
+
+### 3b. Admin Currencies page (#141)
+
+- Scope: a read-only admin page, Currencies under Admin in the sidebar, listing the catalog as stored with each currency's decimal places, its enabled flag and its live account count, with search and filters. It does not know the system currency. The enable control, row links to rates and the Add Currency wizard come with #130 and #131.
+- Tests: the list and counts through the endpoint (open and closed counted, deleted not), admin-only on the server and the page, search and filters.
+- Docs: a mockup first, which was agreed on the issue.
 
 ### 4a. Locale core (#126)
 
