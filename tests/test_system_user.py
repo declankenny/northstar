@@ -39,7 +39,7 @@ def test_every_table_is_either_a_sys_table_or_a_household_table_with_audit_colum
 def test_ref_tables_carry_no_audit_columns(conn):
     names = [row[0] for row in conn.execute(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'ref\\_%' ESCAPE '\\'")]
-    assert sorted(names) == ["ref_property_data_types", "ref_property_lookups", "ref_property_validators"]
+    assert sorted(names) == ["ref_locales", "ref_property_data_types", "ref_property_lookups", "ref_property_validators"]
     for name in names:
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({name})")}
         assert not columns & set(AUDIT), name

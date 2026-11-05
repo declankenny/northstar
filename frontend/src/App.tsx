@@ -11,6 +11,7 @@ import { Imports } from "./Imports";
 import { Profile } from "./Profile";
 import { SignIn } from "./SignIn";
 import { SystemProperties } from "./SystemProperties";
+import { setLocale } from "./locale";
 import { setCurrency } from "./money";
 import { Link, usePath } from "./router";
 import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
@@ -52,10 +53,12 @@ function Shell() {
   const accountId = accountIdFromPath(path);
   const importId = importAccountIdFromPath(path);
   const { data: version } = useRequest(fetchVersion, []);      // a footer only: the app works without it, so a failure is ignored
-  const { data: me, setData: setMe } = useRequest(fetchMe, []);
+  const { data: me, error: meError, setData: setMe, reload: reloadMe } = useRequest(fetchMe, []);
 
-  // Every amount on every page is in the system currency, so tell the money module before the pages render.
+  // Every amount on every page is in the system currency and every number and date in the person's locale, so tell the
+  // modules before the pages render.
   setCurrency(me?.currency ?? null);
+  setLocale(me?.locale ?? null);
 
   // The account's theme wins over whatever this browser remembered.
   const theme = me?.theme;
@@ -77,6 +80,23 @@ function Shell() {
       throw error;
     }
   };
+
+  // Nothing that shows or takes an amount or a date is drawn until the person's locale is known, so a form is never started under
+  // an assumed format. The sign-in page is not part of this shell.
+  if (!me) {
+    return (
+      <div className="app-wait">
+        {meError ? (
+          <>
+            <p className="notice bad" role="alert">{meError}</p>
+            <button className="btn" onClick={reloadMe}>Try again</button>
+          </>
+        ) : (
+          <p className="empty">Loading…</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="app">

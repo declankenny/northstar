@@ -12,6 +12,9 @@ dependencies = [
 dev = [
     "pytest==9.2.0",
     "httpx==0.28.1",
+    # Reads CLDR for scripts/generate_locales.py and the test that the migrated locales match it. Development only: the
+    # application and its image never read CLDR.
+    "babel==2.18.0",
 ]
 
 [tool.setuptools]

@@ -32,6 +32,7 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 - **An existing installation's system currency** is USD if it has at least one account, and unset otherwise. While it is unset, the Add Account action warns and the server refuses to create an account, until an admin sets the currency on the System Properties screen.
 - **`python -m northstar.users create` is removed** in v0.3, replaced by the setup page. `reset-password` stays.
 - **The setup page's only condition** is whether an admin exists.
+- **#126 and #127 ship together** as stacked pull requests, so the locale can be chosen in the interface from the first release.
 
 ## Steps
 
@@ -61,9 +62,9 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 4a. Locale core (#126)
 
-- Scope: a saved locale per user with a system default, the shared server-side amount parser, and the chosen date formatter.
-- Tests: parser vectors per supported locale including refused ambiguous input; a default affects new users only.
-- Docs: a decisions entry for the date approach.
+- Scope: the `ref_locales` catalog (six locales) generated into a migration, `users.locale` and the `ui.locale.default` property, the shared amount parser and the date and amount formatter with their shared test vectors, `/api/me` carrying the locale, and the authenticated shell waiting for `/api/me`. The design is [locale.md](../locale.md).
+- Tests: parser and formatter vectors per supported locale, including refused input; a changed default affects new users only; the foreign key rejects an unsupported tag; backup, restore and upgrade.
+- Docs: a decisions entry for the table, the generator and the date approach.
 
 ### 4b. Importer and exporter (#128)
 
@@ -78,8 +79,9 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 5a. Locale controls (#127)
 
-- Scope: the locale control on the profile screen and on the admin's new-user flow.
-- Docs: a mockup first.
+- Scope: the "Number and date format" dropdown on the profile screen and on the admin's new-user form, the interpreted-amount preview on single and bulk balance entry, and the check that refuses a save made under a different locale than the saved one. It is stacked on #126 and ships with it.
+- Tests: the preview on every row in the account's own currency; the refusal when the preference changed since the form opened; the dropdown saves on choice.
+- Docs: the mockup is agreed.
 
 ### 5b. Import number style from locale (#129)
 

@@ -5,6 +5,7 @@ import { plural } from "./importLogic";
 import { Link } from "./router";
 import { accountPath } from "./routes";
 import { useRequest } from "./useRequest";
+import { formatInteger } from "./locale";
 
 function AccountCell({ entry }: { entry: ImportEntry }) {
   if (entry.account_id === null) return <span className="reverted">Unknown account</span>;
@@ -37,7 +38,7 @@ function Refused({ entry, refusal, onClose }: { entry: ImportEntry; refusal: Und
                 ))}
               </tbody>
             </table>
-            {refusal.more > 0 && <p className="sub">and {refusal.more.toLocaleString("en-US")} more.</p>}
+            {refusal.more > 0 && <p className="sub">and {formatInteger(refusal.more)} more.</p>}
           </div>
           <p className="sub">Nothing was changed. Fix these balances by hand, then try Undo again.</p>
         </>
@@ -134,8 +135,8 @@ export function Imports() {
                     <td>{entry.by}</td>
                     <td><AccountCell entry={entry} /></td>
                     <td>{entry.file ?? "Unnamed file"}</td>
-                    <td className="num r">{entry.added.toLocaleString("en-US")}</td>
-                    <td className="num r">{entry.replaced.toLocaleString("en-US")}</td>
+                    <td className="num r">{formatInteger(entry.added)}</td>
+                    <td className="num r">{formatInteger(entry.replaced)}</td>
                     <td>
                       {entry.reverted_on !== null
                         ? <span className="reverted">Reverted on {entry.reverted_on}</span>
@@ -153,7 +154,7 @@ export function Imports() {
         <UndoDialog entry={undoing}
           onDone={(done) => {
             setData(done.after);
-            setNotice(`Undid ${undoing.file ?? "the import"}: ${plural(done.deleted, "balance")} deleted and ${done.restored.toLocaleString("en-US")} restored.`);
+            setNotice(`Undid ${undoing.file ?? "the import"}: ${plural(done.deleted, "balance")} deleted and ${formatInteger(done.restored)} restored.`);
             setUndoing(null);
           }}
           onClose={(changed) => { setUndoing(null); if (changed) reload(); }} />

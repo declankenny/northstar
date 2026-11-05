@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { type CurrencyRow, fetchCurrencies } from "./api";
 import { useRequest } from "./useRequest";
+import { formatInteger } from "./locale";
 
 type Filter = "all" | "use" | "enabled";
 const FILTERS: { id: Filter; label: string }[] = [
@@ -65,7 +66,7 @@ export function Currencies() {
                     <td>{c.name}</td>
                     <td className="num r">{c.minor_units}</td>
                     <td>{c.is_enabled ? <span className="cur-yes">Yes</span> : <span className="m">No</span>}</td>
-                    <td className="num r">{c.account_count.toLocaleString("en-US")}</td>
+                    <td className="num r">{formatInteger(c.account_count)}</td>
                   </tr>
                 ))}
               </tbody>

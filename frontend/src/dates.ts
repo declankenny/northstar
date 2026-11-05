@@ -2,6 +2,8 @@
 // Nothing here creates a JavaScript Date: new Date("2026-10-30") reads as UTC midnight, which
 // shows as Oct 29 in the US. Days are counted as whole numbers instead (days since 1970-01-01).
 
+import { getLocale } from "./locale";
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -56,8 +58,12 @@ export function addMonths(iso: string, months: number): string {
   return `${ny}-${pad(nm)}-${pad(Math.min(d, daysInMonth(ny, nm)))}`;
 }
 
-/** "2026-05-17" becomes "May 17, 2026". */
+/** "2026-05-17" becomes "May 17, 2026", "17.05.2026" or "2026/05/17", by the person's locale. The template is filled from the text
+ *  of the date, so no JavaScript Date is created. Month names are English, like the rest of the interface. */
 export function formatDate(iso: string): string {
   const [y, m, d] = parts(iso);
-  return `${MONTHS[m - 1]} ${d}, ${y}`;
+  const pieces: Record<string, string> = {
+    "{year}": String(y), "{month}": String(m), "{month2}": pad(m), "{month_short}": MONTHS[m - 1], "{day}": String(d), "{day2}": pad(d),
+  };
+  return getLocale().date_template.replace(/\{[a-z_0-9]+\}/g, (piece) => pieces[piece] ?? piece);
 }

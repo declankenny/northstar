@@ -8,6 +8,7 @@ const INITIALS = new Set(["ui"]);
 const title = (group: string) => (INITIALS.has(group) ? group.toUpperCase() : group.charAt(0).toUpperCase() + group.slice(1));
 const stored = (p: PropertyRow) => p.value ?? "";
 const SYSTEM_CURRENCY = "system.currency";
+const LOCALE_DEFAULT = "ui.locale.default";
 
 /** The admin page for the installation's settings: a list of groups on the left, the chosen group's properties on the right.
  *  What a person has typed stays as a draft until it is saved or reverted, and leaving a group with drafts asks first. */
@@ -148,6 +149,16 @@ export function SystemProperties({ onCurrencyChange }: { onCurrencyChange?: () =
                         placeholder="Search by code or name" onChange={(e) => edit(p, e.target.value)} />
                       <datalist id="sp-currencies">
                         {list.currencies.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                      </datalist>
+                    </>
+                  ) : p.name === LOCALE_DEFAULT ? (
+                    <>
+                      {/* The browser's own search box over the supported formats, as for the currency. The server checks the tag
+                          against the catalog, so text that is not in the list is refused. */}
+                      <input aria-label={p.name} list="sp-locales" value={text} disabled={p.read_only} autoComplete="off"
+                        placeholder="Search by name or tag" onChange={(e) => edit(p, e.target.value)} />
+                      <datalist id="sp-locales">
+                        {list.locales.map((l) => <option key={l.tag} value={l.tag}>{l.label}</option>)}
                       </datalist>
                     </>
                   ) : (

@@ -1,12 +1,13 @@
 # Multi-currency and locale-aware formatting
 
-Status: proposed, not implemented. The design is a draft that Declan has reviewed in discussion but not signed off. Nothing in this folder is the spec or the decisions log. Those change only with the code, in the pull request that implements each step.
+Status: in progress. The currency catalog, account currency and system currency (#125) and the admin Currencies page (#141) are built. The rest is agreed or proposed, as each file says. Nothing in this folder is the spec or the decisions log. Those change only with the code, in the pull request that implements each step.
 
 This folder holds the design for v0.3: accounts held in their own currency, household net worth in one permanent system currency, dated exchange rates, and numbers and dates shown and typed in each user's locale.
 
 | File | What it holds |
 | --- | --- |
 | [design.md](design.md) | The design as drafted on November 3, 2026, with what is decided, what is proposed and what is still open. |
+| [catalog.md](catalog.md) | The currencies in the catalog, as loaded by the first migration of #125. |
 | [implementation-plan.md](implementation-plan.md) | A draft order of work for the whole v0.3 milestone as pull requests. The issues say what is done. |
 
 Related issues: [#56](https://github.com/declankenny/northstar/issues/56) (the epic).

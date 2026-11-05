@@ -21,15 +21,15 @@ afterEach(() => {
 });
 
 describe("amounts in the currency's minor unit", () => {
-  it("shows dollars as before and every other currency with its code", () => {
+  it("shows dollars as before and every other currency with its code and a no-break space", () => {
     expect(formatCents(123456)).toBe("$1,234.56");
     setCurrency(JPY);
-    expect(formatCents(1234567)).toBe("JPY 1,234,567");
-    expect(formatCents(-5)).toBe("-JPY 5");
+    expect(formatCents(1234567)).toBe("JPY 1,234,567");
+    expect(formatCents(-5)).toBe("-JPY 5");
     setCurrency(KWD);
-    expect(formatCents(1234)).toBe("KWD 1.234");
-    expect(formatCents(-1)).toBe("-KWD 0.001");
-    expect(formatCents(0)).toBe("KWD 0.000");
+    expect(formatCents(1234)).toBe("KWD 1.234");
+    expect(formatCents(-1)).toBe("-KWD 0.001");
+    expect(formatCents(0)).toBe("KWD 0.000");
   });
 
   it("reads typed text with the currency's digits and refuses more", () => {
@@ -107,7 +107,7 @@ describe("the system currency on the System properties page", () => {
     name: "system.currency", type: "String", value: null, allow_null: false, hint: "A hint.", read_only: false, options: [], ...over,
   });
   const page = (over: Partial<PropertyRow> = {}): PropertyList => ({
-    properties: [property(over)], currencies: [{ ...USD, name: "US Dollar" }, JPY, KWD],
+    properties: [property(over)], currencies: [{ ...USD, name: "US Dollar" }, JPY, KWD], locales: [],
   });
 
   it("is a search box over the catalog, one option per currency with its code and name", async () => {
@@ -148,5 +148,42 @@ describe("the system currency on the System properties page", () => {
     fireEvent.change(await screen.findByLabelText("system.currency"), { target: { value: "ZZZ" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Choose a currency from the list.");
+  });
+});
+
+describe("the default number and date format on the System properties page", () => {
+  const property = (over: Partial<PropertyRow> = {}): PropertyRow => ({
+    name: "ui.locale.default", type: "String", value: "en-US", allow_null: false, hint: "A hint.", read_only: false, options: [], ...over,
+  });
+  const page = (over: Partial<PropertyRow> = {}): PropertyList => ({
+    properties: [property(over)], currencies: [],
+    locales: [{ tag: "de-DE", label: "German (Germany)" }, { tag: "en-US", label: "English (United States)" }],
+  });
+
+  it("is a search box over the supported formats, one option per tag with its label", async () => {
+    vi.mocked(fetchProperties).mockResolvedValue(page());
+    const { container } = render(<SystemProperties />);
+    const box = await screen.findByLabelText("ui.locale.default");
+    expect(box.getAttribute("list")).toBe("sp-locales");
+    const options = [...container.querySelectorAll("datalist#sp-locales option")];
+    expect(options.map((o) => [o.getAttribute("value"), o.textContent])).toEqual([
+      ["de-DE", "German (Germany)"], ["en-US", "English (United States)"]]);
+  });
+
+  it("saves the tag that was chosen, stays editable, and shows the refusal beside the box", async () => {
+    const { RequestError } = await import("./api");
+    vi.mocked(fetchProperties).mockResolvedValue(page());
+    vi.mocked(saveProperty).mockRejectedValueOnce(new RequestError("Choose a number and date format from the list.", {}, 422, [], null, []));
+    render(<SystemProperties />);
+    const box = await screen.findByLabelText("ui.locale.default");
+    fireEvent.change(box, { target: { value: "xx-XX" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Choose a number and date format from the list.");
+    vi.mocked(saveProperty).mockResolvedValue(page({ value: "de-DE" }));
+    fireEvent.change(box, { target: { value: "de-DE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Saved");
+    expect(saveProperty).toHaveBeenLastCalledWith("ui.locale.default", "de-DE");
+    expect((screen.getByLabelText("ui.locale.default") as HTMLInputElement).disabled).toBe(false);
   });
 });

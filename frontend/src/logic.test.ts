@@ -92,7 +92,8 @@ describe("parseCents", () => {
     expect(parseCents("$25")).toBe(2500);
     expect(parseCents("-$25.00")).toBe(-2500);
     expect(parseCents("-25")).toBe(-2500);
-    expect(parseCents(" 12 000.5 ")).toBe(1200050); // spaces are dropped, as on the server
+    expect(parseCents(" 12000.5 ")).toBe(1200050); // surrounding spaces go; spaces inside are not a group mark in US English
+    expect(parseCents("12 000.5")).toBeNull();
     expect(parseCents("0")).toBe(0);
     expect(parseCents("-0")).toBe(0);
     expect(parseCents(".5")).toBe(50);

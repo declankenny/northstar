@@ -40,6 +40,10 @@ Use synthetic data only, always: no real balances, account numbers or credential
 - A schema change is a forward-only migration, and a released migration is never edited.
 - Each new dependency needs a reason, and the project keeps them few. Versions are pinned exactly.
 
+## Locales
+
+The number and date formats are rows of `ref_locales`, loaded by a migration that `scripts/generate_locales.py` writes from the Unicode CLDR. Nothing at run time reads CLDR, and Babel, which reads it, is a development dependency only. To add a locale, put it on the allowlist in the script, run `python scripts/generate_locales.py` (it needs Node, to cross-check the result) and then `--write` into a new migration, and review the rows. The script refuses a locale whose conventions go beyond the rules in `docs/design/locale.md`. The tests fail if the migrated rows differ from what the script generates.
+
 ## Pull requests
 
 The pull request description says **what changed**, **what was verified** and **what was not**. The template asks for these, and being honest about the last one is the most useful thing you can write.

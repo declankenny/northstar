@@ -14,13 +14,19 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 - A Currencies page for admins (#141), under Admin in the sidebar: the currency catalog as a searchable list with each currency's code, name, decimal places, whether it is enabled and how many accounts use it, and filters for all, in use and enabled. It is read-only.
 
+- A number and date format for each person (#126). Amounts and dates are shown and typed in the person's own conventions, such as `1.234,56` and `07.05.2026`. Six formats are supported to start with: US and UK English, German (Germany and Switzerland), French and Japanese. Existing users keep the US English display they had. A new user takes the default format, which an admin sets on the System properties page. The format is chosen from the profile screen (#127).
+- The page now waits for your account's details before it shows anything signed in, and offers to try again if they cannot be loaded.
+
 ### Breaking
 
+- Migrations: `0011_locales` adds the `ref_locales` table and a `locale` column on users, and a new system property `ui.locale.default`. A checked backup is made first. No new environment variables and no change to the backup format.
 - Migrations: `0010_currencies` adds the `currencies` table and rebuilds `accounts` to add `currency_id`, and `system.currency` is now checked against the catalog. A checked backup is made first. No amount changes: the money column keeps its name and now holds the minor unit of the account's currency, which is cents for every existing account. No new environment variables and no change to the backup format. A fresh installation, or an upgraded one with no accounts, must set the system currency on the System properties page before adding the first account.
 - Migrations: four new tables hold the system properties, and the first three properties are added. A checked backup is made first. Nothing else changes for an existing installation, and there are no new environment variables and no change to the backup format.
 
 ### Changed
 
+- Typed amounts no longer ignore every space: a space is accepted only as the group mark of a locale that uses one (such as French), so `1 2` is refused where it used to read as 12. Currency codes are separated from the number by a no-break space.
+- A third-party notices file, `THIRD_PARTY_NOTICES.md`, carries the Unicode CLDR licence for the locale data, and the image includes it, with the licence, under `/licenses/`.
 - The image's base, `python:3.15-slim`, is moved to a newer build whose `apt` is 3.0.4, which fixes CVE-2026-109518 (HIGH) that the image scan reported in 3.0.3. Nothing else in the image changes.
 - The Add type form starts a new account type at the `balance.stale` system property, 35 days until an admin changes it, where the 35 was fixed in the form. Existing types keep their own days, and any number of at least 1 can still be typed.
 - The sidebar and the sign-in page show the new brand mark in place of the plain star (#76), as a pair of images that follows the theme you chose in Northstar, not the operating system's: a white road on a blue tile on the light theme, and a blue road on a white tile on the dark one. The browser tab icon is unchanged.

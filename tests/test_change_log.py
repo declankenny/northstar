@@ -74,7 +74,7 @@ def test_only_ids_secrets_and_generated_metadata_are_unlogged(conn):
     unlogged = {(row[0], row[1]) for row in conn.execute("SELECT tablename, fieldname FROM sys_audited_fields WHERE is_logged = 0")}
     tables = {table for table, _ in unlogged}
     expected = {(table, column) for table in tables for column in ("id", "updated_at", "updated_by")}
-    expected |= {("balances", "version"), ("users", "password_hash"), ("users", "theme"), ("users", "is_system")}
+    expected |= {("balances", "version"), ("users", "password_hash"), ("users", "theme"), ("users", "locale"), ("users", "is_system")}
     assert unlogged == expected
     logged = {(row[0], row[1]) for row in conn.execute("SELECT tablename, fieldname FROM sys_audited_fields WHERE is_logged = 1")}
     assert {(t, "created_at") for t in tables} | {(t, "created_by") for t in tables} <= logged     # so a restore keeps them

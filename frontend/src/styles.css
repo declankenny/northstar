@@ -374,3 +374,6 @@ a.btn { display: inline-block; text-decoration: none; }
 .cur-code { font-weight: 600; }
 .cur-yes { color: var(--pos); }
 .cur-count { margin-top: 10px; }
+
+/* The signed-in shell while it waits for the person's locale, or after that failed. */
+.app-wait { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; max-width: 480px; margin: 0 auto; padding: 64px 24px; }
