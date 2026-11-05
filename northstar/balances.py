@@ -174,29 +174,37 @@ def record_balance(op: Operation, account_id: int, as_of: date, cents: int,
 
 
 def add_balance(op: Operation, account_id: int, date_text: str | None,
-                amount_text: str | None, note: str | None, today: date) -> str:
-    """The detail page's Add a balance form: typed text in, 'added', 'updated' or 'unchanged' out."""
+                amount_text: str | None, note: str | None, today: date, locale_tag: str | None = None) -> str:
+    """The detail page's Add a balance form: typed text in, 'added', 'updated' or 'unchanged' out. A form says which locale it
+    was using in `locale_tag`, and is refused with LocaleChanged, writing nothing, if the person's saved one is now another."""
     as_of = parse_date(date_text, today)
-    cents = parse_for(currencies.account_currency(op.conn, account_id), amount_text, locales.for_user(op.conn, op.actor_id))
-    return record_balance(op, account_id, as_of, cents, note)
+    cents = parse_for(currencies.account_currency(op.conn, account_id), amount_text,
+                      locales.reading_locale(op.conn, op.actor_id, locale_tag))
+    with db.write_transaction(op.conn):
+        locales.require_current(op.conn, op.actor_id, locale_tag)
+        return record_balance(op, account_id, as_of, cents, note)
 
 
 def add_account_with_balance(op: Operation, class_slug: str | None, name: str | None,
                              type_id: int | None, notes: str | None, amount_text: str | None,
-                             date_text: str | None, today: date) -> int:
+                             date_text: str | None, today: date, locale_tag: str | None = None) -> int:
     """Add an account, and its first balance when an amount is typed, all or nothing. Returns the id.
 
     A blank amount adds the account with no balance and the date is ignored. A typed amount with a
-    blank date is as of today. Anything wrong refuses the whole thing, so no half-made account is left.
+    blank date is as of today. Anything wrong refuses the whole thing, so no half-made account is left. A form says which
+    locale it was using in `locale_tag`: with an amount typed, it is refused with LocaleChanged if the saved one is now another.
     """
     conn = op.conn
     cls = accounts.get_class_by_slug(conn, class_slug)
     currency = currencies.require_system_currency(conn)        # refused before anything is read from the form
     entry = None
-    if (amount_text or "").strip():
+    typed = bool((amount_text or "").strip())
+    if typed:
         entry = (parse_date((date_text or "").strip() or today.isoformat(), today),
-                 parse_for(currency, amount_text, locales.for_user(conn, op.actor_id)))
+                 parse_for(currency, amount_text, locales.reading_locale(conn, op.actor_id, locale_tag)))
     with db.write_transaction(conn):
+        if typed:
+            locales.require_current(conn, op.actor_id, locale_tag)
         account_id = accounts.add_account(op, name, cls["id"], type_id, notes, currency.id)
         if entry:
             record_balance(op, account_id, entry[0], entry[1])
@@ -226,14 +234,17 @@ def _balance_currency(conn: sqlite3.Connection, balance_id: int) -> currencies.C
 
 
 def update_balance(op: Operation, balance_id: int, date_text: str | None,
-                   amount_text: str | None, note: str | None, today: date, expected_version=UNCHECKED) -> str:
+                   amount_text: str | None, note: str | None, today: date, expected_version=UNCHECKED,
+                   locale_tag: str | None = None) -> str:
     """Change a balance's date, amount and note. Returns 'updated' or 'unchanged'. Given the version the caller loaded, it
-    refuses with ConflictingEdit, before anything else, if the balance has been written since (or deleted)."""
+    refuses with ConflictingEdit, before anything else, if the balance has been written since (or deleted). A form says which
+    locale it was using in `locale_tag`, and is refused with LocaleChanged, writing nothing, if the saved one is now another."""
     conn = op.conn
     as_of = parse_date(date_text, today)
-    cents = parse_for(_balance_currency(conn, balance_id), amount_text, locales.for_user(conn, op.actor_id))
+    cents = parse_for(_balance_currency(conn, balance_id), amount_text, locales.reading_locale(conn, op.actor_id, locale_tag))
     new_note = clean_note(note)
     with db.write_transaction(conn):
+        locales.require_current(conn, op.actor_id, locale_tag)
         if expected_version is not UNCHECKED:
             require_version(conn, balance_id, expected_version)
         balance = get_balance(conn, balance_id)
@@ -295,18 +306,21 @@ def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict
 
 
 def save_update(op: Operation, date_text: str | None,
-                amounts: dict[int, str | None], today: date, expected_versions=UNCHECKED) -> dict[str, int]:
+                amounts: dict[int, str | None], today: date, expected_versions=UNCHECKED,
+                locale_tag: str | None = None) -> dict[str, int]:
     """Save one date's amounts for the open accounts, all or nothing.
 
     Blank amounts are skipped. If any amount is bad, nothing is saved and EntryErrors says which. Given the version of the
     balance each account had on the date when the caller loaded it (None for none), it refuses with ConflictingEdit, naming
     every account whose balance has since changed, been deleted or been added. Returns how many balances were added,
-    updated and left unchanged.
+    updated and left unchanged. A form says which locale it was using in `locale_tag`: with an amount typed, it is refused
+    with LocaleChanged, writing nothing, if the saved one is now another.
     """
     conn = op.conn
     as_of = parse_date(date_text, today)
     open_ids = [r["id"] for r in update_rows(conn, as_of, today)]
-    locale = locales.for_user(conn, op.actor_id)
+    typed = any((amounts.get(account_id) or "").strip() for account_id in open_ids)
+    locale = locales.reading_locale(conn, op.actor_id, locale_tag) if typed else locales.for_user(conn, op.actor_id)
     entered: dict[int, int] = {}
     errors: dict[int, str] = {}
     for account_id in open_ids:
@@ -322,6 +336,8 @@ def save_update(op: Operation, date_text: str | None,
 
     counts = {"added": 0, "updated": 0, "unchanged": 0}
     with db.write_transaction(conn):
+        if typed:
+            locales.require_current(conn, op.actor_id, locale_tag)
         if expected_versions is not UNCHECKED:
             require_versions(conn, as_of, {account_id: expected_versions.get(account_id) for account_id in entered})
         for account_id, cents in entered.items():

@@ -1,8 +1,11 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useContext, useEffect, useRef, useState } from "react";
 import { fetchUpdate, RequestError, saveUpdate, type UpdatePage, type UpdateRow } from "./api";
 import { dayNumber, formatDate, isoFromDay } from "./dates";
 import { Modal } from "./Dialogs";
-import { formatCents } from "./money";
+import { AmountReading } from "./AmountReading";
+import { getLocale } from "./locale";
+import { currencyMark, formatCents } from "./money";
+import { RefreshMe } from "./session";
 import { useLeaveGuard } from "./router";
 import { useLatest } from "./useRequest";
 import { conflictBanner, rowConflictNote } from "./conflicts";
@@ -56,6 +59,22 @@ export function UpdateBalances() {
   const latestRequest = useRef<(date: string) => void>(() => {});
 
   const rows = page?.rows ?? [];
+  const refreshMe = useContext(RefreshMe);
+  // When the person's format changes under the page, the boxes still holding what was loaded are written again in the new
+  // format, and what the person typed is left as it is.
+  const locale = getLocale();
+  const seenLocale = useRef(locale);
+  useEffect(() => {
+    const before = seenLocale.current;
+    if (before.tag === locale.tag) return;
+    seenLocale.current = locale;
+    setValues((now) => Object.fromEntries(rows.map((row) => {
+      const text = now[row.id] ?? "";
+      return [row.id, text === baselineText(row, before) ? baselineText(row) : text];
+    })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the format changes
+  }, [locale.tag]);
+
   const dirty = rows.some((row) => isTyped(row, values[row.id] ?? ""));
   const toSend = changedAmounts(rows, values);
   // While a request runs the form cannot be edited, so an answer can never replace what was just typed.
@@ -147,6 +166,12 @@ export function UpdateBalances() {
       body.current?.scrollTo({ top: 0 });
     } catch (e) {
       const refused = e as RequestError;
+      if (refused.localeChanged) {
+        // Nothing was saved. The page loads the new format, what was typed stays, and it is read in the new format.
+        refreshMe();
+        setBanner({ kind: "bad", text: refused.message });
+        return;
+      }
       if (refused.conflicts?.length) {
         // Nothing was saved. Show the balances as they are now, keep what was typed, and mark the rows that moved on.
         setBanner({ kind: "bad", text: conflictBanner(refused.conflicts.length) });
@@ -228,14 +253,15 @@ export function UpdateBalances() {
                           {row.last_date && <div className="m ub-sub">{formatDate(row.last_date)} · {ago(row.days_since)}</div>}
                         </td>
                         <td className="r">
-                          <div className="ub-in">
-                            <i>$</i>
+                          <div className={currencyMark() === "$" ? "ub-in" : "ub-in code"}>
+                            <i>{currencyMark()}</i>
                             <input data-id={row.id} className="num" inputMode="decimal" autoComplete="off" disabled={busy}
                               aria-label={`New balance for ${row.name}`} aria-invalid={errors[row.id] !== undefined}
                               placeholder={row.class_name === "Asset" ? "balance" : "amount owed"}
                               autoFocus={row.id === first} value={text}
                               onChange={(e) => type(row.id, e.target.value)} onKeyDown={move} />
                           </div>
+                          {errors[row.id] === undefined && <AmountReading text={text} />}
                           <RowNote row={row} text={text} error={errors[row.id]} />
                         </td>
                         <td className="r"><Change row={row} text={text} /></td>

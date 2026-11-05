@@ -12,6 +12,7 @@ import { Profile } from "./Profile";
 import { SignIn } from "./SignIn";
 import { SystemProperties } from "./SystemProperties";
 import { setLocale } from "./locale";
+import { RefreshMe } from "./session";
 import { setCurrency } from "./money";
 import { Link, usePath } from "./router";
 import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
@@ -99,6 +100,7 @@ function Shell() {
   }
 
   return (
+    <RefreshMe.Provider value={reloadMe}>
     <div className="app">
       <nav>
         <Brand />
@@ -151,5 +153,6 @@ function Shell() {
         )}
       </main>
     </div>
+    </RefreshMe.Provider>
   );
 }

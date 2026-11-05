@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { type AccountList, type AccountPage, type BalanceEntry, type BalanceRow, type NewAccount } from "./api";
 import { conflictText } from "./conflicts";
 import { formatDate } from "./dates";
+import { AmountReading } from "./AmountReading";
 import { amountPlaceholder, centsToInput } from "./money";
 import { Modal, useAction } from "./Dialogs";
 import { Link } from "./router";
@@ -67,8 +68,9 @@ export function BalanceDialog(props: {
           Not in the future.{!editing && " A date that already has a balance is replaced."}
         </div>
         <label>Balance
-          <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus />
+          <input inputMode="decimal" placeholder={amountPlaceholder()} value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus />
         </label>
+        <AmountReading text={amount} />
         <label>Note (optional)
           <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
         </label>
@@ -234,6 +236,7 @@ export function AddAccountDialog(props: {
               <input type="date" value={date} max={list.today} onChange={(e) => setDate(e.target.value)} />
             </label>
           </div>
+          <AmountReading text={amount} />
           <div className="hint">
             {owed ? "Enter what is owed as a positive number. Leave it blank to add the account without a balance."
               : "Leave the balance blank to add the account without one."} Amounts are in {list.currency.name} ({list.currency.code}).

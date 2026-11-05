@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
-import { changePassword, type Me, type Theme, updateMe } from "./api";
+import { changePassword, fetchLocales, type Me, type Theme, updateMe } from "./api";
+import { useRequest } from "./useRequest";
 
 type Notice = { ok: boolean; text: string } | null;
 
@@ -36,8 +37,19 @@ function NameForm({ me, onChange }: { me: Me; onChange: (me: Me) => void }) {
   );
 }
 
-function ThemeForm({ me, onTheme }: { me: Me; onTheme: (theme: Theme) => Promise<void> }) {
+function ThemeForm({ me, onTheme, onChange }: { me: Me; onTheme: (theme: Theme) => Promise<void>; onChange: (me: Me) => void }) {
   const [notice, setNotice] = useState<Notice>(null);
+  const { data: choices } = useRequest(fetchLocales, []);
+  // Like the theme, a format is saved as soon as it is chosen.
+  const chooseFormat = (tag: string) => {
+    updateMe({ locale: tag }).then(
+      (updated) => {
+        onChange(updated);
+        setNotice(null);
+      },
+      (e: Error) => setNotice({ ok: false, text: e.message }),
+    );
+  };
   const choose = (theme: Theme) => {
     onTheme(theme).then(
       () => setNotice(null),
@@ -54,6 +66,13 @@ function ThemeForm({ me, onTheme }: { me: Me; onTheme: (theme: Theme) => Promise
           </button>
         ))}
       </div>
+      <label>Number and date format
+        <select value={me.locale.tag} onChange={(e) => chooseFormat(e.target.value)}>
+          {(choices?.locales ?? [{ tag: me.locale.tag, label: me.locale.label }]).map((choice) => (
+            <option key={choice.tag} value={choice.tag}>{choice.label}</option>
+          ))}
+        </select>
+      </label>
       <div className="hint">Saved to your account, so it follows you to other browsers.</div>
       <Message notice={notice} />
     </div>
@@ -113,7 +132,7 @@ export function Profile(props: { me: Me; onChange: (me: Me) => void; onTheme: (t
       <div className="panels two">
         <div className="col">
           <NameForm me={props.me} onChange={props.onChange} />
-          <ThemeForm me={props.me} onTheme={props.onTheme} />
+          <ThemeForm me={props.me} onTheme={props.onTheme} onChange={props.onChange} />
         </div>
         <div className="col">
           <PasswordForm />

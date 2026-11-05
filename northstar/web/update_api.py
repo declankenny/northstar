@@ -47,6 +47,7 @@ class UpdateEntries(BaseModel):
     date: str
     amounts: dict[int, str | None]   # account id to typed text; blank is skipped
     versions: dict[int, int | None]  # for each account sent, the version of its balance on the date when loaded, or None for none
+    locale: str | None = None        # the number and date format the page was using, refused if it is no longer the saved one
 
 
 def _page(conn, date_text: str | None, saved: dict[str, int] | None = None) -> dict:
@@ -66,7 +67,8 @@ def read_update(request: Request, date: str | None = None):
 def save_update(body: UpdateEntries, request: Request):
     """Save one date's amounts, then answer with that date as the server now holds it."""
     def action(conn):
-        counts = balances.save_update(operation(request, conn, "bulk_update", {"date": body.date}), body.date, body.amounts, clock.today(), body.versions)
+        counts = balances.save_update(operation(request, conn, "bulk_update", {"date": body.date}), body.date, body.amounts, clock.today(), body.versions,
+                                       locale_tag=body.locale)
         return _page(conn, body.date, counts)
 
     return run(request, action)

@@ -100,6 +100,7 @@ class NewAccount(BaseModel):
     notes: str | None = None
     amount: str | None = None        # typed text; blank adds the account with no balance
     date: str | None = None          # as of; blank means today
+    locale: str | None = None        # the number and date format the page was using, refused if it is no longer the saved one
 
 
 class AccountChange(BaseModel):
@@ -116,6 +117,7 @@ class BalanceEntry(BaseModel):
     date: str                # typed text, checked by the server
     amount: str
     note: str | None = None
+    locale: str | None = None        # the number and date format the page was using, refused if it is no longer the saved one
 
 
 class BalanceEdit(BalanceEntry):
@@ -145,7 +147,7 @@ def add_account(body: NewAccount, request: Request):
     """Adds the account (and its first balance, if an amount is typed) and answers with the open list."""
     def action(conn):
         balances.add_account_with_balance(operation(request, conn), body.account_class, body.name, body.type_id,
-                                          body.notes, body.amount, body.date, clock.today())
+                                          body.notes, body.amount, body.date, clock.today(), body.locale)
         return _list(conn, closed=False)
     return run(request, action)
 
@@ -208,7 +210,8 @@ def delete_account(account_id: int, request: Request):
 def add_balance(account_id: int, body: BalanceEntry, request: Request):
     """A date that already has a balance is edited."""
     def action(conn):
-        balances.add_balance(operation(request, conn), account_id, body.date, body.amount, body.note, clock.today())
+        balances.add_balance(operation(request, conn), account_id, body.date, body.amount, body.note, clock.today(),
+                             locale_tag=body.locale)
         return _page(conn, account_id)
     return run(request, action)
 
@@ -216,7 +219,8 @@ def add_balance(account_id: int, body: BalanceEntry, request: Request):
 @router.patch("/balances/{balance_id}", response_model=AccountOut)
 def edit_balance(balance_id: int, body: BalanceEdit, request: Request):
     def action(conn):
-        balances.update_balance(operation(request, conn), balance_id, body.date, body.amount, body.note, clock.today(), body.version)
+        balances.update_balance(operation(request, conn), balance_id, body.date, body.amount, body.note, clock.today(), body.version,
+                                locale_tag=body.locale)
         return _page(conn, balances.get_balance(conn, balance_id)["account_id"])
     return run(request, action)
 

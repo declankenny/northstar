@@ -377,3 +377,9 @@ a.btn { display: inline-block; text-decoration: none; }
 
 /* The signed-in shell while it waits for the person's locale, or after that failed. */
 .app-wait { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; max-width: 480px; margin: 0 auto; padding: 64px 24px; }
+
+/* The line under an amount box that says how what is typed is read. It keeps its height so the form does not jump. */
+.reads { font-size: 13px; min-height: 18px; margin: 4px 0 0; }
+.reads.ok { color: var(--pos); }
+.reads.bad { color: var(--neg); }
+.ub-in.code input { padding-left: 46px; }

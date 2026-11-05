@@ -1,6 +1,6 @@
 # Locale: design
 
-Status: the agreed design for #126 (the locale core) and #127 (the places a locale is chosen), dated November 5, 2026. It is part of the v0.3 multi-currency work described in [currency/design.md](currency/design.md), but is its own design because locale is not only about currency. Nothing here is built. It is not the spec or the decisions log, which change only with the code. Everything is agreed unless marked **TODO**, which means unverified or unresolved: do not guess it.
+Status: the agreed design for #126 (the locale core) and #127 (the places a locale is chosen), dated November 5, 2026. It is part of the v0.3 multi-currency work described in [currency/design.md](currency/design.md), but is its own design because locale is not only about currency. #126 is built, and #127 is built with it as the second pull request. It is not the spec or the decisions log, which change only with the code. Everything is agreed unless marked **TODO**, which means unverified or unresolved: do not guess it.
 
 ## Outcome
 
@@ -144,7 +144,7 @@ A small function fills the date template from the `YYYY-MM-DD` text. The fronten
 
 ## Locale changes while a form is open
 
-A money form sends the locale tag it was initialised under. The server compares it with the saved preference in the same transaction as the balance write. On a mismatch it writes nothing, the page keeps the draft and says what changed, and nothing is retried under the new locale. This includes a preference changed in another tab. It is built with #127, where a locale can first change.
+A money form sends the tag of the format the page is using, which changes only when the page loads the person's details again. The server compares it with the saved preference in the same transaction as the balance write. On a mismatch it writes nothing, the page keeps the draft and says what changed, and nothing is retried under the new locale. This includes a preference changed in another tab. It is built with #127, where a locale can first change.
 
 ## Screens (#127)
 

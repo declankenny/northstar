@@ -1,4 +1,4 @@
-import type { Locale } from "./locale";
+import { getLocale, type Locale } from "./locale";
 import type { Currency } from "./money";
 
 /** One point of the series: the totals on a date, in integer cents. */
@@ -35,6 +35,19 @@ export type Me = {
   currency: Currency | null; // the system currency every amount is in; null until an admin sets it
   locale: Locale; // how this person's numbers and dates are shown and typed
 };
+
+/** The number and date formats a person can choose, by label, and the one a new user starts with. */
+export type LocaleChoices = { locales: { tag: string; label: string }[]; default: string };
+
+export async function fetchLocales(signal?: AbortSignal): Promise<LocaleChoices> {
+  const response = await fetch("/api/me/locales", { signal });
+  if (response.status === 401) {
+    signIn();
+    throw new Error("You are signed out.");
+  }
+  if (!response.ok) throw new Error(`The server answered ${response.status}`);
+  return response.json();
+}
 
 /** Go to the sign-in page, which brings the person back to this page afterwards. */
 function signIn() {
@@ -76,14 +89,16 @@ export class RequestError extends Error {
   dates: string[]; // the dates whose balance changed, when an import is refused because the account moved on (409)
   refusal: Omit<UndoRefusal, "refused"> | null; // why an import cannot be undone (409)
   conflicts: Conflict[]; // the balances that changed since the person opened them (409)
+  localeChanged: { tag: string; label: string } | null; // the number and date format the person now has, when theirs changed since the page loaded (409)
   constructor(message: string, errors: Record<string, string> = {}, status = 0, dates: string[] = [], refusal: RequestError["refusal"] = null,
-    conflicts: Conflict[] = []) {
+    conflicts: Conflict[] = [], localeChanged: RequestError["localeChanged"] = null) {
     super(message);
     this.errors = errors;
     this.status = status;
     this.dates = dates;
     this.refusal = refusal;
     this.conflicts = conflicts;
+    this.localeChanged = localeChanged;
   }
 }
 
@@ -106,7 +121,8 @@ async function send<T>(method: string, url: string, body: unknown, signal?: Abor
       response.status, Array.isArray(answer?.dates) ? answer.dates : [],
       typeof answer?.reason === "string" && Array.isArray(answer.blocked)
         ? { message: String(detail), reason: answer.reason, blocked: answer.blocked, more: answer.more ?? 0 } : null,
-      Array.isArray(answer?.conflicts) ? answer.conflicts : []);
+      Array.isArray(answer?.conflicts) ? answer.conflicts : [],
+      typeof answer?.locale_changed?.tag === "string" ? { tag: answer.locale_changed.tag, label: String(answer.locale_changed.label) } : null);
   }
   return response.status === 204 ? null : response.json();
 }
@@ -122,7 +138,7 @@ export async function fetchMe(signal?: AbortSignal): Promise<Me> {
 }
 
 /** Change the display name and/or the theme. Only the fields given change. */
-export async function updateMe(change: { display_name?: string; theme?: Theme }): Promise<Me> {
+export async function updateMe(change: { display_name?: string; theme?: Theme; locale?: string }): Promise<Me> {
   return (await send<Me>("PATCH", "/api/me", change))!;
 }
 
@@ -180,7 +196,7 @@ export function undoImport(importId: number): Promise<UndoDone | UndoRefusal> {
   return orRefusal(send<UndoDone>("POST", `/api/imports/${importId}/undo`, {}).then((done) => done!));
 }
 
-export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean }): Promise<UserRow> {
+export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean; locale?: string }): Promise<UserRow> {
   return (await send<UserRow>("POST", "/api/users", user))!;
 }
 
@@ -251,12 +267,12 @@ export async function deleteAccount(id: number): Promise<void> {
 
 /** A date that already has a balance is edited. */
 export async function addBalance(accountId: number, entry: BalanceEntry): Promise<AccountPage> {
-  return (await send<AccountPage>("POST", `/api/accounts/${accountId}/balances`, entry))!;
+  return (await send<AccountPage>("POST", `/api/accounts/${accountId}/balances`, { ...entry, locale: getLocale().tag }))!;
 }
 
 /** `version` is the balance's version when the page loaded it. A balance written since is a RequestError whose `conflicts` say so. */
 export async function editBalance(balanceId: number, entry: BalanceEntry, version: number): Promise<AccountPage> {
-  return (await send<AccountPage>("PATCH", `/api/balances/${balanceId}`, { ...entry, version }))!;
+  return (await send<AccountPage>("PATCH", `/api/balances/${balanceId}`, { ...entry, version, locale: getLocale().tag }))!;
 }
 
 export async function deleteBalance(balanceId: number, version: number): Promise<AccountPage> {
@@ -303,7 +319,7 @@ export async function fetchAccounts(closed: boolean, signal?: AbortSignal): Prom
 
 /** Answers with the open list, which now includes the new account. */
 export async function addAccount(account: NewAccount): Promise<AccountList> {
-  return (await send<AccountList>("POST", "/api/accounts", account))!;
+  return (await send<AccountList>("POST", "/api/accounts", { ...account, locale: getLocale().tag }))!;
 }
 
 /** One account type. account_count is how many accounts use it, and deleted_account_count how many deleted accounts still do
@@ -385,7 +401,7 @@ export async function fetchUpdate(date?: string, signal?: AbortSignal): Promise<
  *  (null for none). A bad amount is a RequestError whose `errors` say which; a balance that changed since is one whose `conflicts`
  *  say which. Either way nothing is saved. */
 export async function saveUpdate(date: string, amounts: Record<number, string>, versions: Record<number, number | null>): Promise<UpdatePage> {
-  return (await send<UpdatePage>("POST", "/api/balances/update", { date, amounts, versions }))!;
+  return (await send<UpdatePage>("POST", "/api/balances/update", { date, amounts, versions, locale: getLocale().tag }))!;
 }
 
 /** The version of the running app, for the footer of the navigation. */

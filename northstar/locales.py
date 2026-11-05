@@ -68,3 +68,33 @@ def for_user(conn: sqlite3.Connection, user_id: int | None) -> Locale:
     """The locale a person reads and types in. The command line has no user and reads in US English."""
     row = None if user_id is None else conn.execute("SELECT locale FROM users WHERE id = ?", (user_id,)).fetchone()
     return get(conn, DEFAULT_TAG if row is None else row["locale"])
+
+
+class LocaleChanged(ValidationError):
+    """A form was using one number and date format and the person's saved one is now another, so what was typed may mean
+    something else. Nothing was saved. `now` is the saved locale, which the page shows and then reads the draft in."""
+
+    def __init__(self, now: Locale):
+        super().__init__(f"Your number and date format changed to {now.label}. Nothing was saved.")
+        self.now = now
+
+    @property
+    def details(self) -> dict:
+        return {"locale_changed": {"tag": self.now.tag, "label": self.now.label}}
+
+
+def require_current(conn: sqlite3.Connection, user_id: int | None, tag: str | None) -> None:
+    """Refuse with LocaleChanged unless the person's saved locale is the one the form says it was using. A form that does not
+    say (the command line, a script) is not checked. Called inside the write transaction, so the preference cannot change
+    between the check and the write."""
+    if tag is None:
+        return
+    saved = for_user(conn, user_id)
+    if saved.tag != tag:
+        raise LocaleChanged(saved)
+
+
+def reading_locale(conn: sqlite3.Connection, user_id: int | None, tag: str | None) -> Locale:
+    """The locale to read typed amounts in: the one the form was using, which must still be the saved one, else the saved one."""
+    require_current(conn, user_id, tag)
+    return for_user(conn, user_id)
