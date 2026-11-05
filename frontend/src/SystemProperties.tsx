@@ -7,10 +7,11 @@ const groupOf = (p: PropertyRow) => p.name.split(".")[0];
 const INITIALS = new Set(["ui"]);
 const title = (group: string) => (INITIALS.has(group) ? group.toUpperCase() : group.charAt(0).toUpperCase() + group.slice(1));
 const stored = (p: PropertyRow) => p.value ?? "";
+const SYSTEM_CURRENCY = "system.currency";
 
 /** The admin page for the installation's settings: a list of groups on the left, the chosen group's properties on the right.
  *  What a person has typed stays as a draft until it is saved or reverted, and leaving a group with drafts asks first. */
-export function SystemProperties() {
+export function SystemProperties({ onCurrencyChange }: { onCurrencyChange?: () => void } = {}) {
   const { data: list, error, setData: setList } = useRequest(fetchProperties, []);
   const [chosen, setChosen] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -47,6 +48,7 @@ export function SystemProperties() {
       const fresh = await saveProperty(p.name, drafts[p.name] ?? stored(p));
       setList(fresh);
       forget([p.name]);
+      if (p.name === SYSTEM_CURRENCY) onCurrencyChange?.(); // every amount in the app is now in this currency
       setSaved(p.name);
       window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => setSaved(null), 1600);
@@ -138,6 +140,16 @@ export function SystemProperties() {
                       {p.allow_null && <option value="">Not set</option>}
                       {p.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
+                  ) : p.name === SYSTEM_CURRENCY ? (
+                    <>
+                      {/* The browser's own search box: it filters the catalog by code or name as you type. The server
+                          checks the code against the catalog, so text that is not in the list is refused. */}
+                      <input aria-label={p.name} list="sp-currencies" value={text} disabled={p.read_only} autoComplete="off"
+                        placeholder="Search by code or name" onChange={(e) => edit(p, e.target.value)} />
+                      <datalist id="sp-currencies">
+                        {list.currencies.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                      </datalist>
+                    </>
                   ) : (
                     <input aria-label={p.name} value={text} disabled={p.read_only} placeholder={p.allow_null ? "Not set" : ""}
                       onChange={(e) => edit(p, e.target.value)} />

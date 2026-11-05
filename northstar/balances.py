@@ -5,9 +5,9 @@ import re
 import sqlite3
 from datetime import date
 
-from northstar import accounts, db, staleness, writer
+from northstar import accounts, currencies, db, staleness, writer
 from northstar.errors import NotFoundError, ValidationError
-from northstar.money import parse_cents
+from northstar.money import parse_amount
 from northstar.writer import Operation
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
@@ -23,6 +23,11 @@ class EntryErrors(ValidationError):
     @property
     def details(self) -> dict:
         return {"errors": self.by_account}
+
+
+def parse_for(currency: currencies.Currency, text: str | None) -> int:
+    """Typed text as a count of the currency's minor units. A leading '$' is accepted only for US dollars."""
+    return parse_amount(text, currency.minor_units, dollar_sign=currency.code == "USD")
 
 
 # What a caller loaded a balance as: the `version` it carried (the id of the operation that last wrote it), or None for a date
@@ -171,7 +176,7 @@ def add_balance(op: Operation, account_id: int, date_text: str | None,
                 amount_text: str | None, note: str | None, today: date) -> str:
     """The detail page's Add a balance form: typed text in, 'added', 'updated' or 'unchanged' out."""
     as_of = parse_date(date_text, today)
-    cents = parse_cents(amount_text)
+    cents = parse_for(currencies.account_currency(op.conn, account_id), amount_text)
     return record_balance(op, account_id, as_of, cents, note)
 
 
@@ -185,11 +190,12 @@ def add_account_with_balance(op: Operation, class_slug: str | None, name: str | 
     """
     conn = op.conn
     cls = accounts.get_class_by_slug(conn, class_slug)
+    currency = currencies.require_system_currency(conn)        # refused before anything is read from the form
     entry = None
     if (amount_text or "").strip():
-        entry = (parse_date((date_text or "").strip() or today.isoformat(), today), parse_cents(amount_text))
+        entry = (parse_date((date_text or "").strip() or today.isoformat(), today), parse_for(currency, amount_text))
     with db.write_transaction(conn):
-        account_id = accounts.add_account(op, name, cls["id"], type_id, notes)
+        account_id = accounts.add_account(op, name, cls["id"], type_id, notes, currency.id)
         if entry:
             record_balance(op, account_id, entry[0], entry[1])
     return account_id
@@ -208,13 +214,22 @@ def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
     return dict(row)
 
 
+def _balance_currency(conn: sqlite3.Connection, balance_id: int) -> currencies.Currency:
+    """The currency of the balance's account. A balance that is gone is read as dollars, so the amount is still checked
+    and the caller's own check (a version, or the balance no longer existing) is what refuses it."""
+    row = conn.execute(
+        "SELECT c.id, c.code, c.name, c.minor_units FROM live_balances b JOIN live_accounts a ON a.id = b.account_id "
+        "JOIN currencies c ON c.id = a.currency_id WHERE b.id = ?", (balance_id,)).fetchone()
+    return currencies.Currency(row["id"], row["code"], row["name"], row["minor_units"]) if row         else currencies.Currency(0, "USD", "US Dollar", 2)
+
+
 def update_balance(op: Operation, balance_id: int, date_text: str | None,
                    amount_text: str | None, note: str | None, today: date, expected_version=UNCHECKED) -> str:
     """Change a balance's date, amount and note. Returns 'updated' or 'unchanged'. Given the version the caller loaded, it
     refuses with ConflictingEdit, before anything else, if the balance has been written since (or deleted)."""
     conn = op.conn
     as_of = parse_date(date_text, today)
-    cents = parse_cents(amount_text)
+    cents = parse_for(_balance_currency(conn, balance_id), amount_text)
     new_note = clean_note(note)
     with db.write_transaction(conn):
         if expected_version is not UNCHECKED:
@@ -296,7 +311,7 @@ def save_update(op: Operation, date_text: str | None,
         if not text:
             continue
         try:
-            entered[account_id] = parse_cents(text)
+            entered[account_id] = parse_for(currencies.account_currency(conn, account_id), text)
         except ValidationError as err:
             errors[account_id] = str(err)
     if errors:

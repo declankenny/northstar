@@ -154,7 +154,9 @@ def file_bytes(body: FileBody) -> bytes:
 
 def open_account(conn, account_id: int):
     """A missing or deleted account is NotFoundError, and a closed one is refused, as for any change to its balances."""
-    return balances.require_open(accounts.get_account(conn, account_id))
+    account = balances.require_open(accounts.get_account(conn, account_id))
+    balance_import.require_supported_currency(conn, account_id)
+    return account
 
 
 def mapping_of(body: MappingBody) -> csvparse.Mapping:

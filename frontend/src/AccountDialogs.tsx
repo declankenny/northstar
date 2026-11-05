@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { type AccountList, type AccountPage, type BalanceEntry, type BalanceRow, type NewAccount } from "./api";
 import { conflictText } from "./conflicts";
 import { formatDate } from "./dates";
-import { centsToInput } from "./money";
+import { amountPlaceholder, centsToInput } from "./money";
 import { Modal, useAction } from "./Dialogs";
 import { Link } from "./router";
 import { PATHS } from "./routes";
@@ -201,7 +201,16 @@ export function AddAccountDialog(props: {
 
   return (
     <Modal title={`Add ${accountClass} account`} onClose={props.onClose}>
-      {cls.types.length === 0 ? (
+      {list.currency === null ? (
+        <div>
+          <p className="notice warn" role="alert"><b>Choose the system currency first.</b> Accounts can't be created until it is set, and it can't be changed afterwards.</p>
+          <p className="sub">{props.isAdmin ? "An admin sets it on the System properties page." : "Ask an admin to set the system currency."}</p>
+          <div className="foot">
+            <button type="button" className="btn ghost" onClick={props.onClose}>Close</button>
+            {props.isAdmin && <Link className="btn" to={PATHS.properties} onClick={props.onClose}>Open System properties</Link>}
+          </div>
+        </div>
+      ) : cls.types.length === 0 ? (
         <p className="sub">There are no {accountClass} types yet. {props.isAdmin ? <><Link to={PATHS.types}>Add one on the Account types page</Link> first.</> : "Ask an admin to add one."}</p>
       ) : (
         <form onSubmit={submit}>
@@ -219,7 +228,7 @@ export function AddAccountDialog(props: {
           </label>
           <div className="two">
             <label>{owed ? "Amount owed (optional)" : "Current balance (optional)"}
-              <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <input inputMode="decimal" placeholder={amountPlaceholder()} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </label>
             <label>As of
               <input type="date" value={date} max={list.today} onChange={(e) => setDate(e.target.value)} />
@@ -227,7 +236,7 @@ export function AddAccountDialog(props: {
           </div>
           <div className="hint">
             {owed ? "Enter what is owed as a positive number. Leave it blank to add the account without a balance."
-              : "Leave the balance blank to add the account without one."}
+              : "Leave the balance blank to add the account without one."} Amounts are in {list.currency.name} ({list.currency.code}).
           </div>
           {error && <p className="notice bad" role="alert">{error}</p>}
           <div className="foot">

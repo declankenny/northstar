@@ -9,11 +9,17 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from northstar import clock, db, throttle, users
+from northstar import clock, currencies, db, throttle, users
 from northstar.errors import ValidationError
 from northstar.web.auth_routes import COOKIE, current_user, operation, run
 
 router = APIRouter(prefix="/api/me")
+
+
+class CurrencyOut(BaseModel):
+    code: str
+    name: str
+    minor_units: int       # digits after the decimal point: 0, 2 or 3
 
 
 class Me(BaseModel):
@@ -22,6 +28,7 @@ class Me(BaseModel):
     display_name: str
     is_admin: bool
     theme: Literal["light", "dark"]
+    currency: CurrencyOut | None = None    # the system currency every amount is shown in; null until an admin sets it
 
 
 class ProfileChange(BaseModel):
@@ -37,7 +44,8 @@ class PasswordChange(BaseModel):
 
 def _me(conn, user_id: int) -> dict:
     row = users.get_user(conn, user_id)
-    return {**{key: row[key] for key in ("id", "email", "display_name", "theme")}, "is_admin": bool(row["is_admin"])}
+    return {**{key: row[key] for key in ("id", "email", "display_name", "theme")}, "is_admin": bool(row["is_admin"]),
+            "currency": currencies.system_currency_dict(conn)}
 
 
 @router.get("", response_model=Me)

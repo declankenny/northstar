@@ -8,7 +8,7 @@ fit to show, and an unknown property a 404.
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from northstar import system_properties
+from northstar import currencies, system_properties
 from northstar.web.auth_routes import operation, require_admin, run
 
 router = APIRouter(prefix="/api/system-properties", dependencies=[Depends(require_admin)])
@@ -29,8 +29,15 @@ class PropertyRow(BaseModel):
     options: list[Option]      # the allowed values of a Lookup, else empty
 
 
+class CatalogCurrency(BaseModel):
+    code: str
+    name: str
+    minor_units: int
+
+
 class PropertyList(BaseModel):
     properties: list[PropertyRow]     # ordered by name
+    currencies: list[CatalogCurrency]     # the whole catalog, for the system currency's search box
 
 
 class NewValue(BaseModel):
@@ -38,7 +45,7 @@ class NewValue(BaseModel):
 
 
 def _list(conn) -> dict:
-    return {"properties": system_properties.list_properties(conn)}
+    return {"properties": system_properties.list_properties(conn), "currencies": currencies.catalog(conn)}
 
 
 @router.get("", response_model=PropertyList)

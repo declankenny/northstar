@@ -27,7 +27,7 @@ After about a minute `docker compose ps` shows the container as `healthy`. There
 docker compose exec northstar python -m northstar.users create you@example.com "Your Name" --admin
 ```
 
-Then open <http://localhost:8000>. The app listens on `127.0.0.1` only, so you can reach it from this machine and nothing else can. That is on purpose: it serves plain HTTP, which is fine for trying it out and wrong for anything else, because a sign-in sends a password and a 30-day cookie. To use it from your phone or another computer, put it behind HTTPS as described next.
+Then open <http://localhost:8000>, sign in, and before adding the first account choose the system currency under Admin, System properties. It is the currency every amount is in, it is chosen once and locked as soon as it is saved, and a new installation has none chosen. An installation upgraded from 0.2 that already has accounts is set to US dollars. The app listens on `127.0.0.1` only, so you can reach it from this machine and nothing else can. That is on purpose: it serves plain HTTP, which is fine for trying it out and wrong for anything else, because a sign-in sends a password and a 30-day cookie. To use it from your phone or another computer, put it behind HTTPS as described next.
 
 If sign-in appears to do nothing on an address such as `http://192.168.1.10:8000`, that is the cookie setting below doing its job: browsers drop a `Secure` cookie on plain HTTP, except on `localhost`. Use HTTPS, or for a trial on your own network set `NORTHSTAR_COOKIE_SECURE=0` in `.env` and accept the warning in the log.
 

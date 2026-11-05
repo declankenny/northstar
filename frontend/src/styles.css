@@ -363,3 +363,7 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
   padding: 9px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 14px; }
 .sp-prompt-actions { display: flex; gap: 6px; }
 @media (max-width: 760px) { .sp-layout { grid-template-columns: minmax(0, 1fr); } .sp-tabs { flex-direction: row; flex-wrap: wrap; } }
+
+/* The system currency is not set: the Add account dialog says so instead of showing the form. */
+.notice.warn { background: var(--warn-soft); color: var(--warn); border-radius: 9px; padding: 10px 12px; margin: 0 0 12px; }
+a.btn { display: inline-block; text-decoration: none; }

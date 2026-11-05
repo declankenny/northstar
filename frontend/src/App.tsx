@@ -10,6 +10,7 @@ import { Imports } from "./Imports";
 import { Profile } from "./Profile";
 import { SignIn } from "./SignIn";
 import { SystemProperties } from "./SystemProperties";
+import { setCurrency } from "./money";
 import { Link, usePath } from "./router";
 import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
@@ -51,6 +52,9 @@ function Shell() {
   const importId = importAccountIdFromPath(path);
   const { data: version } = useRequest(fetchVersion, []);      // a footer only: the app works without it, so a failure is ignored
   const { data: me, setData: setMe } = useRequest(fetchMe, []);
+
+  // Every amount on every page is in the system currency, so tell the money module before the pages render.
+  setCurrency(me?.currency ?? null);
 
   // The account's theme wins over whatever this browser remembered.
   const theme = me?.theme;
@@ -113,7 +117,7 @@ function Shell() {
         ) : route === "imports" ? (
           me.is_admin ? <Imports /> : <p className="empty">Only admins can see imports.</p>
         ) : route === "properties" ? (
-          me.is_admin ? <SystemProperties /> : <p className="empty">Only admins can manage system properties.</p>
+          me.is_admin ? <SystemProperties onCurrencyChange={() => fetchMe().then(setMe)} /> : <p className="empty">Only admins can manage system properties.</p>
         ) : route === "profile" ? (
           <Profile me={me} onChange={setMe} onTheme={chooseTheme} />
         ) : me.is_admin ? (

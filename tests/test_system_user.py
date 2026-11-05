@@ -27,7 +27,7 @@ def system_id(conn):
 # -- the schema rules --
 
 def test_every_table_is_either_a_sys_table_or_a_household_table_with_audit_columns(conn):
-    assert household_tables(conn) == ["account_classes", "account_types", "accounts", "balances", "system_properties", "users"]
+    assert household_tables(conn) == ["account_classes", "account_types", "accounts", "balances", "currencies", "system_properties", "users"]
     for table in household_tables(conn):
         columns = {row["name"]: row for row in conn.execute(f"PRAGMA table_info({table})")}
         assert set(AUDIT) <= set(columns), table
@@ -89,7 +89,7 @@ def test_the_seeded_rows_are_authored_by_the_system_user(conn):
 
 def test_an_author_must_be_a_real_user(conn):
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO accounts (name, class_id, type_id, created_by, updated_by) VALUES ('X', 1, 1, 9999, 9999)")
+        conn.execute("INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES ('X', 1, 1, (SELECT id FROM currencies WHERE code = 'USD'), 9999, 9999)")
 
 
 # -- the system user cannot be used --

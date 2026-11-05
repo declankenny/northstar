@@ -170,7 +170,8 @@ def test_adding_an_account_logs_one_insert_with_every_logged_field(conn, admin):
     assert (change["tablename"], change["record_id"], change["change"], change["old"]) == ("accounts", account, "INSERT", None)
     row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account,)).fetchone()
     assert change["new"] == {"name": "Test savings", "class_id": ASSET, "type_id": type_id(conn, "Savings"), "is_open": 1,
-                             "notes": "a note", "deleted": 0, "created_at": row["created_at"], "created_by": admin}
+                             "notes": "a note", "deleted": 0,
+                             "currency_id": conn.execute("SELECT id FROM currencies WHERE code = 'USD'").fetchone()[0], "created_at": row["created_at"], "created_by": admin}
     assert (row["created_by"], row["updated_by"]) == (admin, admin)             # the audit columns agree with the log
 
 

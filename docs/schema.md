@@ -7,11 +7,13 @@ erDiagram
     account_classes ||--o{ account_types : "class_id"
     account_classes ||--o{ accounts : "class_id"
     account_types ||--o{ accounts : "type_id, class_id"
+    currencies ||--o{ accounts : "currency_id"
     accounts ||--o{ balances : "account_id"
     users ||--o{ sys_sessions : "user_id"
     users ||--o{ account_classes : "created_by, updated_by"
     users ||--o{ account_types : "created_by, updated_by"
     users ||--o{ accounts : "created_by, updated_by"
+    users ||--o{ currencies : "created_by, updated_by"
     users ||--o{ balances : "created_by, updated_by"
     users ||--o{ users : "created_by, updated_by"
     users ||--o{ system_properties : "created_by, updated_by"
@@ -46,13 +48,25 @@ erDiagram
         text name
         integer class_id FK
         integer type_id FK
+        integer currency_id FK "set at creation, never changed"
         integer is_open "0 or 1"
         text notes "optional"
+        integer deleted "0 or 1"
         text created_at "UTC"
         integer created_by FK "who created it"
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
-        integer deleted "0 or 1"
+    }
+    currencies {
+        integer id PK
+        text code UK "ISO 4217, three capital letters"
+        text name "ISO's own name"
+        integer minor_units "0, 2 or 3"
+        integer is_enabled "0 or 1"
+        text created_at "UTC"
+        integer created_by FK "who created it"
+        text updated_at "UTC"
+        integer updated_by FK "who last changed it"
     }
     balances {
         integer id PK
@@ -155,12 +169,12 @@ erDiagram
 
 ## Conventions
 
-- Money is integer cents. A balance date is a calendar date, `YYYY-MM-DD`, with no timezone. Row timestamps are UTC text, `YYYY-MM-DDTHH:MM:SSZ`.
+- Money is an integer count of the account's currency's minor unit (cents for US dollars, whole yen, fils for Kuwaiti dinars), held in `amount_cents`, which keeps its name. A balance date is a calendar date, `YYYY-MM-DD`, with no timezone. Row timestamps are UTC text, `YYYY-MM-DDTHH:MM:SSZ`.
 - `is_open` and `is_admin` are 0 or 1, because SQLite has no boolean type.
 - `sys_schema_migrations` is created by the migration runner in `northstar/db.py`, not by a migration file. Releases before 0.2 called it `schema_migrations`, and the runner renames it (keeping its rows) the first time a newer version starts, after a backup.
 - A table that starts with `sys_` is written by the application for itself: it has no audit columns and is never logged. Every other table has the four audit columns (except a `ref_` table, below), and `created_by` and `updated_by` point at `users`. Rows that existed before the audit columns were added, and rows made by the command line, are authored by the system user: the one `users` row with `is_system = 1`, which nobody can sign in as.
 - A table that starts with `ref_` is loaded by a migration and never written at run time: it has no audit columns, is never logged, and the writer refuses it. `account_classes` is the same kind of table but predates the prefix, so it keeps its audit columns.
-- `live_accounts` and `live_balances` are views: the accounts that are not deleted, and the balances of those accounts. All reads go through them, and a test fails on a direct read of `accounts` or `balances`. Anything that rebuilds either table must drop both views first and create them again afterwards, because SQLite cannot rename a table while a view refers to it.
+- `live_accounts` and `live_balances` are views: the accounts that are not deleted, and the balances of those accounts. All reads go through them, and a test fails on a direct read of `accounts` or `balances`. Anything that rebuilds either table must drop both views first and create them again afterwards, because SQLite cannot rename a table while a view refers to it. A rebuild of `accounts` must also create the trigger `accounts_currency_fixed` again, which the migration runner enforces.
 - Every household table uses `AUTOINCREMENT`, so the id of a deleted row is never given to another row.
 - The change log is `sys_operations` (one row per user action that makes a logged change), `sys_record_changes` (one row per record it changed, with the logged fields as JSON) and `sys_audited_fields` (which fields are logged). `sys_record_changes.record_id` and `tablename` name any household record, so there is no foreign key to it. See "Change log" in `spec.md`.
 - `sys_login_attempts` has no relationships on purpose: it keeps only hashes of the email and the address, never the typed values.
@@ -175,6 +189,8 @@ A person checks these against the migrations, because the test cannot read them 
 | `account_types` | `UNIQUE (id, class_id)`, which is the target of the composite key from `accounts`. The first migration also inserts the 11 starting types. |
 | `accounts` | `FOREIGN KEY (type_id, class_id)` references `account_types (id, class_id)` with `ON UPDATE RESTRICT ON DELETE RESTRICT`, so an account's type always belongs to its class, and a type in use can be neither deleted nor moved to another class. |
 | `accounts` (name) | Unique index `accounts_name_unique` on `name COLLATE NOCASE`, only `WHERE deleted = 0`: a name is unique ignoring ASCII case among accounts that are not deleted, open or closed. A deleted account frees its name. |
+| `currencies` | The ISO 4217 catalog (155 rows, from a file published 2026-09-17), loaded by migration `0010`. `code` is three capital letters and unique, `minor_units` is 0, 2 or 3. Triggers refuse deleting a row and changing `code` or `minor_units`; only `is_enabled` changes. A currency is usable for a new account if it is the system currency (the `system.currency` property) or `is_enabled`. |
+| `accounts` (currency) | `currency_id` is `NOT NULL` with no default, so an insert must choose. The trigger `accounts_currency_fixed` refuses any change to it. |
 | `balances` | `UNIQUE (account_id, as_of_date)`: one balance per account per date. `as_of_date` must be a valid date. Deleting an account cascades to its balances. |
 | `users` | `deleted` is 1 for a user who was deleted: the row stays, so the author columns that name them keep working, and adding their email again reactivates it. `is_system` is 1 for exactly one row, enforced by the partial unique index `users_one_system`. The `created_by` and `updated_by` columns of every household table reference it. |
 | `system_properties` | `name` is lowercase dotted segments, at least two, each starting with a letter (a `CHECK`). `value` is null or 1 to 256 characters, and `hint` is 1 to 256. The rows are loaded by migrations: no endpoint adds or deletes one. |

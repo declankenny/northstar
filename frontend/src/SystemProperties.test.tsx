@@ -21,6 +21,7 @@ const list = (): PropertyList => ({
       options: [{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }] }),
     row({ name: "user.session.lifetime_days", type: "Integer", value: "30", read_only: true }),
   ],
+  currencies: [],
 });
 
 async function open() {
@@ -130,10 +131,10 @@ describe("the System properties page", () => {
   });
 
   it("sends blank text to unset an optional property", async () => {
-    vi.mocked(fetchProperties).mockResolvedValue({ properties: [row({ name: "system.contact_email", value: "a@example.com", allow_null: true })] });
+    vi.mocked(fetchProperties).mockResolvedValue({ properties: [row({ name: "system.contact_email", value: "a@example.com", allow_null: true })], currencies: [] });
     render(<SystemProperties />);
     await screen.findByLabelText("system.contact_email");
-    vi.mocked(saveProperty).mockResolvedValue({ properties: [row({ name: "system.contact_email", value: null, allow_null: true })] });
+    vi.mocked(saveProperty).mockResolvedValue({ properties: [row({ name: "system.contact_email", value: null, allow_null: true })], currencies: [] });
     type("system.contact_email", "   ");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Saved");
