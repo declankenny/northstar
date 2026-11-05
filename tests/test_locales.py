@@ -1,6 +1,6 @@
 """The locale catalog, a person's locale and the parser that reads amounts in it. Synthetic data only.
 
-The expected results are in tests/vectors/locale_vectors.json, written by hand. The same file is read by the frontend tests."""
+The expected results are in frontend/src/testdata/locale_vectors.json, written by hand. The same file is read by the frontend tests."""
 
 import importlib.util
 import json
@@ -18,7 +18,7 @@ from northstar.money import parse_amount
 from northstar.web.app import create_app
 
 ROOT = Path(__file__).resolve().parent.parent
-VECTORS = json.loads((Path(__file__).parent / "vectors" / "locale_vectors.json").read_text(encoding="utf-8"))
+VECTORS = json.loads((ROOT / "frontend" / "src" / "testdata" / "locale_vectors.json").read_text(encoding="utf-8"))
 ASSET = 1
 COLUMNS = ("decimal_mark", "group_mark", "date_template", "currency_position", "currency_code_spacing")
 

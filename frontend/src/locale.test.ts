@@ -1,7 +1,7 @@
-// The same hand-written vectors the server's tests read (tests/vectors/locale_vectors.json), so the page and the server are held to
+// The same hand-written vectors the server's tests read (frontend/src/testdata/locale_vectors.json), so the page and the server are held to
 // one set of expected results. They are not generated, so a mistake in the table cannot copy itself into the tests.
 import { afterEach, describe, expect, it } from "vitest";
-import vectors from "../../tests/vectors/locale_vectors.json";
+import vectors from "./testdata/locale_vectors.json";
 import { formatDate } from "./dates";
 import { formatInteger, getLocale, type Locale, setLocale, US_ENGLISH } from "./locale";
 import { amountPlaceholder, centsToInput, formatCents, parseCents, setCurrency } from "./money";
