@@ -63,7 +63,7 @@ export function ChooseFileStep(props: {
         </div>
         <ul className="imp-rules">
           <li>A header row and at least one row of data. Commas, semicolons or tabs.</li>
-          <li>UTF-8 text, up to 2 MB and 20,000 rows.</li>
+          <li>UTF-8 text, up to 2 MB and {formatInteger(20000)} rows.</li>
           <li>Only balances are imported, into this account. Amounts are read in this account’s currency.</li>
           <li>The file is read for this import and is not kept.</li>
         </ul>
