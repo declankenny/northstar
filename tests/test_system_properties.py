@@ -42,7 +42,7 @@ def headers(conn):
 # -- the schema --
 
 def test_the_data_types_are_seeded(conn):
-    assert {row[0] for row in conn.execute("SELECT name FROM ref_property_data_types")} == {"String", "Integer", "Lookup", "Date"}
+    assert {row[0] for row in conn.execute("SELECT name FROM ref_property_data_types")} == {"String", "Integer", "Lookup", "Date", "Time"}
 
 
 def test_the_first_properties_are_seeded_by_the_system_user(conn):

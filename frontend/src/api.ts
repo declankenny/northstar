@@ -359,7 +359,7 @@ export async function deleteType(id: number): Promise<TypeList> {
  *  `options` are the allowed values of a Lookup, else empty. */
 export type PropertyOption = { value: string; label: string };
 export type PropertyRow = {
-  name: string; type: "String" | "Integer" | "Lookup" | "Date"; value: string | null; allow_null: boolean; hint: string;
+  name: string; type: "String" | "Integer" | "Lookup" | "Date" | "Time"; value: string | null; allow_null: boolean; hint: string;
   read_only: boolean; options: PropertyOption[];
 };
 /** The catalogs feed the search boxes of the system currency and of the default number and date format. */

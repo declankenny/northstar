@@ -191,7 +191,7 @@ def test_the_app_refuses_to_start_on_a_newer_database(tmp_path):
     path = tmp_path / "web.db"
     db.upgrade(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0015_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0016_from_the_future')")
     conn.commit()
     conn.close()
     with pytest.raises(ValidationError, match="newer version"):
@@ -262,7 +262,7 @@ def test_the_command_line_refuses_a_newer_database(cli, tmp_path, capsys):
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0015_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0016_from_the_future')")
     conn.commit()
     conn.close()
     assert cli(path, "list") == 1
