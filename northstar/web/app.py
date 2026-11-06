@@ -1,8 +1,9 @@
 """App setup. Routes live in their own modules and call plain functions."""
 
+import asyncio
 import logging
 import os
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
@@ -10,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from northstar import config, db, sessions, system_properties, throttle, users
+from northstar import config, db, scheduler, sessions, system_properties, throttle, users
 from northstar.web import (account_api, api_routes, auth_routes, currencies_api, errors, import_api, imports_api, profile_api, security_headers,
                            system_properties_api, types_api, update_api, users_api, version_api)
 
@@ -74,7 +75,18 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     warn_if_cookie_is_not_secure()
     users.prepare_dummy_hash()
 
-    app = FastAPI(title="Northstar")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """The in-app scheduler runs for as long as the server does. The test client starts it only when it is used as a
+        context manager, so a test that does not ask for it never has a background thread."""
+        app.state.scheduler = scheduler.Scheduler(db_path)
+        app.state.scheduler.start()
+        try:
+            yield
+        finally:
+            await asyncio.to_thread(app.state.scheduler.stop)
+
+    app = FastAPI(title="Northstar", lifespan=lifespan)
     app.state.db_path = db_path
     app.middleware("http")(refuse_cross_site_posts)
     app.middleware("http")(require_login)

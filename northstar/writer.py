@@ -42,7 +42,7 @@ SOFT_DELETED = frozenset({"accounts", "users"})
 # It has no audit columns and is not logged, and the writer refuses it.
 REFERENCE_PREFIX = "ref_"
 
-_CONDITIONS = {"=": "= ?", "!=": "!= ?", "<=": "<= ?", "IS": "IS ?"}
+_CONDITIONS = {"=": "= ?", "!=": "!= ?", "<": "< ?", "<=": "<= ?", ">=": ">= ?", "IS": "IS ?"}
 
 
 class DuplicateChangeError(RuntimeError):
@@ -218,6 +218,31 @@ def sys_insert(conn: sqlite3.Connection, table: str, values: dict) -> int:
     """Add a row to one of the application's own tables and return its rowid."""
     _check_columns(table, _columns(conn, table, system=True), values)
     return _insert(conn, table, values)
+
+
+def sys_insert_ignore(conn: sqlite3.Connection, table: str, values: dict) -> int | None:
+    """Add a row to one of the application's own tables unless a unique index already refuses it. Returns the new rowid,
+    or None when the row was refused. The claim that makes a job run once for a date is this call."""
+    _check_columns(table, _columns(conn, table, system=True), values)
+    columns = list(values)
+    marks = ", ".join("?" for _ in columns)
+    cursor = conn.execute(
+        f"INSERT OR IGNORE INTO {table} ({', '.join(columns)}) VALUES ({marks})", [values[column] for column in columns])
+    return cursor.lastrowid if cursor.rowcount == 1 else None
+
+
+def sys_update(conn: sqlite3.Connection, table: str, values: dict, conditions: list[tuple[str, str, object]]) -> int:
+    """Change the rows of one of the application's own tables that meet every condition, each (column, operator, value)
+    with the operator one of =, !=, <, <=, >= and IS. Returns how many rows changed. One statement, so a condition on
+    a column is checked in the same instant as the change: a job's lock is taken and renewed this way."""
+    known = _columns(conn, table, system=True)
+    _check_columns(table, known, [*values, *(column for column, _, _ in conditions)])
+    if not values or not conditions or any(operator not in _CONDITIONS for _, operator, _ in conditions):
+        raise ValueError("An update needs values and conditions, each condition with a supported operator.")
+    where = " AND ".join(f"{column} {_CONDITIONS[operator]}" for column, operator, _ in conditions)
+    sets = ", ".join(f"{column} = ?" for column in values)
+    return conn.execute(f"UPDATE {table} SET {sets} WHERE {where}",
+                        [*values.values(), *(value for _, _, value in conditions)]).rowcount
 
 
 def sys_delete(conn: sqlite3.Connection, table: str, conditions: list[tuple[str, str, object]]) -> int:

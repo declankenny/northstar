@@ -31,6 +31,7 @@ STRING_MAX = 256
 INTEGER_MAX = 2**53 - 1
 _INTEGER = re.compile(r"-?\d{1,16}")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
+_TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d", re.ASCII)      # HH:MM on a 24-hour clock
 SYSTEM_CURRENCY = "system.currency"     # saving it also enables that currency (see set_property)
 SYSTEM_TIMEZONE = "system.timezone"     # saving it also sets the clock's zone (see set_property)
 
@@ -144,6 +145,10 @@ def _checked(conn: sqlite3.Connection, row: sqlite3.Row, text: str) -> str:
             date.fromisoformat(text)
         except ValueError:
             raise ValidationError("Enter a date like 2026-11-06.") from None
+        return text
+    if data_type == "Time":
+        if not _TIME.fullmatch(text):
+            raise ValidationError("Enter a time of day like 04:30, on a 24-hour clock.")
         return text
     if len(text) > STRING_MAX:
         raise ValidationError(f"Use {STRING_MAX} characters or fewer.")

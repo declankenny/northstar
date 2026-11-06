@@ -27,6 +27,7 @@ erDiagram
     sys_operation_kinds ||--o{ sys_operations : "kind"
     sys_operations |o--o{ sys_operations : "undoes_operation_id"
     sys_operations ||--o{ sys_record_changes : "operation_id"
+    sys_jobs ||--o{ sys_job_runs : "job"
 
     account_classes {
         integer id PK
@@ -136,7 +137,7 @@ erDiagram
     }
     ref_property_data_types {
         integer id PK
-        text name UK "String, Integer, Lookup or Date"
+        text name UK "String, Integer, Lookup, Date or Time"
     }
     ref_property_lookups {
         integer id PK
@@ -161,6 +162,21 @@ erDiagram
         text email_hash
         text address_hash "nullable"
         text attempted_at "UTC"
+    }
+    sys_jobs {
+        text job PK "the name of a registered job"
+        text owner "a fresh token for each acquisition, empty when free"
+        text lease_until "UTC, empty when free"
+    }
+    sys_job_runs {
+        integer id PK
+        text job FK
+        text run_date "the installation's calendar date the run is for"
+        text started_by "scheduled or manual"
+        text started_at "UTC"
+        text finished_at "UTC, empty while running"
+        text outcome "running, succeeded, failed or abandoned"
+        text detail "short, optional"
     }
     sys_operation_kinds {
         text kind PK "ui_edit, bulk_update, import, undo or cli"
@@ -226,3 +242,5 @@ A person checks these against the migrations, because the test cannot read them 
 | `ref_property_validators` | `UNIQUE (property_id, validator)` and `UNIQUE (property_id, position)`. `validator` is a key of `VALIDATORS` in `northstar/system_properties.py`, checked by a test. Deleting a property deletes its rows. |
 | `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. |
 | `sys_login_attempts` | Indexes on `(email_hash, attempted_at)` and `(address_hash, attempted_at)`. |
+| `sys_jobs` | One row per registered job, seeded at startup and never by a migration. `owner` and `lease_until` are both set or both empty (a `CHECK`). A job takes its lock with one `UPDATE ... WHERE owner IS NULL`, and every commit it makes checks the token and the unexpired lease in the same transaction. |
+| `sys_job_runs` | A unique index on `(job, run_date)` where `started_by = 'scheduled'`: at most one scheduled run for a job and date, and a manual run is not covered. `finished_at` is empty exactly while `outcome` is `running` (a `CHECK`), `detail` is at most 500 characters, and the loop deletes finished runs older than 90 days. |

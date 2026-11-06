@@ -145,6 +145,20 @@ describe("the System properties page", () => {
     expect(saveProperty).toHaveBeenCalledWith("currency.rate.start.default", "2005-06-07");
   });
 
+  it("edits a Time in a time box and sends its HH:MM text", async () => {
+    const times = { properties: [row({ name: "currency.rate.fetch_time", type: "Time", value: "04:00" })], currencies: [], locales: [] };
+    vi.mocked(fetchProperties).mockResolvedValue(times);
+    vi.mocked(saveProperty).mockResolvedValue(times);
+    render(<SystemProperties />);
+    const box = (await screen.findByLabelText("currency.rate.fetch_time")) as HTMLInputElement;
+    expect(box.type).toBe("time");
+    expect(box.value).toBe("04:00");
+    fireEvent.change(box, { target: { value: "16:45" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Saved");
+    expect(saveProperty).toHaveBeenCalledWith("currency.rate.fetch_time", "16:45");
+  });
+
   it("sends blank text to unset an optional property", async () => {
     vi.mocked(fetchProperties).mockResolvedValue({ properties: [row({ name: "system.contact_email", value: "a@example.com", allow_null: true })], currencies: [], locales: [] });
     render(<SystemProperties />);

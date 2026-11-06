@@ -157,6 +157,8 @@ export function SystemProperties({ onCurrencyChange }: { onCurrencyChange?: () =
                     </select>
                   ) : p.type === "Date" ? (
                     <input aria-label={p.name} type="date" value={text} disabled={p.read_only} onChange={(e) => edit(p, e.target.value)} />
+                  ) : p.type === "Time" ? (
+                    <input aria-label={p.name} type="time" value={text} disabled={p.read_only} onChange={(e) => edit(p, e.target.value)} />
                   ) : (
                     <input aria-label={p.name} value={text} disabled={p.read_only} placeholder={p.allow_null ? "Not set" : ""}
                       onChange={(e) => edit(p, e.target.value)} />

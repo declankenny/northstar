@@ -155,6 +155,30 @@ def test_sys_insert_returns_the_rowid(conn):
     assert writer.sys_delete(conn, "sys_login_attempts", [("email_hash", "=", "e"), ("address_hash", "IS", None)]) == 2
 
 
+def test_sys_update_changes_only_the_rows_that_meet_every_condition_and_says_how_many(conn):
+    for job in ("a.job", "b.job"):
+        writer.sys_insert(conn, "sys_jobs", {"job": job})
+    assert writer.sys_update(conn, "sys_jobs", {"owner": "x" * 16, "lease_until": "2026-06-01T00:05:00Z"},
+                             [("job", "=", "a.job"), ("owner", "IS", None)]) == 1
+    # a second try at the same lock changes nothing: the condition is checked in the same statement as the change
+    assert writer.sys_update(conn, "sys_jobs", {"owner": "y" * 16, "lease_until": "2026-06-01T00:05:00Z"},
+                             [("job", "=", "a.job"), ("owner", "IS", None)]) == 0
+    assert writer.sys_update(conn, "sys_jobs", {"lease_until": "2026-06-01T00:10:00Z"},
+                             [("job", "=", "a.job"), ("lease_until", ">=", "2026-06-01T00:04:00Z")]) == 1
+    assert writer.sys_update(conn, "sys_jobs", {"lease_until": "2026-06-01T00:15:00Z"},
+                             [("job", "=", "a.job"), ("lease_until", "<", "2026-06-01T00:04:00Z")]) == 0
+    assert conn.execute("SELECT owner FROM sys_jobs WHERE job = 'b.job'").fetchone()[0] is None
+
+
+def test_sys_insert_ignore_returns_the_rowid_or_none_when_a_unique_index_refuses_the_row(conn):
+    writer.sys_insert(conn, "sys_jobs", {"job": "a.job"})
+    row = {"job": "a.job", "run_date": "2026-06-01", "started_by": "scheduled", "started_at": "2026-06-01T04:00:00Z", "outcome": "running"}
+    first = writer.sys_insert_ignore(conn, "sys_job_runs", row)
+    assert first is not None
+    assert writer.sys_insert_ignore(conn, "sys_job_runs", row) is None
+    assert writer.sys_insert_ignore(conn, "sys_job_runs", {**row, "started_by": "manual"}) > first
+
+
 # -- what the writer refuses --
 
 @pytest.mark.parametrize("call", [

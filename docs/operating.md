@@ -166,7 +166,7 @@ docker compose cp northstar:/data/manual/. ./backups
 
 ### Scheduling
 
-Northstar has no scheduler of its own, so use your host's. Save this as `backup.sh` beside `compose.yaml`, make it executable, and change the last line to wherever your off-machine copy goes:
+Northstar's own scheduler runs only the application's own jobs, and backups stay on the host, so use your host's scheduler for them. Save this as `backup.sh` beside `compose.yaml`, make it executable, and change the last line to wherever your off-machine copy goes:
 
 ```sh
 #!/bin/sh
