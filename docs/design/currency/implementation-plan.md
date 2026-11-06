@@ -20,7 +20,6 @@ Steps with the same number can be done in any order or in parallel.
 | 4 | Rates and conversion | #56 | [#130](https://github.com/declankenny/northstar/issues/130) | #125 |
 | 4 | Accounts in other currencies | #56 | [#149](https://github.com/declankenny/northstar/issues/149) | #130 |
 | 5 | Locale controls: profile and new-user flow | #56 | [#127](https://github.com/declankenny/northstar/issues/127) | #126 |
-| 5 | Import number style defaults from locale | #56 | [#129](https://github.com/declankenny/northstar/issues/129) | #126, #128 |
 | 5 | Fetching rates | #56 | [#131](https://github.com/declankenny/northstar/issues/131) | #130, Frankfurter checks |
 | 6 | First-run setup page | none | [#64](https://github.com/declankenny/northstar/issues/64) | #65, #124, #125, #126 |
 | 7 | Integration, recovery rehearsal and operator guide | #56 | [#132](https://github.com/declankenny/northstar/issues/132) | all of the above |
@@ -89,11 +88,6 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 - Scope: the "Number and date format" dropdown on the profile screen and on the admin's new-user form, the interpreted-amount preview on single and bulk balance entry, and the check that refuses a save made under a different locale than the saved one. It is stacked on #126 and ships with it.
 - Tests: the preview on every row in the account's own currency; the refusal when the preference changed since the form opened; the dropdown saves on choice.
 - Docs: the mockup is agreed.
-
-### 5b. Import number style from locale (#129)
-
-- Scope: the number style offered on a spreadsheet import starts from the user's locale and the user still confirms it. The Northstar CSV stays locale-independent.
-- Tests: the offered default per locale; an export imports identically in any locale.
 
 ### 5c. Fetching rates (#131)
 

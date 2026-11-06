@@ -8,7 +8,7 @@ Each person reads and types numbers and dates in their own conventions, such as 
 
 #126 builds the core: the catalog, the saved preference, the parser and the formatter. #127 builds the controls and the interpreted-amount preview. They are two stacked pull requests that ship together, so acceptance testing never needs a database edit.
 
-Out of scope: the importer and exporter (#128), the number style offered on a spreadsheet import (#129), the Northstar CSV, translated interface text, other numbering systems, lakh grouping and time zones.
+Out of scope: the importer and exporter (#128), the number style offered on a spreadsheet import (#129, not built: see decisions), the Northstar CSV, translated interface text, other numbering systems, lakh grouping and time zones.
 
 ## Principles
 
