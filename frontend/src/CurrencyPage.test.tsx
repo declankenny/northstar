@@ -95,6 +95,27 @@ describe("switching on and off", () => {
     expect(screen.getByRole("button", { name: "Add rate" })).toBeTruthy();
   });
 
+  it("frees the switch once a change is saved, so it can be changed again without reloading", async () => {
+    await open();
+    vi.mocked(changeCurrency).mockResolvedValueOnce(page({ is_enabled: false })).mockResolvedValueOnce(page());
+    const toggle = () => screen.getByRole("switch", { name: "Enabled" }) as HTMLButtonElement;
+    fireEvent.click(toggle());
+    await waitFor(() => expect(toggle().getAttribute("aria-checked")).toBe("false"));
+    expect(toggle().disabled).toBe(false);
+    fireEvent.click(toggle());
+    await waitFor(() => expect(toggle().getAttribute("aria-checked")).toBe("true"));
+    expect(toggle().disabled).toBe(false);
+    expect(changeCurrency).toHaveBeenCalledTimes(2);
+  });
+
+  it("frees the switch after a refusal too", async () => {
+    await open();
+    vi.mocked(changeCurrency).mockRejectedValue(new RequestError("No.", {}, 422));
+    fireEvent.click(screen.getByRole("switch", { name: "Enabled" }));
+    await screen.findByRole("alert");
+    expect((screen.getByRole("switch", { name: "Enabled" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("switches off with no question, and says what that does", async () => {
     await open();
     vi.mocked(changeCurrency).mockResolvedValue(page({ is_enabled: false }));

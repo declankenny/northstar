@@ -20,7 +20,8 @@ export function CurrencyPage({ code }: { code: string }) {
   const [dialog, setDialog] = useState<{ rate: RateRow } | "add" | null>(null);
   const [start, setStart] = useState<string | null>(null); // what the date box shows while it is not the stored date
   const [startError, setStartError] = useState<string | null>(null);
-  const action = useAction();
+  const [busy, setBusy] = useState(false);       // a switch or start-date change is being saved
+  const [failure, setFailure] = useState<string | null>(null);
 
   const header = (name: string) => (
     <div className="top">
@@ -39,12 +40,20 @@ export function CurrencyPage({ code }: { code: string }) {
   const gap = !page.is_system && first && page.rates_start && first.date > page.rates_start ? first : null;
   const accounts = page.open_account_count === 1 ? "1 open account" : `${page.open_account_count} open accounts`;
 
-  const apply = (change: { is_enabled?: boolean; rates_start?: string }) =>
-    action.run(async () => {
+  /** Saves a change to the page's own fields. The page stays, so unlike a dialog it must free the controls again when the answer comes. */
+  const apply = async (change: { is_enabled?: boolean; rates_start?: string }) => {
+    setBusy(true);
+    setFailure(null);
+    try {
       setData(await changeCurrency(code, change));
       setStart(null);
       setStartError(null);
-    });
+    } catch (e) {
+      setFailure((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const flip = () => {
     if (!shownStart) return setStartError("Enter the date rates start from.");
@@ -74,7 +83,7 @@ export function CurrencyPage({ code }: { code: string }) {
             <div className="v"><span className="cur-switch locked on" aria-hidden="true" /> Yes</div>
           ) : (
             <button type="button" className="cur-toggle" role="switch" aria-checked={page.is_enabled} aria-label="Enabled"
-              disabled={action.busy} onClick={flip}>
+              disabled={busy} onClick={flip}>
               <span className={page.is_enabled ? "cur-switch on" : "cur-switch"} aria-hidden="true" />
               {page.is_enabled ? "Yes" : "No"}
             </button>
@@ -93,7 +102,7 @@ export function CurrencyPage({ code }: { code: string }) {
         </div>
       </div>
 
-      {action.error && <p className="notice bad" role="alert">{action.error}</p>}
+      {failure && <p className="notice bad" role="alert">{failure}</p>}
       {startError && <p className="notice bad" role="alert">{startError}</p>}
 
       <p className="sub">
