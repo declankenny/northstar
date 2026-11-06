@@ -36,7 +36,7 @@ const row = (record: number, date: string, outcome: ImportRow["outcome"], cents:
 });
 
 const reviewOf = (over: Partial<ImportReview> = {}): ImportReview => ({
-  can_commit: true, errors: [], date_format: "YYYY-MM-DD",
+  can_commit: true, errors: [], notes: [], date_format: "YYYY-MM-DD",
   counts: { add: 2, replace: 0, unchanged: 0, skip: 1 },
   rows: [row(4, "2026-03-31", "add", 120000), row(3, "2026-02-28", "skip", 110050, 99999), row(2, "2026-01-31", "add", 100000)],
   hidden: {}, reviewed: { fingerprint: "abc", expectations: [{ date: "2026-01-31", balance_id: null, version: null }] }, ...over,
@@ -520,5 +520,19 @@ describe("Import: leaving", () => {
     await screen.findByText("Imported from statement.csv.");
     expect(navigate("/accounts/7")).toBe(true);
     expect(confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe("the currency note on the review", () => {
+  it("shows what in the file names another currency, and still lets the import go on", async () => {
+    const note = "The 'Currency' column says EUR, and this account is in USD. Nothing is converted: every amount is read as USD.";
+    await toReview(reviewOf({ notes: [note] }));
+    expect(screen.getByRole("status", { name: "" }).textContent).toBe(note);
+    expect((screen.getByRole("button", { name: /Import/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says nothing when the file agrees with the account", async () => {
+    await toReview(reviewOf({ notes: [] }));
+    expect(document.querySelector(".notice.warn")).toBeNull();
   });
 });

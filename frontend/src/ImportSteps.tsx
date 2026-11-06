@@ -247,6 +247,7 @@ export function ReviewStep(props: {
           ) : (
             <>
               <p>Nothing has been saved yet. Dates are shown as read, and all balances are treated as {(props.currency ?? getCurrency()).code}.</p>
+              {(data?.notes ?? []).map((note) => <p key={note} className="notice warn" role="status">{note}</p>)}
               {counts && (
                 <div className="imp-counts" aria-label="What will happen">
                   <div><b>{formatInteger(counts.add)}</b><small>will be added</small></div>

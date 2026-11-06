@@ -454,6 +454,39 @@ def number_choices(cells: list[tuple[int, str]], minor_units: int) -> list[str]:
     return choices
 
 
+# Headers that look like a currency column. The import does not read one (the file is taken to be in the account's currency), but
+# the review says so when one names another currency, so a file for the wrong account is not imported without a word.
+CURRENCY_HEADERS = {"currency", "currency code", "ccy", "curr"}
+# The symbols that name one currency. "$" and "\u00a5" are left out: each is shared by several.
+SYMBOL_CURRENCIES = {"\u20ac": "EUR", "\u00a3": "GBP"}
+
+
+def currency_notes(table: Table, mapping: Mapping, account_code: str) -> list[str]:
+    """Things in the file that say it is in a currency other than the account's, in words for the review. They do not block: nothing
+    is converted, and the person decides. A file that agrees with the account has none."""
+    notes = []
+    used = set(mapping.used().values())
+    for index, header in enumerate(table.headers):
+        if index in used or _normal(header) not in CURRENCY_HEADERS:
+            continue
+        others = sorted({cell.strip().upper() for _, cell in table.values(index) if cell.strip()} - {account_code})
+        if others:
+            notes.append(f"The {header.strip()!r} column says {', '.join(others)}, and this account is in {account_code}. "
+                         f"Nothing is converted: every amount is read as {account_code}.")
+    symbols = set()
+    for _, cell in table.values(mapping.balance) if mapping.balance is not None else []:
+        try:
+            symbol = _split_amount(cell)[1]
+        except ValidationError:
+            continue
+        if symbol is not None and SYMBOL_CURRENCIES.get(symbol, account_code) != account_code:
+            symbols.add(symbol)
+    for symbol in sorted(symbols):
+        notes.append(f"Some amounts have {symbol}, and this account is in {account_code}. "
+                     f"Nothing is converted: every amount is read as {account_code}.")
+    return notes
+
+
 def canonical_amounts(table: Table, mapping: Mapping) -> bool:
     """Recognise the existing Northstar CSV contract, independently of filename and user locale."""
     return table.headers == ["Account ID", "Account Name", "Balance Date", "Balance Amount"] and mapping.date == 2 and mapping.balance == 3

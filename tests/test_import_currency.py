@@ -185,3 +185,72 @@ def test_the_review_no_longer_carries_a_field_that_was_always_empty(client):
     assert "unsupported_currencies" not in body
     bad = client.post(url(account, "review"), json=settings("Date;Balance\n2026-01-31;oops\n", mapping={"date": 0, "balance": 1})).json()
     assert "unsupported_currencies" not in bad
+
+
+# -- a file that says another currency is shown a note, and is not blocked --
+
+def notes_for(text, code, **mapping):
+    table = csvparse.read_table(text.encode("utf-8"))
+    chosen = csvparse.Mapping(**mapping) if mapping else csvparse.suggest_mapping(table.headers)
+    return csvparse.currency_notes(table, chosen, code)
+
+
+def test_a_currency_column_naming_another_currency_is_noted():
+    text = "Date,Balance,Currency\n2026-01-31,5.00,EUR\n2026-02-28,6.00,eur\n"
+    assert notes_for(text, "USD") == [
+        "The 'Currency' column says EUR, and this account is in USD. Nothing is converted: every amount is read as USD."]
+
+
+def test_a_currency_column_that_agrees_with_the_account_says_nothing():
+    assert notes_for("Date,Balance,Currency\n2026-01-31,5.00,USD\n2026-02-28,6.00,usd\n2026-03-31,7.00, \n", "USD") == []
+
+
+def test_only_the_codes_that_differ_are_named_and_each_once():
+    text = "Date,Balance,CCY\n2026-01-31,1,USD\n2026-02-28,2,EUR\n2026-03-31,3,GBP\n2026-04-30,4,EUR\n"
+    assert "says EUR, GBP," in notes_for(text, "USD")[0]
+
+
+@pytest.mark.parametrize("header", ["Currency", "Currency Code", "CCY", "curr", " currency "])
+def test_the_usual_headers_for_a_currency_column_are_recognised(header):
+    assert len(notes_for(f"Date,Balance,{header}\n2026-01-31,5.00,JPY\n", "USD")) == 1
+
+
+def test_a_column_the_person_used_for_something_else_is_not_a_currency_column():
+    text = "Date,Currency\n2026-01-31,5.00\n"
+    assert notes_for(text, "USD", date=0, balance=1) == []
+
+
+def test_a_symbol_that_names_another_currency_is_noted():
+    text = "Date,Balance\n2026-01-31,\u20ac5.00\n2026-02-28,\u20ac6.00\n"
+    assert notes_for(text, "USD") == ["Some amounts have \u20ac, and this account is in USD. Nothing is converted: every amount is read as USD."]
+    assert notes_for("Date,Balance\n2026-01-31,\u00a35.00\n", "USD")[0].startswith("Some amounts have \u00a3,")
+    assert len(notes_for("Date,Balance\n2026-01-31,\u20ac5.00\n2026-02-28,\u00a36.00\n", "USD")) == 2
+
+
+@pytest.mark.parametrize("text, code", [
+    ("Date,Balance\n2026-01-31,$5.00\n", "USD"),               # a dollar sign in a dollar account
+    ("Date,Balance\n2026-01-31,$5.00\n", "CAD"),               # shared by several, so it names none
+    ("Date,Balance\n2026-01-31,\u00a55\n", "JPY"),              # likewise
+    ("Date,Balance\n2026-01-31,\u20ac5.00\n", "EUR"),          # a euro sign in a euro account
+    ("Date,Balance\n2026-01-31,\u00a35.00\n", "GBP"),
+    ("Date,Balance\n2026-01-31,5.00\n", "USD"),
+    ("Date,Balance\n2026-01-31,not a number\n", "USD")])        # an unreadable cell is the review's to report, not this note's
+def test_a_file_that_agrees_with_the_account_has_no_note(text, code):
+    assert notes_for(text, code) == []
+
+
+def test_the_review_carries_the_note_and_the_import_still_goes_through(client):
+    account = currency_account(client, "USD")
+    body = settings("Date,Balance,Currency\n2026-01-31,10.00,EUR\n", mapping={"date": 0, "balance": 1})
+    reviewed = client.post(url(account, "review"), json=body).json()
+    assert reviewed["can_commit"] is True
+    assert reviewed["notes"] == ["The 'Currency' column says EUR, and this account is in USD. Nothing is converted: every amount is read as USD."]
+    saved = client.post(url(account, "commit"), json={**body, "reviewed": reviewed["reviewed"]})
+    assert saved.status_code == 200 and balances_of(client, account)[0][1] == 1000
+
+
+def test_the_review_has_an_empty_list_when_the_file_agrees_and_when_it_cannot_be_read(client):
+    account = currency_account(client, "EUR")
+    assert client.post(url(account, "review"), json=settings("Date;Balance\n2026-01-31;10.00\n", mapping={"date": 0, "balance": 1})).json()["notes"] == []
+    bad = client.post(url(account, "review"), json=settings("Date;Balance\n2026-01-31;oops\n", mapping={"date": 0, "balance": 1})).json()
+    assert bad["can_commit"] is False and bad["notes"] == []

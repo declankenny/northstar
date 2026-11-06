@@ -8,7 +8,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Added
 
-- Balance imports now use the account currency and its decimal places (#128). An inline number-style picker resolves ambiguous amounts, with a preview before review. Currency columns are ignored, excess precision is refused without rounding, and the review names the destination currency.
+- Balance imports now use the account currency and its decimal places (#128). An inline number-style picker resolves ambiguous amounts, with a preview before review. Currency columns are ignored, but the review notes it, without blocking, when a file says another currency than the account's. Excess precision is refused without rounding, and the review names the destination currency.
 
 - System properties (#124): an admin page, System properties under Admin in the sidebar, for settings that belong to the whole installation. Properties are listed by group on the left and edited one at a time on the right, with a hint beside each name, Save and Revert on a changed value, and the reason shown when a value is refused. Every change is in the change log. The first properties are `ui.theme.default`, which sets the theme every new user starts with (whether added from the page, the command line or by reactivating a deleted user), `balance.stale`, which sets the stale-after days the Add type form starts at, and `system.currency`, which becomes the system currency with the currency catalog.
 

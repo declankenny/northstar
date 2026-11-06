@@ -472,6 +472,7 @@ export type ImportReviewed = {
 };
 
 export type ImportReview = {
+  notes: string[]; // what in the file says another currency than the account's: shown, and they do not block the import
   can_commit: boolean;
   errors: ImportProblem[];
   date_format: string | null;

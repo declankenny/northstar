@@ -119,6 +119,7 @@ class ReviewOut(BaseModel):
     rows: list[RowOut]                 # newest first, at most ROWS_SHOWN of each outcome that is not "unchanged"
     hidden: dict[str, int]             # how many more of each outcome there are than are listed
     reviewed: ReviewedOut | None       # to be sent back with the commit; only when it can be committed
+    notes: list[str]                   # what in the file says another currency than the account's; they do not block the import
 
 
 class CommitOut(BaseModel):
@@ -239,9 +240,10 @@ def row_out(row: PlannedRow) -> dict:
 def review(conn, account_id: int, body: ReviewBody) -> dict:
     open_account(conn, account_id)
     today = clock.today()
-    parsed = csvparse.parse_file(csvparse.read_table(file_bytes(body)), mapping_of(body.mapping), body.date_format, today,
-                                 currencies.account_currency(conn, account_id).minor_units, body.number_format)
-    nothing = {"can_commit": False,
+    table = csvparse.read_table(file_bytes(body))
+    currency = currencies.account_currency(conn, account_id)
+    parsed = csvparse.parse_file(table, mapping_of(body.mapping), body.date_format, today, currency.minor_units, body.number_format)
+    nothing = {"can_commit": False, "notes": csvparse.currency_notes(table, mapping_of(body.mapping), currency.code),
                "date_format": body.date_format or parsed.date_format, "counts": None, "rows": [], "hidden": {}, "reviewed": None}
     if parsed.errors:
         return {**nothing, "errors": problems(parsed.errors)}
