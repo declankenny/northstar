@@ -10,17 +10,17 @@ vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api"
 import { downloadExport, fetchAccount, fetchAccounts } from "./api";
 
 const page = (over: Partial<Account> = {}): Account => ({
-  id: 7, name: "Demo Savings", class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
+  id: 7, name: "Demo Savings", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
   balance_count: 0, earliest_date: null, last_date: null, last_cents: null, days_since: null, stale: false, balances: [],
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30", ...over,
 });
 
 const listed = (id: number, name: string): ListedAccount => ({
-  id, name, class_name: "Asset", type_name: "Savings", notes: null, balance_count: 0, last_date: null, last_cents: null, days_since: null, stale: false,
+  id, name, currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_name: "Savings", notes: null, balance_count: 0, last_date: null, last_cents: null, days_since: null, stale: false,
 });
 
 const list = (closed: boolean): AccountList => ({
-  currency: { code: "USD", name: "US Dollar", minor_units: 2 }, closed, accounts: [listed(7, "Demo Savings")], totals: closed ? null : { assets: 0, liabilities: 0 }, classes: [], today: "2026-10-30",
+  currency: { code: "USD", name: "US Dollar", minor_units: 2 }, currencies: [{ code: "USD", name: "US Dollar", minor_units: 2 }], closed, accounts: [listed(7, "Demo Savings")], totals: closed ? null : { assets: 0, liabilities: 0 }, classes: [], today: "2026-10-30",
 });
 
 beforeEach(() => window.history.replaceState(null, "", "/"));

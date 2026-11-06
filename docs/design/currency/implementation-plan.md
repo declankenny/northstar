@@ -18,6 +18,7 @@ Steps with the same number can be done in any order or in parallel.
 | 4 | Locale core: per-user locale, parser, date formatter | #56 | [#126](https://github.com/declankenny/northstar/issues/126) | #125 |
 | 4 | Importer on account currency | #56 | [#128](https://github.com/declankenny/northstar/issues/128) | #125 |
 | 4 | Rates and conversion | #56 | [#130](https://github.com/declankenny/northstar/issues/130) | #125 |
+| 4 | Accounts in other currencies | #56 | [#149](https://github.com/declankenny/northstar/issues/149) | #130 |
 | 5 | Locale controls: profile and new-user flow | #56 | [#127](https://github.com/declankenny/northstar/issues/127) | #126 |
 | 5 | Import number style defaults from locale | #56 | [#129](https://github.com/declankenny/northstar/issues/129) | #126, #128 |
 | 5 | Fetching rates | #56 | [#131](https://github.com/declankenny/northstar/issues/131) | #130, Frankfurter checks |
@@ -76,6 +77,12 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 - Scope: the rate table and the view `account_days`; a page for each currency, opened from its name on the list, with the Enabled switch (saved at once), the date its rates start from, and adding and correcting rates in one dialog; the system currency always enabled; a new foreign account needing a stored rate; the conversion with per-account rounding done in Python; the missing-coverage rule (a series starts at the first date from which every later date can be converted, and says so); the stale-rate warning on the currency page; and the Date system property type with `currency.rate.stale_days` and `currency.rate.start.default`. Per-account views stay in the account's own currency. The design is on #130.
 - Tests: hand-calculated fixtures; halfway cases of both signs; liabilities; differing decimal places; no future rate used; a date with no rate is refused, not partly totalled; the series start with a gap in the middle; corrections change valuation and not balances; a rate cannot be deleted or re-dated; the system currency cannot be switched off; backup, restore and upgrade.
 - Docs: mockups of the currency page, the Add rate dialog and the chart note were agreed first.
+
+### 4d. Accounts in other currencies (#149)
+
+- Scope: the Add account dialog and API choose the currency (the system currency, or one that is enabled and has a rate); every account view carries its currency; a Currency column on the Accounts list and Update balances; every balance written, typed and read in the account's own currency; a Currency tile on the account page. Totals stay in the system currency, and a foreign account's worth in it is v0.5 household reporting.
+- Tests: choosable currencies; creating accounts in 0-, 2- and 3-decimal currencies; refusals; each view carrying the currency; the screens in the person's format.
+- Docs: mockups agreed first.
 
 ### 5a. Locale controls (#127)
 

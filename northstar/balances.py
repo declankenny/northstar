@@ -70,7 +70,7 @@ def _conflict(conn: sqlite3.Connection, kind: str, account_id: int, row) -> dict
         found = {"balance_id": row["id"], "date": row["as_of_date"], "amount_cents": row["amount_cents"], "note": row["note"],
                  "version": row["version"]}
     return {"kind": kind, "account_id": account_id, "account_name": accounts.get_account(conn, account_id)["name"],
-            "by": by, "on": on, **found}
+            "currency": currencies.as_dict(currencies.account_currency(conn, account_id)), "by": by, "on": on, **found}
 
 
 def _deleted(conn: sqlite3.Connection, where: str, args: tuple):
@@ -187,8 +187,10 @@ def add_balance(op: Operation, account_id: int, date_text: str | None,
 
 def add_account_with_balance(op: Operation, class_slug: str | None, name: str | None,
                              type_id: int | None, notes: str | None, amount_text: str | None,
-                             date_text: str | None, today: date, locale_tag: str | None = None) -> int:
-    """Add an account, and its first balance when an amount is typed, all or nothing. Returns the id.
+                             date_text: str | None, today: date, locale_tag: str | None = None,
+                             currency_code: str | None = None) -> int:
+    """Add an account, and its first balance when an amount is typed, all or nothing. Returns the id. The account is in the
+    currency with `currency_code`, which must be usable (see accounts.add_account), or in the system currency when none is given.
 
     A blank amount adds the account with no balance and the date is ignored. A typed amount with a
     blank date is as of today. Anything wrong refuses the whole thing, so no half-made account is left. A form says which
@@ -197,6 +199,10 @@ def add_account_with_balance(op: Operation, class_slug: str | None, name: str | 
     conn = op.conn
     cls = accounts.get_class_by_slug(conn, class_slug)
     currency = currencies.require_system_currency(conn)        # refused before anything is read from the form
+    if currency_code is not None and currency_code != currency.code:
+        currency = currencies.by_code(conn, currency_code)
+        if currency is None:
+            raise ValidationError("Choose a currency from the list.")
     entry = None
     typed = bool((amount_text or "").strip())
     if typed:
@@ -281,6 +287,7 @@ def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict
     is, whether that is stale for its type, and any balance already saved on the chosen date."""
     rows = conn.execute(
         "SELECT a.id, a.name, c.name AS class_name, t.name AS type_name, t.stale_after_days, "
+        "  cu.code AS currency_code, cu.name AS currency_name, cu.minor_units AS currency_minor_units, "
         "  (SELECT b.as_of_date FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_date, "
         "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
@@ -292,13 +299,14 @@ def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict
         "FROM live_accounts a "
         "JOIN account_classes c ON c.id = a.class_id "
         "JOIN account_types t ON t.id = a.type_id "
+        "JOIN currencies cu ON cu.id = a.currency_id "
         "WHERE a.is_open = 1 "
         "ORDER BY a.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
         (as_of.isoformat(), as_of.isoformat()),
     ).fetchall()
     result = []
     for row in rows:
-        item = dict(row)
+        item = accounts.with_currency(dict(row))
         item["days_since"] = staleness.days_since(row["last_date"], today)
         item["stale"] = staleness.is_stale(row["last_date"], today, row["stale_after_days"])
         result.append(item)

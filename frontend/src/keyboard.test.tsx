@@ -10,7 +10,7 @@ vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api"
 import { fetchUpdate } from "./api";
 
 const row = (id: number, name: string, class_name: UpdateRow["class_name"]): UpdateRow => ({
-  id, name, class_name, type_name: "Savings", stale_after_days: 30, last_date: null, last_cents: null,
+  id, name, currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name, type_name: "Savings", stale_after_days: 30, last_date: null, last_cents: null,
   days_since: null, stale: false, existing_cents: null, existing_version: null,
 });
 const page: UpdatePage = {

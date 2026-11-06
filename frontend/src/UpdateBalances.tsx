@@ -27,7 +27,7 @@ function Change({ row, text }: { row: UpdateRow; text: string }) {
   const change = changeFromLast(row, state.cents);
   if (!change) return <span className="m">first balance</span>;
   if (change.diff === 0) return <span className="m">no change</span>;
-  return <span className={change.good ? "p" : "n"}>{change.diff > 0 ? "+" : "−"}{formatCents(Math.abs(change.diff))}</span>;
+  return <span className={change.good ? "p" : "n"}>{change.diff > 0 ? "+" : "−"}{formatCents(Math.abs(change.diff), row.currency)}</span>;
 }
 
 function RowNote({ row, text, error }: { row: UpdateRow; text: string; error?: string }) {
@@ -35,7 +35,7 @@ function RowNote({ row, text, error }: { row: UpdateRow; text: string; error?: s
   const state = rowState(row, text);
   if (row.existing_cents === null) return null;
   if (state.kind === "replace") {
-    return <div className="ub-msg w">will replace {formatCents(row.existing_cents)} saved on this date</div>;
+    return <div className="ub-msg w">will replace {formatCents(row.existing_cents, row.currency)} saved on this date</div>;
   }
   return <div className="ub-msg m">saved on this date</div>;
 }
@@ -239,8 +239,8 @@ export function UpdateBalances() {
             <div key={g.cls} className={`gcard ${g.cls.toLowerCase()}`}>
               <div className="gh"><span className="gt">{g.name}</span><span className="m">{g.hint}</span></div>
               <table className="num ub-table">
-                <colgroup><col style={{ width: "26%" }} /><col style={{ width: "26%" }} /><col style={{ width: "26%" }} /><col /></colgroup>
-                <thead><tr><th>Account</th><th>Last balance</th><th className="r">New balance</th><th className="r">Change</th></tr></thead>
+                <colgroup><col style={{ width: "23%" }} /><col style={{ width: "9%" }} /><col style={{ width: "23%" }} /><col style={{ width: "26%" }} /><col /></colgroup>
+                <thead><tr><th>Account</th><th>Currency</th><th>Last balance</th><th className="r">New balance</th><th className="r">Change</th></tr></thead>
                 <tbody>
                   {g.rows.map((row) => {
                     const text = values[row.id] ?? "";
@@ -248,21 +248,22 @@ export function UpdateBalances() {
                     return (
                       <tr key={row.id} className={cls}>
                         <td><div className="ub-name">{row.name}</div><div className="m ub-sub">{row.type_name}</div></td>
+                        <td>{row.currency.code}</td>
                         <td>
-                          {row.last_cents === null ? <span className="m">No balances yet</span> : <b>{formatCents(row.last_cents)}</b>}
+                          {row.last_cents === null ? <span className="m">No balances yet</span> : <b>{formatCents(row.last_cents, row.currency)}</b>}
                           {row.stale && <span className="badge stale">Stale</span>}
                           {row.last_date && <div className="m ub-sub">{formatDate(row.last_date)} · {ago(row.days_since)}</div>}
                         </td>
                         <td className="r">
-                          <div className={currencyMark() === "$" ? "ub-in" : "ub-in code"}>
-                            <i>{currencyMark()}</i>
+                          <div className={currencyMark(row.currency) === "$" ? "ub-in" : "ub-in code"}>
+                            <i>{currencyMark(row.currency)}</i>
                             <input data-id={row.id} className="num" inputMode="decimal" autoComplete="off" disabled={busy}
                               aria-label={`New balance for ${row.name}`} aria-invalid={errors[row.id] !== undefined}
                               placeholder={row.class_name === "Asset" ? "balance" : "amount owed"}
                               autoFocus={row.id === first} value={text}
                               onChange={(e) => type(row.id, e.target.value)} onKeyDown={move} />
                           </div>
-                          {errors[row.id] === undefined && <AmountReading text={text} />}
+                          {errors[row.id] === undefined && <AmountReading text={text} currency={row.currency} />}
                           <RowNote row={row} text={text} error={errors[row.id]} />
                         </td>
                         <td className="r"><Change row={row} text={text} /></td>

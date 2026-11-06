@@ -16,9 +16,16 @@ from northstar.web.auth_routes import operation, run
 router = APIRouter(prefix="/api")
 
 
+class RowCurrency(BaseModel):
+    code: str
+    name: str
+    minor_units: int
+
+
 class UpdateRow(BaseModel):
     id: int
     name: str
+    currency: RowCurrency        # the account's currency: what is typed and shown on this row is in it
     class_name: str
     type_name: str
     stale_after_days: int

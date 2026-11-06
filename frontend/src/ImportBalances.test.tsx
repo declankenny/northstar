@@ -16,7 +16,7 @@ const ALL_FORMATS = ["YYYY-MM-DD", "MM/DD/YYYY", "DD/MM/YYYY", "DD.MM.YYYY"];
 const CSV = "Date,Balance,Note\n2026-01-31,1000.00,Opening\n2026-02-28,1100.50,\n2026-03-31,1200.00,Bonus\n";
 
 const account = (over: Partial<AccountPage> = {}): AccountPage => ({
-  id: 7, name: "Demo Savings", class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
+  id: 7, name: "Demo Savings", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
   balance_count: 0, earliest_date: null, last_date: null, last_cents: null, days_since: null, stale: false, balances: [],
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30", ...over,
 });

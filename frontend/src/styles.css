@@ -137,7 +137,7 @@ button.link.danger { color: var(--neg); }
 .sub { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
 .w { color: var(--warn); font-weight: 600; }
 .p { color: var(--pos); } .n { color: var(--neg); } .m { color: var(--muted); }
-.acct .tiles { margin-top: 18px; }
+.acct .tiles { margin-top: 18px; grid-template-columns: 1.35fr 1fr 1fr .8fr; }
 .acct-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.5fr 1fr; grid-template-rows: minmax(0, 1fr); gap: 14px; margin-top: 18px; }
 .acct-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .panelhead { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }

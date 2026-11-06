@@ -82,7 +82,7 @@ export async function signOut(): Promise<void> {
  *  or `added` (a date that had no balance). The balance is as it is now: `amount_cents` is null once it is gone, and `version` is
  *  what to send next. `by` and `on` say who changed it and on what UTC date. */
 export type Conflict = {
-  kind: "changed" | "deleted" | "added"; account_id: number; account_name: string; date: string | null; balance_id: number | null;
+  kind: "changed" | "deleted" | "added"; account_id: number; account_name: string; currency: Currency; date: string | null; balance_id: number | null;
   version: number | null; amount_cents: number | null; note: string | null; by: string | null; on: string | null;
 };
 
@@ -223,6 +223,7 @@ export type TypeChoice = { id: number; name: string };
 export type AccountPage = {
   id: number;
   name: string;
+  currency: Currency; // the account's own currency: every amount on its page is in it
   class_name: "Asset" | "Liability";
   type_id: number;
   type_name: string;
@@ -286,6 +287,7 @@ export async function deleteBalance(balanceId: number, version: number): Promise
 export type ListedAccount = {
   id: number;
   name: string;
+  currency: Currency; // the currency last_cents is in
   class_name: "Asset" | "Liability";
   type_name: string;
   notes: string | null;
@@ -300,6 +302,7 @@ export type ClassTypes = { id: number; name: string; types: TypeChoice[] };
 
 export type AccountList = {
   currency: Currency | null; // the system currency; null while it is unset, when no account can be added
+  currencies: Currency[]; // what a new account can be in: the system currency first, then the other usable ones
   closed: boolean;
   accounts: ListedAccount[]; // grouped by class, then type, then name
   totals: { assets: number; liabilities: number } | null; // as of today; only for the open list
@@ -312,6 +315,7 @@ export type NewAccount = {
   name: string;
   type_id: number;
   notes: string;
+  currency?: string; // a currency code; left out means the system currency
   amount: string; // typed text; blank adds the account with no balance
   date: string; // as of; ignored when the amount is blank
 };
@@ -375,6 +379,7 @@ export async function saveProperty(name: string, value: string): Promise<Propert
 export type UpdateRow = {
   id: number;
   name: string;
+  currency: Currency; // what is typed and shown on this row is in it
   class_name: "Asset" | "Liability";
   type_name: string;
   stale_after_days: number;

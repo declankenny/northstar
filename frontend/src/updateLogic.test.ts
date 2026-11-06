@@ -3,7 +3,7 @@ import type { UpdateRow } from "./api";
 import { baselineText, changedAmounts, changeFromLast, isTyped, rowState, summarize, valuesForDate } from "./updateLogic";
 
 const row = (id: number, over: Partial<UpdateRow> = {}): UpdateRow => ({
-  id, name: `Account ${id}`, class_name: "Asset", type_name: "Checking", stale_after_days: 35,
+  id, name: `Account ${id}`, currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_name: "Checking", stale_after_days: 35,
   last_date: "2026-10-01", last_cents: 100000, days_since: 30, stale: false, existing_cents: null, existing_version: null, ...over,
 });
 

@@ -7,7 +7,7 @@ import { BalanceDialog, ChangeClassDialog, EditAccountDialog } from "./AccountDi
 import { formatDate } from "./dates";
 import { conflictText } from "./conflicts";
 import { ConfirmDialog } from "./Dialogs";
-import { formatCents, percentChange } from "./money";
+import { type Currency, formatCents, percentChange } from "./money";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
 import { Link, navigate } from "./router";
@@ -35,15 +35,15 @@ function ago(days: number | null): string {
 }
 
 /** What deleting a balance does to the account's history, from where that entry sits in the list (newest first). */
-function deleteConsequence(balances: BalanceRow[], index: number): string {
+function deleteConsequence(balances: BalanceRow[], index: number, currency: Currency): string {
   const entry = balances[index];
-  const head = `The ${formatCents(entry.amount_cents)} entry for ${formatDate(entry.as_of_date)} is removed. `;
+  const head = `The ${formatCents(entry.amount_cents, currency)} entry for ${formatDate(entry.as_of_date)} is removed. `;
   if (balances.length === 1) return head + "It is the only balance, so this account will have no history.";
   if (index === balances.length - 1) {
     return head + `It is the first balance, so the history will start at the next entry, on ${formatDate(balances[index - 1].as_of_date)}.`;
   }
   const before = balances[index + 1];
-  return head + `Until the next entry, the balance will go back to ${formatCents(before.amount_cents)} (entered ${formatDate(before.as_of_date)}).`;
+  return head + `Until the next entry, the balance will go back to ${formatCents(before.amount_cents, currency)} (entered ${formatDate(before.as_of_date)}).`;
 }
 
 export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
@@ -143,7 +143,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
       <div className="tiles">
         <div className="tile main">
           <div className="label">Latest balance</div>
-          <div className="val num">{account.last_cents === null ? "—" : formatCents(account.last_cents)}</div>
+          <div className="val num">{account.last_cents === null ? "—" : formatCents(account.last_cents, account.currency)}</div>
           <div className="delta num">
             <span className="m">
               {account.last_date ? `as of ${formatDate(account.last_date)} · ${ago(account.days_since)}` : "No balances yet"}
@@ -153,7 +153,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
         </div>
         <div className="tile">
           <div className="label">Change</div>
-          <div className="val num">{view ? `${sign}${formatCents(Math.abs(diff))}` : "—"}</div>
+          <div className="val num">{view ? `${sign}${formatCents(Math.abs(diff), account.currency)}` : "—"}</div>
           <div className="delta num">
             {view && (
               <>
@@ -169,6 +169,11 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
           <div className="delta num m">
             {view && `since ${formatDate(view.data.start)} · ${formatInteger(account.balance_count)} in all`}
           </div>
+        </div>
+        <div className="tile">
+          <div className="label">Currency</div>
+          <div className="val num">{account.currency.code}</div>
+          <div className="delta m">{account.currency.name}</div>
         </div>
       </div>
 
@@ -192,7 +197,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
               tip={(point) => (
                 <>
                   <span>{formatDate(point.date)}</span>
-                  <b>{formatCents(balanceOf(point))}</b>
+                  <b>{formatCents(balanceOf(point), account.currency)}</b>
                 </>
               )}
             />
@@ -223,9 +228,9 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
                           {formatDate(b.as_of_date)}
                           {b.note && <div className="rownote" title={b.note}>{b.note}</div>}
                         </td>
-                        <td className="r">{formatCents(b.amount_cents)}</td>
+                        <td className="r">{formatCents(b.amount_cents, account.currency)}</td>
                         <td className={`r ${stepGood}`}>
-                          {step === null ? "—" : `${step >= 0 ? "+" : "-"}${formatCents(Math.abs(step))}`}
+                          {step === null ? "—" : `${step >= 0 ? "+" : "-"}${formatCents(Math.abs(step), account.currency)}`}
                         </td>
                         <td className="row-actions">
                           {open && (
@@ -264,7 +269,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
       )}
       {dialog?.kind === "delete-balance" && (
         <ConfirmDialog title="Delete this balance?" confirmLabel="Delete" danger onClose={() => setDialog(null)}
-          text={deleteConsequence(account.balances, dialog.index)} onConflict={refresh}
+          text={deleteConsequence(account.balances, dialog.index, account.currency)} onConflict={refresh}
           conflict={{ lead: "Nothing was deleted.", text: (c) => conflictText(c, account.balances[dialog.index]?.amount_cents) }}
           onConfirm={async () => apply(await deleteBalance(account.balances[dialog.index].id, account.balances[dialog.index].version))} />
       )}

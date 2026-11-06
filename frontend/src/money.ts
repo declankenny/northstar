@@ -2,8 +2,9 @@
 // dinars). It is only turned into a decimal here, for display, with whole-number arithmetic, so no floating point touches an
 // amount.
 //
-// Until accounts can be in different currencies, every amount is in the system currency, which the app tells this module
-// once it knows it (setCurrency). Marks, grouping and where the currency goes come from the person's locale (locale.ts).
+// An amount is in the currency of its account, which a caller passes. When it does not, the amount is in the system currency,
+// which the app tells this module once it knows it (setCurrency): totals, and the pages that have no account. Marks, grouping and
+// where the currency goes come from the person's locale (locale.ts).
 // US dollars show as $1,234.56 in US English and every other case shows the currency code.
 
 import { formatInteger, getLocale, type Locale, normalizeGroupMarks } from "./locale";
@@ -26,8 +27,8 @@ const decimals = (abs: number, places: number, locale: Locale = getLocale()) =>
   places === 0 ? "" : locale.decimal_mark + String(abs % 10 ** places).padStart(places, "0");
 
 /** The mark shown beside an amount box: $ for US dollars in US English, the currency code otherwise. */
-export function currencyMark(): string {
-  return current.code === "USD" && getLocale().tag === "en-US" ? "$" : current.code;
+export function currencyMark(currency: Currency = current): string {
+  return currency.code === "USD" && getLocale().tag === "en-US" ? "$" : currency.code;
 }
 
 /** 123456 becomes "$1,234.56" for US dollars in US English, "EUR 1,234.56" otherwise, and "1.234,56 EUR" where the locale puts
@@ -61,14 +62,14 @@ export type Reading = { cents: number } | { message: string };
  *  else, and the look-alikes of the group mark. More decimal places than the currency has is refused. Null when nothing is
  *  typed. The refusals are worded as the server's are, so the page can say why as you type. This mirrors the server's
  *  parse_amount; the server still checks every amount when it is saved. */
-export function readAmount(text: string): Reading | null {
+export function readAmount(text: string, currency: Currency = current): Reading | null {
   if (text.trim() === "") return null;
-  const places = current.minor_units;
+  const places = currency.minor_units;
   const { decimal_mark: decimal, group_mark: group } = getLocale();
   let s = text.trim();
   const negative = s.startsWith("-");
   if (negative) s = s.slice(1);
-  if (current.code === "USD" && s.startsWith("$")) s = s.slice(1);
+  if (currency.code === "USD" && s.startsWith("$")) s = s.slice(1);
   s = normalizeGroupMarks(s, group);
   const at = s.indexOf(decimal);
   const whole = at < 0 ? s : s.slice(0, at);
@@ -87,8 +88,8 @@ export function readAmount(text: string): Reading | null {
 }
 
 /** Typed text as an integer count of minor units, or null when the server would refuse it (or nothing is typed). */
-export function parseCents(text: string): number | null {
-  const reading = readAmount(text);
+export function parseCents(text: string, currency: Currency = current): number | null {
+  const reading = readAmount(text, currency);
   return reading && "cents" in reading ? reading.cents : null;
 }
 
@@ -100,13 +101,13 @@ export function percentChange(diff: number, base: number): number | null {
 /** 123456 becomes "1234.56", or "1234,56" where the decimal mark is a comma: the text an amount box starts with, with no
  *  grouping or currency, so what is edited is exactly what the parser reads. `locale` is for a caller that needs the text as
  *  it was written under another locale. */
-export function centsToInput(cents: number, locale: Locale = getLocale()): string {
+export function centsToInput(cents: number, locale: Locale = getLocale(), currency: Currency = current): string {
   const abs = Math.abs(cents);
-  return `${cents < 0 ? "-" : ""}${Math.floor(abs / 10 ** current.minor_units)}${decimals(abs, current.minor_units, locale)}`;
+  return `${cents < 0 ? "-" : ""}${Math.floor(abs / 10 ** currency.minor_units)}${decimals(abs, currency.minor_units, locale)}`;
 }
 
 /** What an empty amount box shows: 0.00 for dollars, 0 for yen, 0,00 where the decimal mark is a comma. */
-export function amountPlaceholder(): string {
+export function amountPlaceholder(currency: Currency = current): string {
   const { decimal_mark } = getLocale();
-  return current.minor_units === 0 ? "0" : `0${decimal_mark}${"0".repeat(current.minor_units)}`;
+  return currency.minor_units === 0 ? "0" : `0${decimal_mark}${"0".repeat(currency.minor_units)}`;
 }

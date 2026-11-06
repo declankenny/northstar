@@ -7,7 +7,7 @@ import { centsToInput, parseCents } from "./money";
 
 /** The text a row starts with for the date shown: what is saved on it, or nothing. */
 export function baselineText(row: UpdateRow, locale?: Locale): string {
-  return row.existing_cents === null ? "" : centsToInput(row.existing_cents, locale);
+  return row.existing_cents === null ? "" : centsToInput(row.existing_cents, locale, row.currency);
 }
 
 /** Whether the box differs from what is saved on the date, so it is the user's own typing. */
@@ -36,7 +36,7 @@ export type RowState =
 
 export function rowState(row: UpdateRow, text: string): RowState {
   if (text.trim() === "") return { kind: "blank" };
-  const cents = parseCents(text);
+  const cents = parseCents(text, row.currency);
   if (cents === null) return { kind: "invalid" };
   if (row.existing_cents === null) return { kind: "new", cents };
   return { kind: cents === row.existing_cents ? "same" : "replace", cents };

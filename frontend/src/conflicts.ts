@@ -14,15 +14,15 @@ function whoWhen(conflict: Conflict): string {
 export function conflictText(conflict: Conflict, openedAt?: number): string {
   const where = `${conflict.account_name} on ${conflict.date === null ? "that date" : formatDate(conflict.date)}`;
   if (conflict.kind === "deleted") return `The balance for ${where} was deleted by ${whoWhen(conflict)}.`;
-  const now = conflict.amount_cents === null ? "" : ` It is now ${formatCents(conflict.amount_cents)}${
-    openedAt === undefined ? "" : ` (you opened it at ${formatCents(openedAt)})`}.`;
+  const now = conflict.amount_cents === null ? "" : ` It is now ${formatCents(conflict.amount_cents, conflict.currency)}${
+    openedAt === undefined ? "" : ` (you opened it at ${formatCents(openedAt, conflict.currency)})`}.`;
   return `${where} was ${conflict.kind === "added" ? "added" : "changed"} by ${whoWhen(conflict)}.${now}`;
 }
 
 /** The short note under a row of the Update screen: "Changed by Sam Example on Nov 2, 2026: now $1,200.00". */
 export function rowConflictNote(conflict: Conflict): string {
   const verb = { changed: "Changed", added: "Added", deleted: "Deleted" }[conflict.kind];
-  const now = conflict.amount_cents === null ? "" : `: now ${formatCents(conflict.amount_cents)}`;
+  const now = conflict.amount_cents === null ? "" : `: now ${formatCents(conflict.amount_cents, conflict.currency)}`;
   return `${verb} by ${whoWhen(conflict)}${now}`;
 }
 

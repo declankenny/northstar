@@ -179,7 +179,7 @@ describe("the new-user form's number and date format", () => {
 // -- amount boxes and the refusal when the format changed --
 
 const list = (): AccountList => ({
-  currency: { code: "EUR", name: "Euro", minor_units: 2 }, closed: false, accounts: [], totals: { assets: 0, liabilities: 0 }, today: "2026-11-05",
+  currency: { code: "EUR", name: "Euro", minor_units: 2 }, currencies: [{ code: "EUR", name: "Euro", minor_units: 2 }], closed: false, accounts: [], totals: { assets: 0, liabilities: 0 }, today: "2026-11-05",
   classes: [{ id: 1, name: "Asset", types: [{ id: 1, name: "Savings" }] }, { id: 2, name: "Liability", types: [] }],
 });
 
@@ -251,7 +251,7 @@ describe("the balance dialog", () => {
 // -- the Update balances screen --
 
 const row = (id: number, name: string, over = {}) => ({
-  id, name, class_name: "Asset", type_name: "Savings", stale_after_days: 35, last_date: "2026-10-31", last_cents: 100000,
+  id, name, currency: { code: "EUR", name: "Euro", minor_units: 2 }, class_name: "Asset", type_name: "Savings", stale_after_days: 35, last_date: "2026-10-31", last_cents: 100000,
   days_since: 5, stale: false, existing_cents: null, existing_version: null, ...over,
 });
 const page = (rows = [row(1, "Test checking"), row(2, "Test savings", { existing_cents: 123456, existing_version: 4 })]): UpdatePage => ({

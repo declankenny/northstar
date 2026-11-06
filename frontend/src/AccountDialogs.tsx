@@ -21,7 +21,7 @@ export function BalanceDialog(props: {
 }) {
   const { account, editing, onConflict } = props;
   const [date, setDate] = useState(editing ? editing.as_of_date : account.today);
-  const [amount, setAmount] = useState(editing ? centsToInput(editing.amount_cents) : "");
+  const [amount, setAmount] = useState(editing ? centsToInput(editing.amount_cents, undefined, account.currency) : "");
   const [note, setNote] = useState(editing?.note ?? "");
   const [version, setVersion] = useState<number | null>(editing?.version ?? null);
   const [openedAt, setOpenedAt] = useState(editing?.amount_cents);    // what the person was looking at, for the message
@@ -42,7 +42,7 @@ export function BalanceDialog(props: {
   const useCurrent = () => {
     if (!conflict || conflict.amount_cents === null) return;
     setDate(conflict.date ?? date);
-    setAmount(centsToInput(conflict.amount_cents));
+    setAmount(centsToInput(conflict.amount_cents, undefined, account.currency));
     setNote(conflict.note ?? "");
     setVersion(conflict.version);
     setOpenedAt(conflict.amount_cents);
@@ -69,9 +69,9 @@ export function BalanceDialog(props: {
           Not in the future.{!editing && " A date that already has a balance is replaced."}
         </div>
         <label>Balance
-          <input inputMode="decimal" placeholder={amountPlaceholder()} value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus />
+          <input inputMode="decimal" placeholder={amountPlaceholder(account.currency)} value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus />
         </label>
-        <AmountReading text={amount} />
+        <AmountReading text={amount} currency={account.currency} />
         <label>Note (optional)
           <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
         </label>
@@ -194,12 +194,16 @@ export function AddAccountDialog(props: {
   const [notes, setNotes] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(list.today);
+  const [code, setCode] = useState(list.currency?.code ?? "");
   const { busy, error, run } = useAction();
+  // A Currency box is offered only when an account can be in a currency other than the system currency.
+  const several = list.currencies.length > 1;
+  const chosen = list.currencies.find((c) => c.code === code) ?? list.currency;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (typeId === "") return;
-    run(() => props.onSave({ account_class: accountClass, name, type_id: typeId, notes, amount, date }));
+    run(() => props.onSave({ account_class: accountClass, name, type_id: typeId, notes, amount, date, ...(several ? { currency: code } : {}) }));
   };
 
   return (
@@ -220,27 +224,37 @@ export function AddAccountDialog(props: {
           <label>Name
             <input value={name} placeholder="e.g. Joint Savings" onChange={(e) => setName(e.target.value)} required autoFocus />
           </label>
-          <label>Type
-            <select value={typeId} onChange={(e) => setTypeId(Number(e.target.value))} required>
-              <option value="" disabled>Choose a type</option>
-              {cls.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </label>
+          <div className={several ? "two" : undefined}>
+            <label>Type
+              <select value={typeId} onChange={(e) => setTypeId(Number(e.target.value))} required>
+                <option value="" disabled>Choose a type</option>
+                {cls.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+            {several && (
+              <label>Currency
+                <select value={code} onChange={(e) => { setCode(e.target.value); setAmount(""); }}>
+                  {list.currencies.map((c, i) => <option key={c.code} value={c.code}>{c.code} · {c.name}{i === 0 ? " (system currency)" : ""}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
           <label>Notes (optional)
             <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
           <div className="two">
             <label>{owed ? "Amount owed (optional)" : "Current balance (optional)"}
-              <input inputMode="decimal" placeholder={amountPlaceholder()} value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <input inputMode="decimal" placeholder={amountPlaceholder(chosen ?? undefined)} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </label>
             <label>As of
               <input type="date" value={date} max={list.today} onChange={(e) => setDate(e.target.value)} />
             </label>
           </div>
-          <AmountReading text={amount} />
+          <AmountReading text={amount} currency={chosen ?? undefined} />
           <div className="hint">
             {owed ? "Enter what is owed as a positive number. Leave it blank to add the account without a balance."
-              : "Leave the balance blank to add the account without one."} Amounts are in {list.currency.name} ({list.currency.code}).
+              : "Leave the balance blank to add the account without one."} Amounts are in {chosen!.name} ({chosen!.code}).
+            {several && props.isAdmin && <> <Link to={PATHS.currencies} onClick={props.onClose}>Need another currency? Enable it and add a rate on the Currencies page.</Link></>}
           </div>
           {error && <p className="notice bad" role="alert">{error}</p>}
           <div className="foot">
