@@ -197,6 +197,16 @@ docker compose start
 
 The backup is checked before anything changes. The database it replaces is moved aside as `northstar.db.before-restore-<time>` in the same volume, never deleted.
 
+## Exchange rates
+
+Northstar fetches exchange rates for you once a day, from [Frankfurter](https://frankfurter.dev/), which publishes central-bank rates. The container needs to reach `api.frankfurter.dev` over HTTPS. A request carries only currency codes and dates, never an amount, an account or a name. The time of day is the system property `currency.rate.fetch_time` under Admin, System properties (18:00 in the time zone set in `system.timezone` until you change it), and clearing it turns automatic fetching off. A currency's page under Admin, Currencies shows when it runs and how the last run went. The fetch only adds dates that have no rate, so a rate you typed or corrected is never replaced. To fetch now, for example the first time after you enable a currency, run:
+
+```sh
+docker compose exec northstar python -m northstar.rates fetch
+```
+
+It prints `Rates fetched.` when it worked. If a run fails, the next day's run tries again from where it stopped.
+
 ## Users and passwords
 
 Admins add and remove users, and manage account types, from the app. Everyone who signs in sees all the household's data. These commands do the same from the command line, and are the way back in if every admin is locked out:

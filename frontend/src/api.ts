@@ -549,12 +549,20 @@ export async function fetchCurrencies(signal?: AbortSignal): Promise<{ currencie
  *  `until` is the date of the next newer rate (null for the newest): a correction changes net worth up to it. */
 export type RateRow = { id: number; date: string; rate: string; source: string; changed: string; until: string | null };
 
+/** The automatic rate fetch as the currency page shows it: its daily start time (null when it is off), the time zone that time is in,
+ *  and the last run, whose date and time are in that zone. `detail` is a message Northstar wrote, never the provider's text. */
+export type FetchStatus = {
+  time: string | null; zone: string;
+  last_run: { date: string; time: string; outcome: "running" | "succeeded" | "failed" | "abandoned"; detail: string | null } | null;
+};
+
 /** A currency's page. `rates_start` is the date rates are wanted from (null until the currency is first enabled, and always for
  *  the system currency); `stale` is set when the newest rate is older than the threshold and an account is open. */
 export type CurrencyPageData = {
   code: string; name: string; minor_units: number; is_enabled: boolean; is_system: boolean; system_code: string | null;
   rates_start: string | null; default_rates_start: string; account_count: number; open_account_count: number;
-  can_add_rates: boolean; rates: RateRow[]; stale: { last_date: string; days: number; threshold: number } | null; today: string;
+  can_add_rates: boolean; rates: RateRow[]; stale: { last_date: string; days: number; threshold: number } | null;
+  fetch: FetchStatus | null; today: string;
 };
 
 export async function fetchCurrency(code: string, signal?: AbortSignal): Promise<CurrencyPageData> {

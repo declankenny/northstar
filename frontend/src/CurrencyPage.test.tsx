@@ -22,7 +22,7 @@ const page = (over: Partial<CurrencyPageData> = {}): CurrencyPageData => ({
   default_rates_start: "2000-01-01", account_count: 3, open_account_count: 2, can_add_rates: true,
   rates: [rate(3, "2026-05-12", "1.0840"), rate(2, "2026-05-05", "1.0815", { until: "2026-05-12" }),
           rate(1, "2026-05-01", "1.0850", { until: "2026-05-05" })],
-  stale: null, today: "2026-06-03", ...over,
+  stale: null, fetch: null, today: "2026-06-03", ...over,
 });
 
 afterEach(() => {
@@ -59,6 +59,65 @@ describe("the currency page", () => {
     cleanup();
     await open(page({ rates_start: "2026-05-01" }));
     expect(screen.queryByText(/Nothing from/)).toBeNull();
+  });
+
+  describe("the automatic fetch", () => {
+    const run = (over = {}) => ({ date: "2026-06-03", time: "18:00", outcome: "succeeded" as const, detail: "Completed.", ...over });
+    const fetchOf = (over = {}) => ({ time: "18:00", zone: "America/Chicago", last_run: run(), ...over });
+
+    it("says when it runs, in which zone, from where, and that the last run succeeded", async () => {
+      await open(page({ fetch: fetchOf() }));
+      expect(screen.getByText("Rate source")).toBeTruthy();
+      expect(screen.getByText(/Fetched daily at 18:00 \(America\/Chicago\) from Frankfurter/)).toBeTruthy();
+      expect(screen.getByText("Last run: today, 18:00, succeeded.")).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Change the time" }).getAttribute("href")).toBe("/system-properties");
+      expect(screen.queryByText(/\+\d/)).toBeNull();                   // no counts by currency
+    });
+
+    it("names the day of an older run in the person's format", async () => {
+      await open(page({ fetch: fetchOf({ last_run: run({ date: "2026-06-01", time: "18:02" }) }) }));
+      expect(screen.getByText("Last run: Jun 1, 2026, 18:02, succeeded.")).toBeTruthy();
+    });
+
+    it("shows a failed run in red with Northstar's message and when it runs again", async () => {
+      await open(page({ fetch: fetchOf({ last_run: run({ outcome: "failed", detail: "Could not complete: Gave up after 4 tries: The rate provider did not answer." }) }) }));
+      const line = screen.getByText(/^Last run:/);
+      expect(line.textContent).toBe("Last run: today, 18:00, failed. Could not complete: Gave up after 4 tries: The rate provider did not answer. It runs again tomorrow at 18:00.");
+      expect(line.className).toContain("bad");
+    });
+
+    it("says an interrupted run was interrupted, and that it runs again at the time when the run was not today", async () => {
+      await open(page({ fetch: fetchOf({ last_run: run({ date: "2026-06-02", outcome: "abandoned", detail: "Abandoned: its lock expired before it finished." }) }) }));
+      expect(screen.getByText(/^Last run:/).textContent).toBe("Last run: Jun 2, 2026, 18:00, was interrupted. Abandoned: its lock expired before it finished. It runs again at 18:00.");
+    });
+
+    it("says nothing has run and where the first run starts", async () => {
+      await open(page({ fetch: fetchOf({ last_run: null }) }));
+      expect(screen.getByText("No run yet. The first run fetches rates from the start date, Jan 1, 2020.")).toBeTruthy();
+    });
+
+    it("says a run is going on", async () => {
+      await open(page({ fetch: fetchOf({ last_run: run({ outcome: "running", detail: null }) }) }));
+      expect(screen.getByText("Running now. It started at 18:00.")).toBeTruthy();
+    });
+
+    it("says automatic fetching is off when no time is set, and links to set one", async () => {
+      await open(page({ fetch: fetchOf({ time: null }) }));
+      expect(screen.getByText("Rates are entered by hand. Automatic fetching is off.")).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Set a time" }).getAttribute("href")).toBe("/system-properties");
+      expect(screen.queryByText(/Last run/)).toBeNull();
+    });
+
+    it("is not shown when the page has none, as for the system currency", async () => {
+      await open(page({ fetch: null }));
+      expect(screen.queryByText("Rate source")).toBeNull();
+    });
+
+    it("names Frankfurter as the source of a fetched rate and Manual for a typed one", async () => {
+      await open(page({ rates: [rate(2, "2026-06-03", "1.1219", { source: "provider" }), rate(1, "2026-06-02", "1.1000")] }));
+      const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1).map((r) => r.querySelectorAll("td")[2].textContent);
+      expect(rows).toEqual(["Frankfurter", "Manual"]);
+    });
   });
 
   it("warns that the rates are stale, with the days and the threshold", async () => {

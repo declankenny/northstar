@@ -1,6 +1,6 @@
 # In-app scheduler: design
 
-Status: third revision, November 6, 2026, for issue #138. Step 1 (the time zone, #152) is built and merged. Step 2 (the scheduler) is built in the pull request that adds this folder. Step 3 (the rate fetch, #131) is not started. This is not the spec or the decisions log: the rules are in `docs/spec.md` and the reasons in `docs/decisions.md`.
+Status: third revision, November 6, 2026, for issue #138. Step 1 (the time zone, #152) is built and merged. Step 2 (the scheduler) is built in the pull request that adds this folder. Step 3 (the rate fetch, #131) is built in its own pull request. This is not the spec or the decisions log: the rules are in `docs/spec.md` and the reasons in `docs/decisions.md`.
 
 Each item is labelled. **Decided** means Declan agreed it. **Proposed** means it is the recommendation and has not been challenged or confirmed. **Open** means it is unresolved: do not guess it.
 
@@ -33,7 +33,7 @@ Built in #152 and #153. **`system.timezone`** is a String system property holdin
 
 **A Time data type.** `HH:MM` on a 24-hour clock with a leading zero, validated, edited with a time box. Added by the migration that creates the scheduler's tables.
 
-**The registry.** A list in code, `REGISTRY`, empty until the rate fetch is added. Each entry has the job's name (`currency.rates.fetch`), the function to call, the name of the Time property that holds its start time, an overall deadline (default 10 minutes) and its retry pauses (default 30 seconds, 2 minutes and 5 minutes). The registry is the catalog: a job exists because code says so. The database holds only what changes at run time.
+**The registry.** A list in code, `jobs.REGISTRY`, which holds the rate fetch (#131). Each entry has the job's name (`currency.rates.fetch`), the function to call, the name of the Time property that holds its start time, an overall deadline (default 10 minutes) and its retry pauses (default 30 seconds, 2 minutes and 5 minutes). The registry is the catalog: a job exists because code says so. The database holds only what changes at run time.
 
 **One property per job.** The rate fetch's will be `currency.rate.fetch_time` (#131), default to be chosen there. A job whose property is unset is not scheduled.
 

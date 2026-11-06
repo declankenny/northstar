@@ -9,7 +9,7 @@ shows what the server now holds.
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from northstar import clock, currencies, rates
+from northstar import clock, currencies, rate_fetch, rates
 from northstar.web.auth_routes import operation, require_admin, run
 
 router = APIRouter(prefix="/api/currencies", dependencies=[Depends(require_admin)])
@@ -42,6 +42,19 @@ class Stale(BaseModel):
     threshold: int         # the currency.rate.stale_days property
 
 
+class FetchRun(BaseModel):
+    date: str              # YYYY-MM-DD, the day the run started, in the installation's time zone
+    time: str              # HH:MM, 24-hour, in the same zone
+    outcome: str           # running, succeeded, failed or abandoned
+    detail: str | None     # a short message written by Northstar, never provider text
+
+
+class FetchStatus(BaseModel):
+    time: str | None       # the daily start time (currency.rate.fetch_time), None when automatic fetching is off
+    zone: str              # the installation's time zone name, UTC when none is set
+    last_run: FetchRun | None
+
+
 class CurrencyPage(BaseModel):
     code: str
     name: str
@@ -56,6 +69,7 @@ class CurrencyPage(BaseModel):
     can_add_rates: bool            # enabled or with accounts, and not the system currency
     rates: list[RateRow]           # newest first
     stale: Stale | None            # set when the newest rate is older than the threshold and an account is open
+    fetch: FetchStatus | None      # the automatic fetch, set when rates can be added for this currency
     today: str
 
 
@@ -77,7 +91,8 @@ class RateCorrection(BaseModel):
 
 def _page(conn, code: str) -> dict:
     today = clock.today()
-    return {**rates.currency_page(conn, code, today), "today": today.isoformat()}
+    page = rates.currency_page(conn, code, today)
+    return {**page, "fetch": rate_fetch.status(conn) if page["can_add_rates"] else None, "today": today.isoformat()}
 
 
 @router.get("", response_model=CurrencyList)
