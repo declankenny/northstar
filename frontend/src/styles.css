@@ -392,6 +392,11 @@ a.btn { display: inline-block; text-decoration: none; }
 .cur-fixed { display: flex; gap: 12px; align-items: baseline; margin-bottom: 12px; font-size: 14px; }
 .cur-fixed .k { color: var(--muted); font-size: 13px; }
 .notice.info { background: var(--accent-soft); color: var(--accent); border-radius: 9px; padding: 10px 12px; margin: 0 0 12px; }
+.cur-source { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; font-size: 14px; }
+.cur-source-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.cur-source .k { display: block; font-size: 12px; color: var(--muted); }
+.cur-run { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.cur-run.bad { color: var(--neg); }
 
 /* The signed-in shell while it waits for the person's locale, or after that failed. */
 .app-wait { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; max-width: 480px; margin: 0 auto; padding: 64px 24px; }

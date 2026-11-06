@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { addRate, changeCurrency, correctRate, type CurrencyPageData, fetchCurrency, type RateRow } from "./api";
+import { addRate, changeCurrency, correctRate, type CurrencyPageData, fetchCurrency, type FetchStatus, type RateRow } from "./api";
 import { dayNumber, formatDate, isoFromDay } from "./dates";
 import { Modal, useAction } from "./Dialogs";
 import { getLocale } from "./locale";
@@ -9,6 +9,43 @@ import { PATHS } from "./routes";
 import { useRequest } from "./useRequest";
 
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** A rate's source as the page names it: rates fetched by Northstar come from Frankfurter. */
+const sourceName = (source: string) => (source === "provider" ? "Frankfurter" : capital(source));
+
+/** The automatic fetch: when it runs, in which time zone, and what the last run did. The time is changed on the System properties page. */
+function FetchLine({ fetch, today, start }: { fetch: FetchStatus; today: string; start: string | null }) {
+  const run = fetch.last_run;
+  const link = <Link to={PATHS.properties}>{fetch.time ? "Change the time" : "Set a time"}</Link>;
+  if (!fetch.time) {
+    return (
+      <div className="cur-source">
+        <div className="cur-source-row"><div><span className="k">Rate source</span>Rates are entered by hand. Automatic fetching is off.</div>{link}</div>
+      </div>
+    );
+  }
+  const when = run && (run.date === today ? "today" : formatDate(run.date));
+  const next = run && run.date === today ? `tomorrow at ${fetch.time}` : `at ${fetch.time}`;
+  return (
+    <div className="cur-source">
+      <div className="cur-source-row">
+        <div><span className="k">Rate source</span>Fetched daily at {fetch.time} ({fetch.zone}) from Frankfurter</div>
+        {link}
+      </div>
+      {!run ? (
+        <p className="cur-run">No run yet.{start && ` The first run fetches rates from the start date, ${formatDate(start)}.`}</p>
+      ) : run.outcome === "running" ? (
+        <p className="cur-run">Running now. It started at {run.time}.</p>
+      ) : run.outcome === "succeeded" ? (
+        <p className="cur-run">Last run: {when}, {run.time}, succeeded.</p>
+      ) : (
+        <p className="cur-run bad" role="status">
+          Last run: {when}, {run.time}, {run.outcome === "failed" ? "failed" : "was interrupted"}. {run.detail} It runs again {next}.
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** The rate's own text as the person would type it: their decimal mark, and no group marks. */
 const typed = (rate: string) => rate.replace(".", getLocale().decimal_mark);
@@ -130,6 +167,8 @@ export function CurrencyPage({ code }: { code: string }) {
         </p>
       )}
 
+      {page.fetch && <FetchLine fetch={page.fetch} today={page.today} start={page.rates_start} />}
+
       {!page.is_system && (
         <>
           <div className="cur-ratehead">
@@ -153,7 +192,7 @@ export function CurrencyPage({ code }: { code: string }) {
                     <tr key={r.id}>
                       <td>{formatDate(r.date)}</td>
                       <td className="num r">{formatRate(r.rate)}</td>
-                      <td>{capital(r.source)}</td>
+                      <td>{sourceName(r.source)}</td>
                       <td>{formatDate(r.changed)}</td>
                       <td className="r"><button className="btn ghost small" onClick={() => setDialog({ rate: r })}>Correct</button></td>
                     </tr>

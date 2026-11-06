@@ -667,5 +667,7 @@ def test_a_time_property_lists_as_a_time_through_the_api(client):
     assert refused.status_code == 422 and "24-hour clock" in refused.json()["detail"]
 
 
-def test_the_registry_ships_empty_until_a_job_is_added():
-    assert scheduler.REGISTRY == ()
+def test_the_default_registry_is_the_one_in_jobs_and_a_given_one_replaces_it(tmp_path):
+    from northstar import jobs
+    assert scheduler.Scheduler(tmp_path / "x.db").registry == jobs.REGISTRY
+    assert scheduler.Scheduler(tmp_path / "x.db", ()).registry == ()

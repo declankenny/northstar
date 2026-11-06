@@ -6,11 +6,14 @@ and its currency and date never change (the database enforces that), so a correc
 nothing else. The conversion itself is in networth.py.
 """
 
+import argparse
 import re
 import sqlite3
+import sys
+from contextlib import closing
 from datetime import date
 
-from northstar import currencies, db, locales, money, system_properties, writer
+from northstar import config, currencies, db, locales, money, system_properties, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -134,3 +137,34 @@ def currency_page(conn: sqlite3.Connection, code: str, today: date) -> dict:
         "account_count": counts["total"], "open_account_count": counts["open"],
         "can_add_rates": not is_system and (bool(row["is_enabled"]) or counts["total"] > 0),
         "rates": rates, "stale": stale}
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`python -m northstar.rates fetch`: fetch the rates now, in the foreground, as a manual run (see northstar/rate_fetch.py). It
+    takes the job's lock like the scheduler does, so it is refused while a fetch is already running. Exit status 0 when it succeeded."""
+    from northstar import jobs, scheduler       # imported here: they import this module
+    parser = argparse.ArgumentParser(prog="python -m northstar.rates", description="Exchange rates (NORTHSTAR_DB, default data/northstar.db).")
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("fetch", help="fetch the missing rates from the provider now")
+    parser.parse_args(argv)
+    try:
+        path = config.database_path()
+        if not path.is_file():
+            raise ValidationError(f"There is no database at {path}. Start Northstar once to set one up, then run this again.")
+        with closing(db.connect(path)) as conn:
+            db.require_current(conn, path)
+            job = next(j for j in jobs.REGISTRY if j.name == "currency.rates.fetch")
+            outcome = scheduler.run_now(scheduler.Env(conn, jobs.REGISTRY), job)
+            if outcome is None:
+                print("The rate fetch is already running.", file=sys.stderr)
+                return 1
+            last = conn.execute("SELECT detail FROM sys_job_runs WHERE job = ? ORDER BY id DESC LIMIT 1", (job.name,)).fetchone()
+            print("Rates fetched." if outcome == "succeeded" else f"The rate fetch did not finish ({outcome}): {last['detail']}")
+            return 0 if outcome == "succeeded" else 1
+    except ValidationError as err:
+        print(f"Error: {err}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

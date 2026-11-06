@@ -91,9 +91,9 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 5c. Fetching rates (#131)
 
-- Scope: `python -m northstar.rates fetch`; on the currency page, a rate source (manual or automatic) and "fetch rates from [date]", which also covers starting earlier; and the Fetch now button. There is no Add Currency wizard: switching a currency on is the Enabled switch on its page (#130).
+- Scope: the rate fetch as the first job of the in-app scheduler (design in `docs/design/scheduler/`): `currency.rates.fetch`, the Time property `currency.rate.fetch_time` (18:00), insert-only fetching from Frankfurter in spans of a year, `python -m northstar.rates fetch`, a Rate source block on the currency page (when it runs, in which zone, how the last run went, no counts) and the source label Frankfurter. Built without the Fetch now button (#154) and without a "fetch rates from [date]" action, which the rates start date and the backfill of the days before the oldest stored rate replace.
 - Tests: fetch never overwrites; a missed run is repaired by the next; provider timeout and invalid responses; a partial failure keeps what was committed.
-- Docs: the cron example in `docs/operating.md`, and a mockup of the new controls on the currency page first.
+- Docs: an Exchange rates section in `docs/operating.md` in place of a cron example, and the mockup of the currency page block, agreed first.
 
 ### 6. First-run setup page (#64)
 
