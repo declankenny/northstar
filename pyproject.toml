@@ -15,6 +15,9 @@ dev = [
     # Reads CLDR for scripts/generate_locales.py and the test that the migrated locales match it. Development only: the
     # application and its image never read CLDR.
     "babel==2.18.0",
+    # The IANA zone database for the tests that use a zone name. Windows has none of its own, and the image has
+    # /usr/share/zoneinfo, so the application never needs this package. Development only.
+    "tzdata==2026.6",
 ]
 
 [tool.setuptools]

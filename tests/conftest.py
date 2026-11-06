@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from northstar import db, sessions, users
+from northstar import clock, db, sessions, users
 from northstar.writer import Operation
 from northstar.web.app import create_app
 
@@ -83,6 +83,16 @@ def cheap_password_hashing(monkeypatch):
     """Production hashing takes half a second and 128 MiB, and the tests hash hundreds of passwords, so they
     use the cheapest valid cost. The tests that are about the cost set what they need (test_password_hashing)."""
     monkeypatch.setattr("northstar.users.SCRYPT", {"n": 2**4, "r": 8, "p": 1})
+
+
+@pytest.fixture(autouse=True)
+def utc_clock_zone(monkeypatch):
+    """The clock's zone is process-wide and create_app sets it, so every test starts and ends in UTC, and TZ on the
+    machine running the tests never reaches a test's database."""
+    monkeypatch.delenv("TZ", raising=False)
+    clock.set_zone(None)
+    yield
+    clock.set_zone(None)
 
 
 @pytest.fixture(autouse=True)
