@@ -17,7 +17,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import date
 
-from northstar import db, writer
+from northstar import clock, db, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -32,6 +32,7 @@ INTEGER_MAX = 2**53 - 1
 _INTEGER = re.compile(r"-?\d{1,16}")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 SYSTEM_CURRENCY = "system.currency"     # saving it also enables that currency (see set_property)
+SYSTEM_TIMEZONE = "system.timezone"     # saving it also sets the clock's zone (see set_property)
 
 
 @dataclass(frozen=True)
@@ -71,10 +72,21 @@ def catalog_locale(ctx: Context) -> str:
     return ACCEPT
 
 
+def iana_timezone(ctx: Context) -> str:
+    """The installation's time zone: a name in the zone database, such as America/Chicago. It does not lock."""
+    if ctx.proposed is not None:
+        try:
+            clock.zone_for(ctx.proposed)
+        except ValueError:
+            raise ValidationError("That isn't a time zone name. Use a name such as America/Chicago or Europe/London.") from None
+    return ACCEPT
+
+
 VALIDATORS = {
     "positive_integer": positive_integer,
     "catalog_currency": catalog_currency,
     "catalog_locale": catalog_locale,
+    "iana_timezone": iana_timezone,
 }
 
 
@@ -143,7 +155,24 @@ def _checked(conn: sqlite3.Connection, row: sqlite3.Row, text: str) -> str:
 
 def set_property(op: Operation, name: str, text: str | None) -> str | None:
     """Set a property from submitted text and return what is now stored (None when unset). A submission that, once
-    normalized, equals the stored value writes nothing and runs no validator."""
+    normalized, equals the stored value writes nothing and runs no validator. Saving the time zone also makes it the
+    zone `today()` uses, once the change has been committed."""
+    stored = _set_property(op, name, text)
+    if name == SYSTEM_TIMEZONE:
+        clock.set_zone(stored)
+    return stored
+
+
+def apply_timezone(conn: sqlite3.Connection, environment: str | None = None) -> None:
+    """At startup: set the clock's zone from the system.timezone property. While the property is empty and TZ names a
+    zone, TZ is saved into it once, by the system user, and from then on TZ is ignored (see clock.start_zone)."""
+    use, save = clock.start_zone(get_value(conn, SYSTEM_TIMEZONE), environment)
+    if save:
+        set_property(Operation(conn, None, "cli"), SYSTEM_TIMEZONE, save)
+    clock.set_zone(use)
+
+
+def _set_property(op: Operation, name: str, text: str | None) -> str | None:
     conn = op.conn
     with db.write_transaction(conn):
         row = _row(conn, name)

@@ -14,7 +14,7 @@ curl -O https://raw.githubusercontent.com/declankenny/northstar/main/compose.yam
 curl -o .env https://raw.githubusercontent.com/declankenny/northstar/main/.env.example
 ```
 
-Open `.env` and set `TZ` to your timezone (a name such as `America/Chicago`). "Today" in Northstar is the date in that timezone, and it decides which accounts count as stale. Then:
+Open `.env` and set `TZ` to your timezone (a name such as `America/Chicago`). "Today" in Northstar is the date in that timezone, and it decides which accounts count as stale. The first time Northstar starts it saves `TZ` as the system property `system.timezone`, and after that you change the zone under Admin, System properties, not in `.env`. Then:
 
 ```
 docker compose up -d
@@ -114,7 +114,7 @@ Everything is set in `.env` beside the compose file, and every setting has a def
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `TZ` | `UTC` | The household's timezone. It decides what "today" is, which balance dates are allowed, and which accounts are stale. |
+| `TZ` | `UTC` | The household's timezone, used once: the first time Northstar starts it is saved as the system property `system.timezone`, which then decides what "today" is, which balance dates are allowed, and which accounts are stale. Changing `TZ` later has no effect, and the log warns when it differs from the property. |
 | `NORTHSTAR_PORT` | `8000` | The port on this machine where the app listens, on `127.0.0.1` only. Only the compose file reads it, and the proxy example above does not use it. |
 | `NORTHSTAR_COOKIE_SECURE` | `1` in the compose files | Marks the sign-in cookie `Secure`. The value must be exactly `1`: anything else counts as off, and the app logs a warning at startup. Without the compose file the app's own default is off. |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | The reverse proxy whose forwarded addresses are believed, as an address or a network. Leave it alone when there is no proxy. |

@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from northstar import config, db, sessions, throttle, users
+from northstar import config, db, sessions, system_properties, throttle, users
 from northstar.web import (account_api, api_routes, auth_routes, currencies_api, errors, import_api, imports_api, profile_api, security_headers,
                            system_properties_api, types_api, update_api, users_api, version_api)
 
@@ -68,6 +68,8 @@ def warn_if_cookie_is_not_secure() -> None:
 def create_app(db_path: str | Path | None = None) -> FastAPI:
     db_path = Path(db_path) if db_path else config.database_path()
     db.upgrade(db_path)     # a backup first if a migration is pending, and a refusal if the database is newer
+    with closing(db.connect(db_path)) as conn:
+        system_properties.apply_timezone(conn)      # what "today" is: the system.timezone setting, from TZ the first time
     throttle.log_limits()
     warn_if_cookie_is_not_secure()
     users.prepare_dummy_hash()
