@@ -56,6 +56,13 @@ describe("the Currencies page", () => {
     expect(screen.getByText("4 of 4 shown")).toBeTruthy();
   });
 
+  it("links each currency's name to its page", async () => {
+    await open();
+    expect(screen.getByRole("link", { name: "Euro" }).getAttribute("href")).toBe("/currencies/EUR");
+    expect(screen.getByRole("link", { name: "Kuwaiti Dinar" }).getAttribute("href")).toBe("/currencies/KWD");
+    expect(within(screen.getByRole("table")).queryAllByRole("button")).toHaveLength(0);       // the list has no action of its own
+  });
+
   it("shows the stored flag and says nothing about a system currency", async () => {
     await open();
     expect(screen.queryByText(/system currency/i)).toBeNull();

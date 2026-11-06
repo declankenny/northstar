@@ -29,7 +29,7 @@ def test_the_flag_is_the_stored_one_and_the_system_currency_is_not_special(clien
         conn.execute("UPDATE currencies SET is_enabled = 1 WHERE code = 'EUR'")
     rows = by_code(client)
     assert rows["EUR"]["is_enabled"] is True
-    assert rows["USD"]["is_enabled"] is False        # it is the system currency, and the list does not know that
+    assert rows["USD"]["is_enabled"] is True         # the system currency is always enabled, and the list does not know it is the one
 
 
 def test_the_list_is_the_same_whether_or_not_the_system_currency_is_set(client):
@@ -56,6 +56,8 @@ def test_it_counts_open_and_closed_accounts_and_not_deleted_ones(client):
 def test_each_account_is_counted_under_its_own_currency(client):
     with with_db(client) as conn:
         conn.execute("UPDATE currencies SET is_enabled = 1 WHERE code = 'KWD'")
+        conn.execute("INSERT INTO exchange_rates (currency_id, rate_date, rate, source, created_by, updated_by) "
+                     "VALUES ((SELECT id FROM currencies WHERE code = 'KWD'), '2026-01-01', '3.25', 'manual', 1, 1)")
         accounts.add_account(op(conn), "Test one", ASSET, type_id(conn, "Savings"), None,
                              currencies.by_code(conn, "KWD").id)
         add_account(conn, "Test two", ASSET, "Savings")
@@ -68,7 +70,7 @@ def test_an_ordinary_user_is_refused_and_so_is_someone_signed_out(member_client,
     assert anon_client.get(URL).status_code == 401
 
 
-def test_it_only_reads(client):
+def test_the_catalog_cannot_be_created_replaced_or_deleted(client):
     assert client.post(URL, json={}).status_code in (404, 405)
     assert client.put(f"{URL}/USD", json={"is_enabled": True}).status_code in (404, 405)
     assert client.delete(f"{URL}/USD").status_code in (404, 405)

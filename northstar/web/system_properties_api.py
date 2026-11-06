@@ -21,7 +21,7 @@ class Option(BaseModel):
 
 class PropertyRow(BaseModel):
     name: str                  # lowercase dotted: the first segment is the group the page lists it under
-    type: str                  # String, Integer or Lookup
+    type: str                  # String, Integer, Lookup or Date
     value: str | None          # always text, null when unset
     allow_null: bool           # whether it may be set back to unset
     hint: str

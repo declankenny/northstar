@@ -1,47 +1,103 @@
 """Net worth. Plain functions, no web code.
 
-Net worth on a date = assets minus liabilities, where each account counts at its latest balance
-on or before that date. An account with no balance yet counts for nothing. Closed accounts need
-no special case: their final balance is zero and it carries forward like any other.
+Net worth on a date = assets minus liabilities, where each account counts at its latest balance on or before that date. An
+account with no balance yet counts for nothing. Closed accounts need no special case: their final balance is zero and it
+carries forward like any other.
 
-An account is counted in the class it has now, for every date, so changing an account's class
-changes past net worth too. That is the rule agreed in the spec.
+Every household figure is in the system currency. An account in another currency is converted with the latest rate of its
+currency on or before the date (the view `account_days` looks both up), each account on its own, rounded half away from zero to
+a whole minor unit of the system currency, and the converted amounts are summed. A zero is converted like any other amount. A
+date on which an account has no rate to convert with has no net worth: it is refused, never totalled without that account.
+A single account's figures are in its own currency and need no rate.
+
+An account is counted in the class it has now, for every date, so changing an account's class changes past net worth too.
+That is the rule agreed in the spec.
 
 There is one calculation, net_worth_on. Everything else only chooses which dates to ask about.
 """
 
 import calendar
+import json
 import sqlite3
 from datetime import date, timedelta
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 
-from northstar import accounts
+from northstar import accounts, currencies, locales
 from northstar.errors import ValidationError
 
 ASSET = "Asset"
 LIABILITY = "Liability"
 
 
-def net_worth_on(conn: sqlite3.Connection, as_of: date, account_id: int | None = None) -> dict:
-    """Assets, liabilities and net worth on one date, all in cents.
+class NoRate(ValidationError):
+    """A date on which an account is in a currency that has no rate yet, so its balance cannot be converted."""
 
-    With an account_id the same calculation covers only that account: its balance lands in
-    assets or liabilities by its class, so a single account is just a small household.
+    def __init__(self, day: str, codes: list[str]):
+        super().__init__(
+            f"There is no {', '.join(codes)} rate on or before {locales.speaking().date(day)}, so net worth cannot be worked out "
+            "for that date. An administrator can add rates on the currency's page.")
+        self.codes = codes
+
+    @property
+    def details(self) -> dict:
+        return {"missing_rates": self.codes}
+
+
+def convert(amount: int, minor_units: int, rate: str, system_minor_units: int) -> int:
+    """An amount in the minor units of a currency with `minor_units` decimal places, converted at `rate` (the exact decimal text:
+    1 unit of that currency = `rate` units of the system currency) into minor units of the system currency, rounded half away
+    from zero. Exact decimal arithmetic, never floating point."""
+    with localcontext() as context:
+        context.prec = 80
+        value = Decimal(amount) * Decimal(rate) * Decimal(10) ** (system_minor_units - minor_units)
+        return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def _last_day(conn: sqlite3.Connection) -> str | None:
+    """The last day the view covers: the newest balance or rate. Nothing changes after it, so a later date is its answer."""
+    return conn.execute("SELECT MAX(day) FROM account_days").fetchone()[0]
+
+
+def _totals(conn: sqlite3.Connection, days: list[date], account_id: int | None) -> dict[date, dict]:
+    """Assets, liabilities and net worth for each date, in one query. With an account the figures are in its own currency."""
+    last = _last_day(conn)
+    effective = {day: (min(day.isoformat(), last) if last is not None else None) for day in days}
+    wanted = sorted({day for day in effective.values() if day is not None})
+    by_day: dict[str, list[sqlite3.Row]] = {day: [] for day in wanted}
+    if wanted:
+        for row in conn.execute(
+                "SELECT day, class_name, currency_code, minor_units, converts, amount, rate FROM account_days "
+                "WHERE day IN (SELECT value FROM json_each(?)) AND (? IS NULL OR account_id = ?)",
+                (json.dumps(wanted), account_id, account_id)):
+            by_day[row["day"]].append(row)
+    system = currencies.system_currency(conn)
+    result = {}
+    for day in days:
+        totals = {ASSET: 0, LIABILITY: 0}
+        missing = []
+        for row in (by_day[effective[day]] if effective[day] is not None else []):
+            amount = row["amount"]
+            if account_id is None and row["converts"]:
+                if row["rate"] is None:
+                    missing.append(row["currency_code"])
+                    continue
+                amount = convert(amount, row["minor_units"], row["rate"], system.minor_units)
+            totals[row["class_name"]] += amount
+        if missing:
+            raise NoRate(day.isoformat(), sorted(set(missing)))
+        result[day] = {"date": day.isoformat(), "assets": totals[ASSET], "liabilities": totals[LIABILITY],
+                       "net_worth": totals[ASSET] - totals[LIABILITY]}
+    return result
+
+
+def net_worth_on(conn: sqlite3.Connection, as_of: date, account_id: int | None = None) -> dict:
+    """Assets, liabilities and net worth on one date, in the system currency, as integer minor units.
+
+    With an account_id the same calculation covers only that account, in its own currency and with no conversion: its balance
+    lands in assets or liabilities by its class, so a single account is just a small household. A date on which an account has
+    no rate to convert with raises NoRate.
     """
-    rows = conn.execute(
-        "SELECT c.name AS class_name, SUM(b.amount_cents) AS total "
-        "FROM live_accounts a "
-        "JOIN account_classes c ON c.id = a.class_id "
-        "JOIN live_balances b ON b.account_id = a.id AND b.as_of_date = ("
-        "    SELECT MAX(b2.as_of_date) FROM live_balances b2 "
-        "    WHERE b2.account_id = a.id AND b2.as_of_date <= ?) "
-        "WHERE (? IS NULL OR a.id = ?) "
-        "GROUP BY c.name",
-        (as_of.isoformat(), account_id, account_id),
-    ).fetchall()
-    by_class = {row["class_name"]: row["total"] for row in rows}
-    assets, liabilities = by_class.get(ASSET, 0), by_class.get(LIABILITY, 0)
-    return {"date": as_of.isoformat(), "assets": assets, "liabilities": liabilities,
-            "net_worth": assets - liabilities}
+    return _totals(conn, [as_of], account_id)[as_of]
 
 
 PERIODS = ("day", "week", "month")
@@ -71,18 +127,32 @@ def sample_dates(start: date, end: date, period: str) -> list[date]:
     return sorted(set(dates))
 
 
+def _uncovered(conn: sqlite3.Connection, start: date, end: date) -> tuple[str | None, list[str]]:
+    """The last date up to `end` on which a balance in another currency has no rate, and the currencies that lack one from
+    `start` on."""
+    row = conn.execute("SELECT MAX(day) FROM account_days WHERE converts AND rate IS NULL AND day <= ?", (end.isoformat(),)).fetchone()
+    codes = [r[0] for r in conn.execute(
+        "SELECT DISTINCT currency_code FROM account_days WHERE converts AND rate IS NULL AND day BETWEEN ? AND ? ORDER BY 1",
+        (start.isoformat(), end.isoformat()))]
+    return row[0], codes
+
+
 def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None = None,
                      end: date | None = None, period: str = "month",
                      account_id: int | None = None) -> dict:
     """Net worth at regular dates between start and end, oldest first. Each point is net_worth_on.
 
-    End defaults to today and cannot be after it. Start defaults to the date of the first balance
-    and is never earlier than that: before any balance net worth is zero only because nothing has
-    been entered, and drawing it would look like a climb from zero. The dates actually used are
-    returned. Empty when there are no balances up to end.
+    End defaults to today and cannot be after it. Start defaults to the date of the first balance and is never earlier than
+    that: before any balance net worth is zero only because nothing has been entered, and drawing it would look like a climb
+    from zero. The dates actually used are returned. Empty when there are no balances up to end.
 
-    With an account_id the series covers that account alone, and "the first balance" is that
-    account's own first balance. An unknown account raises NotFoundError.
+    A household series also never starts before the first date from which every later date can be converted. A balance in
+    another currency has no rate before that currency's first rate, so the dates up to there are left out and `limited` says
+    where the series starts and which currencies are missing rates; it is None when nothing was left out. If no date up to end
+    can be converted the series is empty and `limited` says so.
+
+    With an account_id the series covers that account alone, in its own currency, and "the first balance" is that account's own
+    first balance. An unknown account raises NotFoundError.
     """
     if account_id is not None:
         accounts.get_account(conn, account_id)
@@ -95,12 +165,23 @@ def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None =
         "SELECT MIN(as_of_date) FROM live_balances WHERE (? IS NULL OR account_id = ?)",
         (account_id, account_id)).fetchone()[0]
     if first is None or date.fromisoformat(first) > end:
-        return {"start": end.isoformat(), "end": end.isoformat(), "period": period, "series": []}
+        return {"start": end.isoformat(), "end": end.isoformat(), "period": period, "series": [], "limited": None}
     start = max(start, date.fromisoformat(first)) if start else date.fromisoformat(first)
     if start > end:
         raise ValidationError("The start date cannot be after the end date.")
+    limited = None
+    if account_id is None:
+        through, codes = _uncovered(conn, start, end)
+        if through is not None and date.fromisoformat(through) >= start:
+            begins = date.fromisoformat(through) + timedelta(days=1)
+            if begins > end or through >= _last_day(conn):
+                return {"start": start.isoformat(), "end": end.isoformat(), "period": period, "series": [],
+                        "limited": {"starts_on": None, "currencies": codes}}
+            start, limited = begins, {"starts_on": begins.isoformat(), "currencies": codes}
+    days = sample_dates(start, end, period)
+    totals = _totals(conn, days, account_id)
     return {"start": start.isoformat(), "end": end.isoformat(), "period": period,
-            "series": [net_worth_on(conn, day, account_id) for day in sample_dates(start, end, period)]}
+            "series": [totals[day] for day in days], "limited": limited}
 
 
 def month_end_dates(first: date, end: date) -> list[date]:

@@ -14,7 +14,45 @@ import { fetchNetWorth } from "./api";
 const TODAY = "2026-10-30";
 const answer = (start: string): NetWorthSeries => ({
   today: TODAY, start, end: TODAY, period: "week",
-  series: [{ date: start, assets: 100000, liabilities: 0, net_worth: 100000 }],
+  series: [{ date: start, assets: 100000, liabilities: 0, net_worth: 100000 }], limited: null,
+});
+
+describe("Dashboard when a currency has no rate for the early dates", () => {
+  const limitedAnswer = (starts_on: string | null, currencies: string[], series = true): NetWorthSeries => ({
+    ...answer("2026-05-01"), series: series ? answer("2026-05-01").series : [], limited: { starts_on, currencies },
+  });
+  afterEach(cleanup);
+
+  async function show(reply: NetWorthSeries, isAdmin = false) {
+    vi.mocked(fetchNetWorth).mockImplementation(async (options) => (options ? reply : answer("2020-01-01")));
+    render(<Dashboard isAdmin={isAdmin} />);
+    await screen.findByTestId("chart");
+  }
+
+  it("says where the chart starts and which currency has no rate before then", async () => {
+    await show(limitedAnswer("2026-05-01", ["EUR"]));
+    expect(screen.getByRole("status").textContent).toBe("Starts May 1, 2026: EUR has no rate before this.");
+    expect(screen.queryByRole("link")).toBeNull();            // the page to add rates is for admins
+  });
+
+  it("names every currency, and gives an admin a link to each one's page", async () => {
+    await show(limitedAnswer("2026-05-01", ["EUR", "GBP", "JPY"]), true);
+    expect(screen.getByRole("status").textContent).toContain("EUR, GBP and JPY have no rate before this.");
+    expect(screen.getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+      ["Add earlier EUR rates", "/currencies/EUR"], ["Add earlier GBP rates", "/currencies/GBP"], ["Add earlier JPY rates", "/currencies/JPY"]]);
+  });
+
+  it("says so instead of 'nothing to show' when no date can be worked out", async () => {
+    vi.mocked(fetchNetWorth).mockImplementation(async (options) => (options ? limitedAnswer(null, ["EUR"], false) : answer("2020-01-01")));
+    render(<Dashboard />);
+    expect((await screen.findByRole("status")).textContent).toBe("Net worth cannot be shown yet: EUR has no rate for these dates.");
+    expect(screen.queryByText("Nothing to show yet.")).toBeNull();
+  });
+
+  it("shows nothing extra when nothing was left out", async () => {
+    await show(answer("2026-05-01"));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });
 
 describe("Dashboard", () => {

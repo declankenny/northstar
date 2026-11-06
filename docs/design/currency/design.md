@@ -1,6 +1,6 @@
 # Multi-currency and locale-aware formatting: design
 
-Status: a draft dated November 3, 2026. It has been checked against `docs/spec.md`, `docs/roadmap.md` and #56 but not against the code, and the open questions are listed at the end. Nothing here is the spec or the decisions log.
+Status: a draft dated November 3, 2026, updated November 6, 2026 with the design of exchange rates and conversion (#130). Nothing here is the spec or the decisions log. The open questions are listed at the end.
 
 Each item below is labelled. **Decided** means Declan agreed it. **Proposed** means it is the recommendation and has not been challenged or confirmed. **Open** means it is unresolved: do not guess it.
 
@@ -16,7 +16,7 @@ Northstar stays a balance-based tracker. Useful historical context matters more 
 
 **System currency** (decided). Chosen once, before the first account exists, and never changed. An existing installation is migrated to USD. A fresh installation chooses it on the first-run setup page. Another household currency means a fresh instance and an export and import, which must carry actual amounts and not relabel dollars.
 
-**Single and multi-currency** (decided in #125). There is no switch and no stored flag. The catalog holds every ISO currency, so "single-currency" is derived: the interface hides currency choices and rate screens while no currency other than the system currency is enabled and no account uses one. A currency that is enabled or used stays so, because rows are never deleted. The server needs no separate enforcement: an account's currency must be usable, meaning the system currency or an enabled one. Nothing enables a currency until rates exist (#130, #131), because the net worth would otherwise add amounts in different currencies. The Add Currency wizard shows the irreversibility warning.
+**Single and multi-currency** (decided in #125). There is no switch and no stored flag. The catalog holds every ISO currency, so "single-currency" is derived: the interface hides currency choices and rate screens while no currency other than the system currency is enabled and no account uses one. A currency that has an account stays usable by it, because rows are never deleted. The server needs no separate enforcement: an account's currency must be usable, meaning enabled, and the system currency always is (saving it enables it). An admin enables any other currency on its page, and a foreign account needs at least one stored rate, which is what keeps a net worth from adding amounts in different currencies.
 
 **Account currency** (decided). Set when the account is created and never edited. A wrong choice on an account with no balances is fixed by deleting and recreating it, since a deleted account frees its name. Creating an account needs an enabled currency and, for a foreign currency, at least one stored rate. This does not promise coverage for every older date.
 
@@ -30,11 +30,11 @@ Northstar stays a balance-based tracker. Useful historical context matters more 
 
 **Selection** (decided). On reporting date D, each account uses its latest balance on or before D, then the latest stored rate on or before D. Balance carry-forward and rate carry-forward are separate. Today's spec rules for accounts with no balance by D are unchanged.
 
-**Zero balances** (proposed). A zero converts to zero without looking up a rate. This lets a closed account stop collection, avoids a stale-rate warning for a currency that contributes nothing, and means a zero recorded before a currency's rates begin does not make that date unavailable. A missing account still contributes nothing, as today.
+**Zero balances** (decided). A zero balance is converted like any other and needs a rate on its date. There is no special rule: a zero recorded before a currency's rates begin makes those dates unavailable, like any balance there, and the fix is the same, to add rates back to that date.
 
 **Insert-only feeds and corrections** (decided). An automatic fetch inserts missing observations and never overwrites a stored rate for the same currency and date, whether that rate came from a provider or from an admin. An admin can correct a rate's value but cannot delete a rate or change its date. A correction can change historical totals and the screen says so. Provenance is a source column (provider or manual) and the change log records corrections. A separate "corrected" marker is not planned.
 
-**History** (decided). Daily rates only. When an admin adds a currency, the wizard asks for the date rates should start from, defaulting to the provider's earliest date for that currency, and fetches daily rates from there. Dates before it are unsupported for that currency. The wizard can be rerun to start earlier. There is no monthly sampling, cutoff or per-currency override. TODO: confirm the volume and the provider's range limits before relying on this.
+**History** (decided). Daily rates only. Each currency has a date its rates are wanted from, `currencies.rates_start`, chosen when it is first enabled and filled in from the system property `currency.rate.start.default`. It is an intent and is not enforced: the currency page compares it with the first stored rate and says which dates have none, and the coverage rule below comes from the rates that exist. Fetching rates from that date, and starting earlier, belong to #131. There is no monthly sampling, cutoff or per-currency override. TODO: confirm the volume and the provider's range limits before relying on a start date as far back as 2000.
 
 ## Valuation
 
@@ -42,11 +42,11 @@ Northstar stays a balance-based tracker. Useful historical context matters more 
 
 **Conversion** (decided). For native integer N, native precision p, reporting precision q and exact decimal rate R, the result is `round_half_away_from_zero(N × R × 10^q / 10^p)`. Each account is converted and rounded on its own and the converted integers are summed. The asset-minus-liability sign convention is unchanged.
 
-**Where it runs** (proposed). The server computes every number. Conversion is exact decimal arithmetic in Python. If the conversion sits behind a database view, the view finds each account's balance and rate for a date and Python multiplies and rounds, because SQLite has no decimal type and a 10^13 amount times a scaled rate overflows 64-bit integers. The rate is stored as text and parsed as a decimal. This is open until the table and view are designed.
+**Where it runs** (decided). The server computes every number. A view, `account_days`, holds one row for every day from the first balance to the newest balance or rate and every account that has a balance by then, with that account's latest balance and the latest rate of its currency on or before the day. It does only the lookup: the conversion is exact decimal arithmetic in Python (`networth.convert`), because SQLite has no decimal type and a 10^13 amount times a scaled rate overflows 64 bits, which SQLite turns into a float without saying so. The rate is stored as text and parsed as a decimal. The calendar stops at the newest balance or rate, because nothing changes after it, and a later date is answered with the last day. It cannot end at today: SQLite's `'now'` is UTC, and the application reads the date in one place, `clock.today()`.
 
 **Limits** (proposed). Keep the current ceiling of about 10^13 in minor units, which stays inside JavaScript's safe integer range for any system currency.
 
-**Missing coverage** (open). A requested result must never present a partial total as complete or silently omit an unconverted account. Because rates carry forward, missing coverage can only fall before a currency's earliest stored rate, so the affected dates are always a prefix. Two designs fit: hide a requested graph entirely when any point lacks coverage, or start the series at the first covered date with an explanation, like the existing rule that a series never starts before the first balance. The choice waits for the conversion view design. Stale rates beyond the threshold (default 14 days, from System Properties) warn and still calculate.
+**Missing coverage** (decided). A requested result is never a partial total and never silently omits an unconverted account. A date on which a balance has no rate is refused, naming the currencies. The uncovered dates are not always a prefix of the series: a EUR account that starts in March with EUR rates that start in May leaves March and April uncovered while January and February, before the account, are covered. So a series starts at the first date from which every later date can be converted, says where it starts and which currencies have no rate before then ("Starts May 1, 2026: EUR has no rate before this"), and offers admins the page of each currency. It is empty, with that explanation, when no date up to the end can be converted. Stale rates beyond the threshold (`currency.rate.stale_days`, default 14) warn on the currency page and still calculate. **Per-account views** (decided) are in the account's own currency, with no conversion and no coverage rule: only household totals convert.
 
 **Calculated on demand** (decided). Converted balances are never stored as authoritative. Any later cache must be invalidated by balance changes, rate changes and account changes.
 
@@ -80,9 +80,9 @@ The detail is in [locale.md](../locale.md).
 
 **Safety** (decided). Fetch outside write transactions and commit validated batches through the shared writer. A partial failure keeps committed rates and a rerun is safe. A provider failure never stops balance entry. Requests carry only currencies and dates.
 
-## Add Currency wizard
+## Currency page
 
-Steps (proposed): choose a catalog currency and see the permanent system currency; choose automatic or manual-only; choose the date rates start from, with provider coverage shown; fetch with progress and failures; review stored coverage and enable the currency. Manual-only lets an admin enter dated rates. It needs a mockup before any build. What happens after a partly successful fetch, and how a manual-only currency's coverage is reviewed, are open.
+A currency's page is where an admin works with it: the name on the Currencies list opens it. The Enabled switch saves at once in both directions, with no confirmation, because disabling deletes nothing and is undone by switching it on again, and helper text under it states the effect. The Rates start date is a field on the page once the currency is on. While it is off the field is hidden and the helper text names the date switching on will use (the kept one, or the default), which is then changed in the field. Rates are listed newest first, and one Add rate button opens a dialog that also serves Correct. The page allows rates only while the currency is enabled or has an account, and the system currency's page says it needs none. There is no Add Currency wizard: what it was to decide moves here, and #131 adds a rate source (manual or automatic) and "fetch rates from [date]" to this page.
 
 ## Migration and recovery
 
@@ -94,11 +94,9 @@ The acceptance list from the interview carries over: existing USD results unchan
 
 ## Open questions
 
-- Missing-coverage presentation (truncated series or hidden graph).
-- Rate table shape and precision, and whether conversion sits behind a view.
+Resolved in #130: the missing-coverage presentation, the rate table and the view, and zero balances. Still open:
+
 - Whether a later feature adds an informational export Currency column (outside #128).
 - Catalog policy for withdrawn and special codes, and for precision changes.
-- Provider terms, publication time and range limits.
-- Wizard behaviour after a partial fetch, and manual-only coverage review.
+- Provider terms, publication time and range limits, and whether a rates start date as far back as 2000 fits them (#131).
 - Whether the System Properties design adds a multi-currency toggle.
-- Whether zero balances need no rate (proposed above, not yet confirmed).

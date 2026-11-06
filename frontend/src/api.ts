@@ -12,6 +12,9 @@ export type NetWorthSeries = {
   end: string;
   period: Period;
   series: Point[];
+  /** Set when dates were left out because a currency has no rate for them: where the series now starts (null when no date can be
+   *  worked out) and the currencies that lack a rate before then. */
+  limited: { starts_on: string | null; currencies: string[] } | null;
 };
 
 /** Net worth at regular dates. With no start the server begins at the first balance. With an
@@ -352,7 +355,7 @@ export async function deleteType(id: number): Promise<TypeList> {
  *  `options` are the allowed values of a Lookup, else empty. */
 export type PropertyOption = { value: string; label: string };
 export type PropertyRow = {
-  name: string; type: "String" | "Integer" | "Lookup"; value: string | null; allow_null: boolean; hint: string;
+  name: string; type: "String" | "Integer" | "Lookup" | "Date"; value: string | null; allow_null: boolean; hint: string;
   read_only: boolean; options: PropertyOption[];
 };
 /** The catalogs feed the search boxes of the system currency and of the default number and date format. */
@@ -535,4 +538,34 @@ export type CurrencyRow = { code: string; name: string; minor_units: number; is_
 
 export async function fetchCurrencies(signal?: AbortSignal): Promise<{ currencies: CurrencyRow[] }> {
   return (await send<{ currencies: CurrencyRow[] }>("GET", "/api/currencies", undefined, signal))!;
+}
+
+/** One stored rate: 1 unit of the currency = `rate` units of the system currency on `date`. `rate` is the exact decimal text.
+ *  `until` is the date of the next newer rate (null for the newest): a correction changes net worth up to it. */
+export type RateRow = { id: number; date: string; rate: string; source: string; changed: string; until: string | null };
+
+/** A currency's page. `rates_start` is the date rates are wanted from (null until the currency is first enabled, and always for
+ *  the system currency); `stale` is set when the newest rate is older than the threshold and an account is open. */
+export type CurrencyPageData = {
+  code: string; name: string; minor_units: number; is_enabled: boolean; is_system: boolean; system_code: string | null;
+  rates_start: string | null; default_rates_start: string; account_count: number; open_account_count: number;
+  can_add_rates: boolean; rates: RateRow[]; stale: { last_date: string; days: number; threshold: number } | null; today: string;
+};
+
+export async function fetchCurrency(code: string, signal?: AbortSignal): Promise<CurrencyPageData> {
+  return (await send<CurrencyPageData>("GET", `/api/currencies/${code}`, undefined, signal))!;
+}
+
+/** Switch a currency on or off and set the date its rates start from. A field that is left out stays as it is. Each of these
+ *  answers with the page as it now is. */
+export async function changeCurrency(code: string, change: { is_enabled?: boolean; rates_start?: string }): Promise<CurrencyPageData> {
+  return (await send<CurrencyPageData>("PATCH", `/api/currencies/${code}`, change))!;
+}
+
+export async function addRate(code: string, rate: { date: string; rate: string }): Promise<CurrencyPageData> {
+  return (await send<CurrencyPageData>("POST", `/api/currencies/${code}/rates`, { ...rate, locale: getLocale().tag }))!;
+}
+
+export async function correctRate(code: string, id: number, rate: string): Promise<CurrencyPageData> {
+  return (await send<CurrencyPageData>("PUT", `/api/currencies/${code}/rates/${id}`, { rate, locale: getLocale().tag }))!;
 }

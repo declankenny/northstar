@@ -44,7 +44,7 @@ const account = (): Account => ({
 describe("editing a balance that changed since it was opened", () => {
   beforeEach(() => {
     vi.mocked(fetchAccount).mockResolvedValue(account());
-    vi.mocked(fetchNetWorth).mockResolvedValue({ today: "2026-10-30", start: "2026-02-28", end: "2026-10-30", period: "month", series: [] });
+    vi.mocked(fetchNetWorth).mockResolvedValue({ today: "2026-10-30", start: "2026-02-28", end: "2026-10-30", period: "month", series: [], limited: null });
   });
 
   async function openEdit() {
@@ -125,7 +125,7 @@ describe("editing a balance that changed since it was opened", () => {
 describe("deleting a balance that changed since it was opened", () => {
   beforeEach(() => {
     vi.mocked(fetchAccount).mockResolvedValue(account());
-    vi.mocked(fetchNetWorth).mockResolvedValue({ today: "2026-10-30", start: "2026-02-28", end: "2026-10-30", period: "month", series: [] });
+    vi.mocked(fetchNetWorth).mockResolvedValue({ today: "2026-10-30", start: "2026-02-28", end: "2026-10-30", period: "month", series: [], limited: null });
   });
 
   async function openDelete() {

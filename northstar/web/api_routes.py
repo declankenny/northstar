@@ -17,9 +17,14 @@ router = APIRouter(prefix="/api")
 
 class NetWorthPoint(BaseModel):
     date: str            # YYYY-MM-DD, a calendar date with no timezone
-    assets: int          # integer cents
+    assets: int          # integer minor units of the system currency
     liabilities: int
     net_worth: int
+
+
+class Limited(BaseModel):
+    starts_on: str | None    # where the series begins: the first date from which every later date can be converted; None if none can
+    currencies: list[str]    # the currencies that have no rate before then
 
 
 class NetWorthSeries(BaseModel):
@@ -28,6 +33,7 @@ class NetWorthSeries(BaseModel):
     end: str
     period: str
     series: list[NetWorthPoint]
+    limited: Limited | None    # set when dates were left out because a currency has no rate for them
 
 
 @router.get("/networth", response_model=NetWorthSeries)

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { type CurrencyRow, fetchCurrencies } from "./api";
 import { useRequest } from "./useRequest";
 import { formatInteger } from "./locale";
+import { Link } from "./router";
+import { currencyPath } from "./routes";
 
 type Filter = "all" | "use" | "enabled";
 const FILTERS: { id: Filter; label: string }[] = [
@@ -20,7 +22,7 @@ const shown = (currency: CurrencyRow, filter: Filter) =>
   filter === "all" || (filter === "use" ? currency.account_count > 0 : currency.is_enabled);
 
 /** The admin page listing the currency catalog as it is stored, with how many accounts use each. It is read-only: it does not
- *  know which currency is the system currency, and enabling a currency arrives with exchange rates. */
+ *  know which currency is the system currency. A currency's name opens its page, where it is switched on or off and its rates are kept. */
 export function Currencies() {
   const { data, error } = useRequest(fetchCurrencies, []);
   const [text, setText] = useState("");
@@ -63,7 +65,7 @@ export function Currencies() {
                 ) : rows.map((c) => (
                   <tr key={c.code}>
                     <td className="num cur-code">{c.code}</td>
-                    <td>{c.name}</td>
+                    <td><Link to={currencyPath(c.code)}>{c.name}</Link></td>
                     <td className="num r">{c.minor_units}</td>
                     <td>{c.is_enabled ? <span className="cur-yes">Yes</span> : <span className="m">No</span>}</td>
                     <td className="num r">{formatInteger(c.account_count)}</td>

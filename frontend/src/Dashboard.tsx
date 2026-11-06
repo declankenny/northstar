@@ -1,14 +1,30 @@
 import { useState } from "react";
-import { fetchNetWorth } from "./api";
+import { fetchNetWorth, type NetWorthSeries } from "./api";
 import { formatDate } from "./dates";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
 import { Link } from "./router";
-import { PATHS } from "./routes";
+import { currencyPath, PATHS } from "./routes";
 import { Tile, WHEN } from "./Tile";
 import { useRequest } from "./useRequest";
 
-export function Dashboard() {
+const names = (codes: string[]) => (codes.length < 2 ? codes.join("") : `${codes.slice(0, -1).join(", ")} and ${codes[codes.length - 1]}`);
+
+/** Why the chart does not reach as far back as it was asked to, or why it is empty: a currency has no rate before a date. Admins are
+ *  offered the page where earlier rates are added. */
+function LimitedNote({ limited, isAdmin }: { limited: NonNullable<NetWorthSeries["limited"]>; isAdmin: boolean }) {
+  const { starts_on, currencies } = limited;
+  const have = currencies.length === 1 ? "has" : "have";
+  return (
+    <p className="notice warn" role="status">
+      {starts_on ? `Starts ${formatDate(starts_on)}: ${names(currencies)} ${have} no rate before this.`
+        : `Net worth cannot be shown yet: ${names(currencies)} ${have} no rate for these dates.`}
+      {isAdmin && currencies.map((code) => <span key={code}> <Link to={currencyPath(code)}>Add earlier {code} rates</Link></span>)}
+    </p>
+  );
+}
+
+export function Dashboard({ isAdmin = false }: { isAdmin?: boolean } = {}) {
   const [range, setRange] = useState<Range>("1Y");
 
   // The first request, with no dates, only learns the server's today. Ranges are worked out from it.
@@ -40,7 +56,9 @@ export function Dashboard() {
         </div>
       </div>
 
-      {data.series.length === 0 ? (
+      {data.series.length === 0 && data.limited ? (
+        <LimitedNote limited={data.limited} isAdmin={isAdmin} />
+      ) : data.series.length === 0 ? (
         <div className="empty">
           <p>Nothing to show yet.</p>
           <p>Add an account on <Link to={PATHS.accounts}>Accounts</Link>, then enter its first balance on <Link to={PATHS.update}>Update balances</Link>.</p>
@@ -65,6 +83,7 @@ export function Dashboard() {
             </div>
           </div>
           <NetWorthChart data={data} />
+          {data.limited && <LimitedNote limited={data.limited} isAdmin={isAdmin} />}
         </>
       )}
     </>

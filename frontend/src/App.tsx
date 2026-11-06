@@ -5,6 +5,7 @@ import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
 import { Currencies } from "./Currencies";
+import { CurrencyPage } from "./CurrencyPage";
 import { Dashboard } from "./Dashboard";
 import { ImportBalances } from "./ImportBalances";
 import { Imports } from "./Imports";
@@ -15,7 +16,7 @@ import { setLocale } from "./locale";
 import { RefreshMe } from "./session";
 import { setCurrency } from "./money";
 import { Link, usePath } from "./router";
-import { accountIdFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
+import { accountIdFromPath, currencyCodeFromPath, importAccountIdFromPath, PATHS, routeFromPath } from "./routes";
 import { UpdateBalances } from "./UpdateBalances";
 import { useRequest } from "./useRequest";
 import { Users } from "./Users";
@@ -53,6 +54,7 @@ function Shell() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const accountId = accountIdFromPath(path);
   const importId = importAccountIdFromPath(path);
+  const currencyCode = currencyCodeFromPath(path);
   const { data: version } = useRequest(fetchVersion, []);      // a footer only: the app works without it, so a failure is ignored
   const { data: me, error: meError, setData: setMe, reload: reloadMe } = useRequest(fetchMe, []);
 
@@ -113,7 +115,7 @@ function Shell() {
             <Link className={route === "types" ? "active" : ""} to={PATHS.types}>Account types</Link>
             <Link className={route === "users" ? "active" : ""} to={PATHS.users}>Users</Link>
             <Link className={route === "imports" ? "active" : ""} to={PATHS.imports}>Imports</Link>
-            <Link className={route === "currencies" ? "active" : ""} to={PATHS.currencies}>Currencies</Link>
+            <Link className={route === "currencies" || route === "currency" ? "active" : ""} to={PATHS.currencies}>Currencies</Link>
             <Link className={route === "properties" ? "active" : ""} to={PATHS.properties}>System properties</Link>
           </>
         )}
@@ -125,7 +127,7 @@ function Shell() {
       </nav>
       <main>
         {route === "dashboard" ? (
-          <Dashboard />
+          <Dashboard isAdmin={me?.is_admin ?? false} />
         ) : route === "accounts" ? (
           <AccountsList isAdmin={me?.is_admin ?? false} />
         ) : route === "update" ? (
@@ -142,6 +144,8 @@ function Shell() {
           me.is_admin ? <Imports /> : <p className="empty">Only admins can see imports.</p>
         ) : route === "currencies" ? (
           me.is_admin ? <Currencies /> : <p className="empty">Only admins can see currencies.</p>
+        ) : route === "currency" && currencyCode !== null ? (
+          me.is_admin ? <CurrencyPage key={currencyCode} code={currencyCode} /> : <p className="empty">Only admins can see currencies.</p>
         ) : route === "properties" ? (
           me.is_admin ? <SystemProperties onCurrencyChange={() => fetchMe().then(setMe)} /> : <p className="empty">Only admins can manage system properties.</p>
         ) : route === "profile" ? (
