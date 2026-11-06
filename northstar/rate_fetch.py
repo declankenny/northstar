@@ -2,8 +2,9 @@
 
 The provider is Frankfurter. `base=EUR&quotes=USD` answers with 1 EUR in USD, which is the direction Northstar stores. The fetch is
 insert-only: it adds the dates a currency has no rate for and never changes a rate that is stored, whether it came from the provider
-or from an admin. For each collected currency it fills two gaps, found from what is stored: the days after the newest stored rate
-up to today, and, once, the days from the currency's rates start up to the day before the oldest stored rate. Both are fetched in
+or from an admin. For each collected currency it fills two gaps, found from the rates the provider has supplied: the days after the
+newest of them up to today, and, once, the days from the currency's rates start up to the day before the oldest of them. A rate an
+admin typed is not an edge, so one far from the rest never makes the history look covered. Both gaps are fetched in
 spans of at most a year, newest first, and each span is checked whole and committed on its own, so a span that fails leaves no
 hole inside what was stored, a rerun is safe, and a missed run mends itself at the next. The provider's own list of what it covers
 starts the window no earlier than its data does, and a currency it does not list is skipped.
@@ -72,10 +73,11 @@ def spans(first: date, last: date):
 
 
 def gaps(conn, currency_id: int, start: date, today: date) -> list[tuple[date, date]]:
-    """What is missing, as ranges to ask for, newest first: the days after the newest stored rate, then the days before the
-    oldest. A currency with no rate is one range from its start to today."""
-    row = conn.execute("SELECT MIN(rate_date) AS oldest, MAX(rate_date) AS newest FROM exchange_rates WHERE currency_id = ?",
-                       (currency_id,)).fetchone()
+    """What is missing, as ranges to ask for, newest first: the days after the newest provider rate, then the days before the
+    oldest. Only a provider rate marks an edge: a rate an admin typed or corrected is skipped when stored, but it does not tell
+    where the fetched history ends. A currency with no provider rate is one range from its start to today."""
+    row = conn.execute("SELECT MIN(rate_date) AS oldest, MAX(rate_date) AS newest FROM exchange_rates "
+                       "WHERE currency_id = ? AND source = 'provider'", (currency_id,)).fetchone()
     if row["oldest"] is None:
         return [(start, today)] if start <= today else []
     newest, oldest = date.fromisoformat(row["newest"]), date.fromisoformat(row["oldest"])
@@ -102,8 +104,10 @@ def read_coverage(ctx) -> dict[str, date]:
 
 
 def check_span(items, code: str, system_code: str, first: date, last: date) -> dict[str, str]:
-    """The rates of one response as {date: canonical rate text}, or an InvalidResponse. A date after `last` is dropped, because
-    Northstar stores no rate dated after today. Anything else wrong rejects the whole span."""
+    """The rates of one response as {date: canonical rate text}, or an InvalidResponse. A date outside first..last is dropped: one
+    after `last` because Northstar stores no rate dated after today, and one before `first` because where its data is sparse the
+    provider also answers with the last observation before the range (a span from 2009-10-25 came back with 2009-10-24), which
+    belongs to the span before. Anything else wrong rejects the whole span."""
     bad = scheduler.InvalidResponse("The rate provider sent rates that could not be used.")
     if not isinstance(items, list):
         raise bad
@@ -119,9 +123,9 @@ def check_span(items, code: str, system_code: str, first: date, last: date) -> d
             rate = rates.parse_rate(text)
         except (ValueError, ValidationError):
             raise bad from None
-        if when > last:
+        if when < first or when > last:
             continue
-        if when < first or day in found:
+        if day in found:
             raise bad
         found[day] = rate
     return found

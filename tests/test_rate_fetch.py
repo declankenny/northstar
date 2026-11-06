@@ -69,6 +69,15 @@ def enable(conn, code, start="2026-05-01"):
     currencies.update_currency(op(conn), code, True, start, TODAY)
 
 
+def put_provider(conn, code, first, last, rate="1.2000"):
+    """Rates a past fetch stored: one row a day from first to last with source provider."""
+    currency = conn.execute("SELECT id FROM currencies WHERE code = ?", (code,)).fetchone()[0]
+    system = "(SELECT id FROM users WHERE is_system = 1)"
+    for i in range((last - first).days + 1):
+        conn.execute("INSERT INTO exchange_rates (currency_id, rate_date, rate, source, created_by, updated_by) "
+                     f"VALUES (?, ?, ?, 'provider', {system}, {system})", (currency, (first + timedelta(days=i)).isoformat(), rate))
+
+
 def stored(conn, code):
     return {r["rate_date"]: (r["rate"], r["source"]) for r in conn.execute(
         "SELECT rate_date, rate, source FROM exchange_rates e JOIN currencies c ON c.id = e.currency_id WHERE c.code = ?", (code,))}
@@ -107,16 +116,15 @@ def test_a_date_after_today_is_dropped(conn, provider):
     assert max(stored(conn, "EUR")) == "2026-06-03"
 
 
-def test_only_the_days_after_the_newest_stored_rate_are_asked_for_and_a_stored_rate_is_never_changed(conn, provider):
+def test_only_the_days_after_the_newest_provider_rate_are_asked_for_and_a_stored_rate_is_never_changed(conn, provider):
     enable(conn, "EUR")
-    rates.add_rate(op(conn), "EUR", "2026-05-01", "9.9999", TODAY)
-    rates.add_rate(op(conn), "EUR", "2026-06-01", "8.8888", TODAY)
-    rates.add_rate(op(conn), "EUR", "2026-06-02", "7.7777", TODAY)
+    put_provider(conn, "EUR", date(2026, 5, 1), date(2026, 6, 1))
+    rates.add_rate(op(conn), "EUR", "2026-06-02", "7.7777", TODAY)               # typed after the last fetch
     fake = provider({"EUR": "2000-01-01"})
     go(conn)
-    assert fake.rate_calls == [{"base": "EUR", "quotes": "USD", "from": "2026-06-03", "to": "2026-06-03"}]
+    assert fake.rate_calls == [{"base": "EUR", "quotes": "USD", "from": "2026-06-02", "to": "2026-06-03"}]
     got = stored(conn, "EUR")
-    assert got["2026-06-01"] == ("8.8888", "manual") and got["2026-06-02"] == ("7.7777", "manual") and got["2026-05-01"][0] == "9.9999"
+    assert got["2026-06-02"] == ("7.7777", "manual") and got["2026-06-01"] == ("1.2000", "provider")
     assert got["2026-06-03"][1] == "provider"
 
 
@@ -131,14 +139,14 @@ def test_a_corrected_provider_rate_is_not_overwritten_either(conn, provider):
     assert stored(conn, "EUR")["2026-06-03"] == ("5.5555", "manual")
 
 
-def test_history_before_the_oldest_stored_rate_is_fetched_once_and_nothing_is_asked_for_when_nothing_is_missing(conn, provider):
+def test_history_before_the_oldest_provider_rate_is_fetched_once_and_nothing_is_asked_for_when_nothing_is_missing(conn, provider):
     enable(conn, "EUR", "2026-04-01")
-    rates.add_rate(op(conn), "EUR", "2026-05-01", "1.2000", TODAY)
+    put_provider(conn, "EUR", date(2026, 5, 1), date(2026, 5, 1))
     fake = provider({"EUR": "2000-01-01"})
     go(conn)
     assert {tuple(c[k] for k in ("from", "to")) for c in fake.rate_calls} == {("2026-05-02", "2026-06-03"), ("2026-04-01", "2026-04-30")}
     assert fake.rate_calls[0]["from"] == "2026-05-02"           # the newest gap first
-    assert min(stored(conn, "EUR")) == "2026-04-01" and stored(conn, "EUR")["2026-05-01"] == ("1.2000", "manual")
+    assert min(stored(conn, "EUR")) == "2026-04-01" and stored(conn, "EUR")["2026-05-01"] == ("1.2000", "provider")
     conn.execute("DELETE FROM sys_job_runs")
     fake.rate_calls.clear()
     go(conn, at=datetime(2026, 6, 3, 19, 0, tzinfo=UTC))
@@ -154,6 +162,31 @@ def test_a_long_gap_is_asked_for_in_spans_of_at_most_a_year_newest_first_and_eac
     assert all((b - a).days + 1 <= rate_fetch.SPAN_DAYS for a, b in spans)
     assert all(spans[i][0] == spans[i + 1][1] + timedelta(days=1) for i in range(2)) and spans[-1][0] == date(2024, 1, 1)
     assert len(stored(conn, "EUR")) == (TODAY - date(2024, 1, 1)).days + 1
+
+
+def test_a_manual_rate_far_from_the_rest_does_not_make_the_fetch_think_the_history_is_covered(conn, provider):
+    enable(conn, "EUR", "2024-01-01")
+    rates.add_rate(op(conn), "EUR", "2024-01-01", "9.9999", TODAY)             # typed at the far edge, as the start date
+    rates.add_rate(op(conn), "EUR", "2025-03-01", "8.8888", TODAY)
+    fake = provider({"EUR": "2000-01-01"}, fail={n: Retryable("The rate provider did not answer.") for n in range(3, 7)})
+    assert go(conn)[0] == [(JOB, "failed")]                                    # the third span never arrived: two of three are stored
+    assert len(stored(conn, "EUR")) < (TODAY - date(2024, 1, 1)).days + 1
+    fake.rate_calls.clear()
+    assert go(conn, at=datetime(2026, 6, 4, 18, 0, tzinfo=UTC))[0] == [(JOB, "succeeded")]
+    got = stored(conn, "EUR")
+    assert sorted(got) == [day(i, date(2024, 1, 1)) for i in range((date(2026, 6, 4) - date(2024, 1, 1)).days + 1)]       # no hole anywhere
+    assert got["2024-01-01"] == ("9.9999", "manual") and got["2025-03-01"] == ("8.8888", "manual")
+
+
+def test_where_the_providers_history_is_sparse_the_answer_that_starts_before_the_span_is_still_accepted(conn, provider):
+    enable(conn, "EUR", "2026-05-20")
+
+    def carry_in(q):
+        return [{"date": "2026-05-19", "base": "EUR", "quote": "USD", "rate": "1.0000"},
+                {"date": q["from"], "base": "EUR", "quote": "USD", "rate": "1.1000"}]
+    provider({"EUR": "2000-01-01"}, bad={"EUR": carry_in})
+    assert go(conn)[0] == [(JOB, "succeeded")]
+    assert stored(conn, "EUR") == {"2026-05-20": ("1.1000", "provider")}
 
 
 def test_the_window_starts_no_earlier_than_the_providers_own_data(conn, provider):
@@ -235,7 +268,6 @@ def test_nothing_is_asked_when_there_is_nothing_to_collect_or_no_system_currency
     ("too many digits", lambda q: [{"date": q["from"], "base": "EUR", "quote": "USD", "rate": "1.1234567890123"}]),
     ("a rate that is not text", lambda q: [{"date": q["from"], "base": "EUR", "quote": "USD", "rate": None}]),
     ("a date that is not a date", lambda q: [{"date": "tomorrow", "base": "EUR", "quote": "USD", "rate": "1.1"}]),
-    ("a date before the span", lambda q: [{"date": "2000-01-01", "base": "EUR", "quote": "USD", "rate": "1.1"}]),
     ("a date twice", lambda q: [{"date": q["from"], "base": "EUR", "quote": "USD", "rate": "1.1"}] * 2),
 ])
 def test_a_span_with_anything_unusable_is_rejected_whole_and_nothing_of_that_currency_is_stored(conn, provider, name, mutate):
@@ -259,8 +291,8 @@ def test_rates_are_stored_as_the_providers_own_decimal_text_and_a_whole_number_r
     assert stored(conn, "JPY") == {"2026-06-02": ("0.0063614", "provider"), "2026-06-03": ("1", "provider")}
 
 
-def test_the_check_of_a_span_keeps_dates_up_to_the_last_and_drops_later_ones():
-    items = [{"date": d, "base": "EUR", "quote": "USD", "rate": "1.5"} for d in ("2026-06-02", "2026-06-03", "2026-06-04")]
+def test_the_check_of_a_span_keeps_dates_inside_it_and_drops_earlier_and_later_ones():
+    items = [{"date": d, "base": "EUR", "quote": "USD", "rate": "1.5"} for d in ("2026-05-31", "2026-06-02", "2026-06-03", "2026-06-04")]
     assert rate_fetch.check_span(items, "EUR", "USD", date(2026, 6, 1), date(2026, 6, 3)) == {"2026-06-02": "1.5", "2026-06-03": "1.5"}
     assert rate_fetch.check_span([], "EUR", "USD", date(2026, 6, 1), date(2026, 6, 3)) == {}
 
