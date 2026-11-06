@@ -43,7 +43,7 @@ def test_the_catalog_has_the_155_currencies_from_the_proposal(conn):
     assert by_precision == {0: 16, 2: 132, 3: 7}
     assert (rows["USD"]["minor_units"], rows["JPY"]["minor_units"], rows["KWD"]["minor_units"]) == (2, 0, 3)
     assert rows["USD"]["name"] == "US Dollar"
-    assert {r["is_enabled"] for r in rows.values()} == {0}
+    assert {code for code, r in rows.items() if r["is_enabled"]} == {"USD"}        # only the system currency is enabled
 
 
 @pytest.mark.parametrize("code", [
@@ -107,8 +107,21 @@ def test_an_account_cannot_be_given_a_currency_that_is_not_enabled(conn):
     assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 0
 
 
+def add_rate(conn, code, day="2026-01-01", rate="0.31"):
+    conn.execute("INSERT INTO exchange_rates (currency_id, rate_date, rate, source, created_by, updated_by) "
+                 "VALUES ((SELECT id FROM currencies WHERE code = ?), ?, ?, 'manual', 1, 1)", (code, day, rate))
+
+
+def test_an_enabled_currency_with_no_rate_cannot_be_chosen(conn):
+    conn.execute("UPDATE currencies SET is_enabled = 1 WHERE code = 'KWD'")
+    with pytest.raises(ValidationError, match="no exchange rate"):
+        accounts.add_account(op(conn), "Test savings", ASSET_CLASS, type_id(conn, "Savings"), None, currency_id(conn, "KWD"))
+    assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 0
+
+
 def test_an_enabled_currency_can_be_chosen_and_the_account_keeps_it(conn):
     conn.execute("UPDATE currencies SET is_enabled = 1 WHERE code = 'KWD'")
+    add_rate(conn, "KWD")
     account = accounts.add_account(op(conn), "Test savings", ASSET_CLASS, type_id(conn, "Savings"), None,
                                    currency_id(conn, "KWD"))
     assert currencies.account_currency(conn, account).code == "KWD"
@@ -116,8 +129,12 @@ def test_an_enabled_currency_can_be_chosen_and_the_account_keeps_it(conn):
     assert conn.execute("SELECT amount_cents FROM live_balances WHERE account_id = ?", (account,)).fetchone()[0] == 1234
 
 
-def test_the_system_currency_is_usable_whether_or_not_it_is_enabled(conn):
-    assert conn.execute("SELECT is_enabled FROM currencies WHERE code = 'USD'").fetchone()[0] == 0
+def test_saving_the_system_currency_enables_it(conn):
+    unset_currency(conn)
+    conn.execute("UPDATE currencies SET is_enabled = 0 WHERE code = 'USD'")
+    assert not currencies.is_usable(conn, currency_id(conn, "USD"))
+    sp.set_property(op(conn), "system.currency", "USD")
+    assert conn.execute("SELECT is_enabled FROM currencies WHERE code = 'USD'").fetchone()[0] == 1
     assert currencies.is_usable(conn, currency_id(conn, "USD"))
     assert not currencies.is_usable(conn, currency_id(conn, "EUR"))
 
@@ -342,7 +359,7 @@ def v02_database(tmp_path, v02_migrations, accounts_to_add=1, delete_all=False):
 
 def test_an_upgrade_with_accounts_makes_them_dollars_and_locks_the_system_currency(tmp_path, v02_migrations):
     path = v02_database(tmp_path, v02_migrations, accounts_to_add=2)
-    assert db.upgrade(path) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property"]
+    assert db.upgrade(path) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates"]
     conn = db.connect(path)
     assert [r[0] for r in conn.execute("SELECT c.code FROM accounts a JOIN currencies c ON c.id = a.currency_id")] == ["USD", "USD"]
     assert [r[0] for r in conn.execute("SELECT amount_cents FROM live_balances")] == [123456, 123456]     # no amount changed
@@ -350,7 +367,7 @@ def test_an_upgrade_with_accounts_makes_them_dollars_and_locks_the_system_curren
     assert (row["value"], row["read_only"]) == ("USD", 1)
     assert currencies.system_currency(conn).code == "USD"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
-    assert {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'view'")} == {"live_accounts", "live_balances"}
+    assert {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'view'")} == {"live_accounts", "live_balances", "account_days"}
 
 
 def test_an_upgrade_with_only_a_deleted_account_still_counts_as_having_one(tmp_path, v02_migrations):
@@ -394,7 +411,7 @@ def test_a_backup_is_made_before_the_upgrade_and_restores_to_the_old_version(tmp
     assert "currencies" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert conn.execute("SELECT amount_cents FROM balances").fetchone()[0] == 123456
     conn.close()
-    assert db.upgrade(restored) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property"]               # and the old version upgrades again
+    assert db.upgrade(restored) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates"]               # and the old version upgrades again
 
 
 def test_a_backup_of_the_new_version_restores_with_its_currencies(tmp_path, v02_migrations):
@@ -402,7 +419,7 @@ def test_a_backup_of_the_new_version_restores_with_its_currencies(tmp_path, v02_
     db.upgrade(path)
     copy = tmp_path / "copy.db"
     backup.create_backup(path, copy)
-    assert backup.check_database(copy)["migrations"] == len(V02) + 3
+    assert backup.check_database(copy)["migrations"] == len(V02) + 4
     restored = tmp_path / "again" / "northstar.db"
     backup.restore_backup(copy, restored)
     conn = db.connect(restored)

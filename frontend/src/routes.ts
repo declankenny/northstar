@@ -1,5 +1,5 @@
 /** The app's pages. The page is chosen by the address path, so no router library is needed. */
-export type Route = "login" | "dashboard" | "profile" | "users" | "accounts" | "account" | "import" | "types" | "imports" | "currencies" | "properties" | "update" | "notfound";
+export type Route = "login" | "dashboard" | "profile" | "users" | "accounts" | "account" | "import" | "types" | "imports" | "currencies" | "currency" | "properties" | "update" | "notfound";
 
 /** Where each page without a parameter lives. Links use these, so an address is spelled in one place. */
 export const PATHS = {
@@ -16,10 +16,14 @@ export const PATHS = {
 } as const;
 
 const ACCOUNT = /^\/accounts\/(\d+)$/;
+const CURRENCY = /^\/currencies\/([A-Z]{3})$/;
 const IMPORT = /^\/accounts\/(\d+)\/import$/;
 
 /** The address of one account's page. */
 export const accountPath = (id: number) => `/accounts/${id}`;
+
+/** The address of one currency's page: its state and its rates. */
+export const currencyPath = (code: string) => `/currencies/${code}`;
 
 /** The address of the page that imports balances from a CSV file into one account. */
 export const importPath = (id: number) => `/accounts/${id}/import`;
@@ -39,6 +43,7 @@ export function routeFromPath(path: string): Route {
   if (clean === PATHS.types) return "types";
   if (clean === PATHS.update) return "update";
   if (ACCOUNT.test(clean)) return "account";
+  if (CURRENCY.test(clean)) return "currency";
   if (IMPORT.test(clean)) return "import";
   return "notfound";
 }
@@ -48,6 +53,13 @@ export function accountIdFromPath(path: string): number | null {
   const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
   const match = ACCOUNT.exec(clean);
   return match ? Number(match[1]) : null;
+}
+
+/** The currency code in /currencies/EUR, or null for any other address. */
+export function currencyCodeFromPath(path: string): string | null {
+  const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const match = CURRENCY.exec(clean);
+  return match ? match[1] : null;
 }
 
 /** The account id in /accounts/12/import, or null for any other address. */

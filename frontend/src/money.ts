@@ -42,6 +42,13 @@ export function formatCents(cents: number, currency: Currency = current): string
   return minus + (locale.currency_position === "prefix" ? `${currency.code}${spacing}${number}` : `${number}${spacing}${currency.code}`);
 }
 
+/** An exchange rate as the server stores it ("1234.5000": digits and a point) the way the person reads numbers: the whole part
+ *  grouped from four digits with the locale's group mark, and the locale's decimal mark. The digits after the point stay as they are. */
+export function formatRate(rate: string): string {
+  const [whole, fraction] = rate.split(".");
+  return formatInteger(Number(whole)) + (fraction === undefined ? "" : getLocale().decimal_mark + fraction);
+}
+
 // About 10^13 minor units, whatever the currency: the same limit as the server's, so a typo is caught the same way.
 const MAX_CENTS = 99_999_999_999_99;
 

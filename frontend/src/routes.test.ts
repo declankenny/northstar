@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountIdFromPath, accountPath, importAccountIdFromPath, importPath, PATHS, routeFromPath } from "./routes";
+import { accountIdFromPath, accountPath, currencyCodeFromPath, currencyPath, importAccountIdFromPath, importPath, PATHS, routeFromPath } from "./routes";
 
 describe("routeFromPath", () => {
   it("opens each page at its own address", () => {
@@ -19,6 +19,17 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/accounts/12")).toBe("account");
     expect(accountIdFromPath("/accounts/12")).toBe(12);
     expect(accountPath(12)).toBe("/accounts/12");
+  });
+
+  it("opens a currency at /currencies/<code>", () => {
+    expect(routeFromPath("/currencies/EUR")).toBe("currency");
+    expect(routeFromPath("/currencies/EUR/")).toBe("currency");
+    expect(currencyCodeFromPath("/currencies/EUR")).toBe("EUR");
+    expect(currencyPath("EUR")).toBe("/currencies/EUR");
+    for (const path of ["/currencies", "/currencies/eur", "/currencies/EU", "/currencies/EURO", "/currencies/EUR/rates", "/currency/EUR"]) {
+      expect(currencyCodeFromPath(path), path).toBeNull();
+    }
+    expect(routeFromPath("/currencies/eur")).toBe("notfound");
   });
 
   it("opens the import of an account's balances at /accounts/<number>/import", () => {

@@ -42,7 +42,7 @@ def headers(conn):
 # -- the schema --
 
 def test_the_data_types_are_seeded(conn):
-    assert {row[0] for row in conn.execute("SELECT name FROM ref_property_data_types")} == {"String", "Integer", "Lookup"}
+    assert {row[0] for row in conn.execute("SELECT name FROM ref_property_data_types")} == {"String", "Integer", "Lookup", "Date"}
 
 
 def test_the_first_properties_are_seeded_by_the_system_user(conn):
@@ -51,7 +51,8 @@ def test_the_first_properties_are_seeded_by_the_system_user(conn):
         "JOIN ref_property_data_types t ON t.id = p.data_type_id")}
     assert {name: (row["type"], row["value"]) for name, row in rows.items()} == {
         "ui.theme.default": ("Lookup", "dark"), "system.balance.stale_days": ("Integer", "35"),
-        "system.currency": ("String", "USD"), "ui.locale.default": ("String", "en-US")}
+        "system.currency": ("String", "USD"), "ui.locale.default": ("String", "en-US"),
+        "currency.rate.stale_days": ("Integer", "14"), "currency.rate.start.default": ("Date", "2000-01-01")}
     system_user = conn.execute("SELECT id FROM users WHERE is_system = 1").fetchone()[0]
     assert {row["created_by"] for row in rows.values()} == {system_user}
 

@@ -131,6 +131,20 @@ describe("the System properties page", () => {
     expect(saveProperty).toHaveBeenCalledWith("ui.theme.default", "light");
   });
 
+  it("edits a Date in a date box and sends its ISO text", async () => {
+    const dates = { properties: [row({ name: "currency.rate.start.default", type: "Date", value: "2000-01-01" })], currencies: [], locales: [] };
+    vi.mocked(fetchProperties).mockResolvedValue(dates);
+    vi.mocked(saveProperty).mockResolvedValue(dates);
+    render(<SystemProperties />);
+    const box = (await screen.findByLabelText("currency.rate.start.default")) as HTMLInputElement;
+    expect(box.type).toBe("date");
+    expect(box.value).toBe("2000-01-01");
+    fireEvent.change(box, { target: { value: "2005-06-07" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Saved");
+    expect(saveProperty).toHaveBeenCalledWith("currency.rate.start.default", "2005-06-07");
+  });
+
   it("sends blank text to unset an optional property", async () => {
     vi.mocked(fetchProperties).mockResolvedValue({ properties: [row({ name: "system.contact_email", value: "a@example.com", allow_null: true })], currencies: [], locales: [] });
     render(<SystemProperties />);

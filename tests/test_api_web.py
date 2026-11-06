@@ -42,7 +42,7 @@ def test_no_balances_gives_an_empty_series_and_the_servers_today(client):
     response = client.get("/api/networth")
     assert response.status_code == 200
     assert response.json() == {"today": "2026-10-30", "start": "2026-10-30", "end": "2026-10-30",
-                               "period": "month", "series": []}
+                               "period": "month", "series": [], "limited": None}
 
 
 def test_with_no_parameters_the_series_is_monthly_from_the_first_balance_to_today(client, household):

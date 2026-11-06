@@ -15,6 +15,7 @@ def use_dollars(conn):
     """Set the system currency to US dollars, as an administrator would before the first account. A fresh database has it
     unset, and no account can be created until it is set; most tests are about accounts, so their fixtures set it."""
     conn.execute("UPDATE system_properties SET value = 'USD', read_only = 1 WHERE name = 'system.currency'")
+    conn.execute("UPDATE currencies SET is_enabled = 1 WHERE code = 'USD'")      # saving the system currency enables it
 
 
 @pytest.fixture

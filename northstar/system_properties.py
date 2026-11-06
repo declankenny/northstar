@@ -15,6 +15,7 @@ import logging
 import re
 import sqlite3
 from dataclasses import dataclass
+from datetime import date
 
 from northstar import db, writer
 from northstar.errors import NotFoundError, ValidationError
@@ -29,6 +30,8 @@ STRING_MAX = 256
 # The range JavaScript represents exactly, because the frontend reads an Integer as a number.
 INTEGER_MAX = 2**53 - 1
 _INTEGER = re.compile(r"-?\d{1,16}")
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
+SYSTEM_CURRENCY = "system.currency"     # saving it also enables that currency (see set_property)
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,14 @@ def _checked(conn: sqlite3.Connection, row: sqlite3.Row, text: str) -> str:
         if not _INTEGER.fullmatch(text) or abs(int(text)) > INTEGER_MAX:
             raise ValidationError("Enter a whole number.")
         return str(int(text))
+    if data_type == "Date":
+        try:
+            if not _DATE.fullmatch(text):
+                raise ValueError
+            date.fromisoformat(text)
+        except ValueError:
+            raise ValidationError("Enter a date like 2026-11-06.") from None
+        return text
     if len(text) > STRING_MAX:
         raise ValidationError(f"Use {STRING_MAX} characters or fewer.")
     if data_type == "Lookup" and not conn.execute(
@@ -160,4 +171,8 @@ def set_property(op: Operation, name: str, text: str | None) -> str | None:
                 raise RuntimeError(f"The validator {validator} returned {decision!r}, not a decision.")
             lock = lock or decision == ACCEPT_AND_LOCK
         writer.update(op, "system_properties", row["id"], {"value": proposed, **({"read_only": 1} if lock else {})})
+        if name == SYSTEM_CURRENCY and proposed is not None:
+            # The system currency is always enabled: it is the one currency that needs no rates, so nothing else enables it.
+            currency = conn.execute("SELECT id FROM currencies WHERE code = ?", (proposed,)).fetchone()
+            writer.update(op, "currencies", currency["id"], {"is_enabled": 1})
         return proposed

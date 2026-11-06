@@ -4,6 +4,8 @@ the ledger from schema_migrations to sys_schema_migrations. Synthetic data only.
 import shutil
 import sqlite3
 
+import pathlib
+
 import pytest
 
 from northstar import backup, db
@@ -15,12 +17,16 @@ LEGACY_LEDGER = (
     "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, "
     "applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))")
 
-# A rebuild of accounts or balances has to drop the live views first (SQLite cannot rename a table under a view) and
-# recreate them, and the partial name index, afterwards. The runner's guard checks that everything came back.
+# A rebuild of accounts or balances has to drop the views over them first (SQLite cannot rename a table under a view) and
+# recreate them, and the partial name index, afterwards: the live views and account_days, which is read from the migration
+# that creates it. The runner's guard checks that everything came back.
+_RATES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0013_exchange_rates.sql").read_text(encoding="utf-8")
+ACCOUNT_DAYS = _RATES[_RATES.index("CREATE VIEW account_days"):_RATES.index(") WHERE amount IS NOT NULL;") + len(") WHERE amount IS NOT NULL;")] + "\n"
 LIVE_BALANCES = ("CREATE VIEW live_balances AS SELECT balances.* FROM balances "
                  "JOIN accounts ON accounts.id = balances.account_id WHERE accounts.deleted = 0;\n")
 VIEWS = "CREATE VIEW live_accounts AS SELECT * FROM accounts WHERE deleted = 0;\n" + LIVE_BALANCES
 REBUILD_ACCOUNTS = """-- northstar: rebuild
+DROP VIEW account_days;
 DROP VIEW live_accounts;
 DROP VIEW live_balances;
 CREATE TABLE accounts_new (
@@ -50,7 +56,7 @@ WHEN NEW.currency_id IS NOT OLD.currency_id
 BEGIN
     SELECT RAISE(ABORT, 'The currency of an account cannot be changed.');
 END;
-""" + VIEWS
+""" + VIEWS + ACCOUNT_DAYS
 
 
 def folder_with(tmp_path, **extra):
@@ -197,6 +203,7 @@ def test_migrations_cannot_start_inside_a_transaction(tmp_path, migrated):
 INDEX_AND_VIEW = ("CREATE INDEX balances_note ON balances (note);\n"
                   "CREATE VIEW big_balances AS SELECT id FROM balances WHERE amount_cents > 100;")
 REBUILD_BALANCES = """-- northstar: rebuild
+DROP VIEW account_days;
 DROP VIEW big_balances;
 DROP VIEW live_balances;
 CREATE TABLE balances_new (
@@ -211,7 +218,7 @@ CREATE TABLE balances_new (
 INSERT INTO balances_new SELECT * FROM balances;
 DROP TABLE balances;
 ALTER TABLE balances_new RENAME TO balances;
-""" + LIVE_BALANCES
+""" + LIVE_BALANCES + ACCOUNT_DAYS
 
 
 def test_a_rebuild_that_keeps_its_indexes_and_views_is_accepted(tmp_path, migrated):
@@ -391,7 +398,7 @@ def test_a_database_from_a_newer_version_with_a_stray_ledger_is_refused_without_
     db.upgrade(path)
     stray(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0013_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0014_from_the_future')")
     conn.commit()
     conn.close()
     before = path.read_bytes()

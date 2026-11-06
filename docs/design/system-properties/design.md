@@ -57,6 +57,7 @@ The data type decides how a value is validated generically (decided). The valida
 |---|---|---|
 | String | the text itself | at most 256 characters (decided). Empty text is not a value: see "Unset". |
 | Integer | decimal digits with an optional leading minus | a whole number inside the range JavaScript represents exactly, because the frontend reads it as a number |
+| Date | an ISO calendar date, `YYYY-MM-DD` | a real date. Shown and edited in the person's format (decided in #130). |
 | Lookup | the `value` of one allowed option | equal to the `value` of one of the property's rows in `ref_property_lookups` |
 
 New types are added with a migration that adds a row here and a check for the type in the setting service, by the first feature that needs one. A Time, stored as `HH:MM` on a 24-hour clock without a time zone, is the likely next.

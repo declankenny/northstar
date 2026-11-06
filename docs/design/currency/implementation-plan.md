@@ -20,7 +20,7 @@ Steps with the same number can be done in any order or in parallel.
 | 4 | Rates and conversion | #56 | [#130](https://github.com/declankenny/northstar/issues/130) | #125 |
 | 5 | Locale controls: profile and new-user flow | #56 | [#127](https://github.com/declankenny/northstar/issues/127) | #126 |
 | 5 | Import number style defaults from locale | #56 | [#129](https://github.com/declankenny/northstar/issues/129) | #126, #128 |
-| 5 | Fetching rates and the Add Currency wizard | #56 | [#131](https://github.com/declankenny/northstar/issues/131) | #130, Frankfurter checks |
+| 5 | Fetching rates | #56 | [#131](https://github.com/declankenny/northstar/issues/131) | #130, Frankfurter checks |
 | 6 | First-run setup page | none | [#64](https://github.com/declankenny/northstar/issues/64) | #65, #124, #125, #126 |
 | 7 | Integration, recovery rehearsal and operator guide | #56 | [#132](https://github.com/declankenny/northstar/issues/132) | all of the above |
 
@@ -56,7 +56,7 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 3b. Admin Currencies page (#141)
 
-- Scope: a read-only admin page, Currencies under Admin in the sidebar, listing the catalog as stored with each currency's decimal places, its enabled flag and its live account count, with search and filters. It does not know the system currency. The enable control, row links to rates and the Add Currency wizard come with #130 and #131.
+- Scope: a read-only admin page, Currencies under Admin in the sidebar, listing the catalog as stored with each currency's decimal places, its enabled flag and its live account count, with search and filters. It does not know the system currency. The name links to a currency's page, where the enable switch and the rates live (#130).
 - Tests: the list and counts through the endpoint (open and closed counted, deleted not), admin-only on the server and the page, search and filters.
 - Docs: a mockup first, which was agreed on the issue.
 
@@ -73,9 +73,9 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 4c. Rates and conversion (#130)
 
-- Scope: the rate table, manual entry and correction by an admin, the conversion with per-account rounding, the zero-balance rule, and the missing-coverage behaviour.
-- Tests: hand-calculated fixtures; halfway cases of both signs; no future rate used; corrections change valuation and not balances.
-- Docs: a mockup of rate maintenance and of the missing-coverage state first.
+- Scope: the rate table and the view `account_days`; a page for each currency, opened from its name on the list, with the Enabled switch (saved at once), the date its rates start from, and adding and correcting rates in one dialog; the system currency always enabled; a new foreign account needing a stored rate; the conversion with per-account rounding done in Python; the missing-coverage rule (a series starts at the first date from which every later date can be converted, and says so); the stale-rate warning on the currency page; and the Date system property type with `currency.rate.stale_days` and `currency.rate.start.default`. Per-account views stay in the account's own currency. The design is on #130.
+- Tests: hand-calculated fixtures; halfway cases of both signs; liabilities; differing decimal places; no future rate used; a date with no rate is refused, not partly totalled; the series start with a gap in the middle; corrections change valuation and not balances; a rate cannot be deleted or re-dated; the system currency cannot be switched off; backup, restore and upgrade.
+- Docs: mockups of the currency page, the Add rate dialog and the chart note were agreed first.
 
 ### 5a. Locale controls (#127)
 
@@ -90,9 +90,9 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 5c. Fetching rates (#131)
 
-- Scope: `python -m northstar.rates fetch`, the Add Currency wizard with its rerun, the Fetch now button and the staleness warning.
+- Scope: `python -m northstar.rates fetch`; on the currency page, a rate source (manual or automatic) and "fetch rates from [date]", which also covers starting earlier; and the Fetch now button. There is no Add Currency wizard: switching a currency on is the Enabled switch on its page (#130).
 - Tests: fetch never overwrites; a missed run is repaired by the next; provider timeout and invalid responses; a partial failure keeps what was committed.
-- Docs: the cron example in `docs/operating.md`, and a mockup of the wizard first.
+- Docs: the cron example in `docs/operating.md`, and a mockup of the new controls on the currency page first.
 
 ### 6. First-run setup page (#64)
 

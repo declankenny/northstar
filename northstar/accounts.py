@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import date
 
-from northstar import currencies, db, staleness, writer
+from northstar import currencies, db, rates, staleness, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -164,8 +164,9 @@ def _check_name_free(conn: sqlite3.Connection, name: str, own_id: int | None = N
 
 def add_account(op: Operation, name: str | None, class_id: int,
                 type_id: int | None, notes: str | None = None, currency_id: int | None = None) -> int:
-    """Add an account. Its currency is chosen here and never changes: the one given, which must be usable (the system
-    currency or an enabled one), or the system currency. While the system currency is unset no account can be added."""
+    """Add an account. Its currency is chosen here and never changes: the one given, which must be enabled and have at least one
+    stored rate unless it is the system currency, or the system currency. While the system currency is unset no account can be
+    added."""
     conn = op.conn
     with db.write_transaction(conn):
         currency = currencies.require_system_currency(conn)
@@ -173,6 +174,9 @@ def add_account(op: Operation, name: str | None, class_id: int,
             if not currencies.is_usable(conn, currency_id):
                 raise ValidationError("Choose a currency that is enabled.")
             currency = currencies.get(conn, currency_id)
+            if not rates.has_rate(conn, currency.id):
+                raise ValidationError(f"{currency.code} has no exchange rate yet. An administrator adds one on its currency "
+                                      "page before an account can use it.")
         name = _clean_name(name)
         type_id = _check_type(conn, type_id, class_id)
         _check_name_free(conn, name)
