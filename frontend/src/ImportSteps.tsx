@@ -1,8 +1,8 @@
 import { type DragEvent, type ReactNode, useState } from "react";
 import type { ImportOutcome, ImportPolicy, ImportRead, ImportResult, ImportReview } from "./api";
 import { formatDate } from "./dates";
-import { hiddenSummary, plural, readiness, type Readiness, TARGETS, type Use, USE_LABEL, writeCount, writeSummary } from "./importLogic";
-import { formatCents } from "./money";
+import { hiddenSummary, plural, readiness, type Readiness, styleLabel, TARGETS, type Use, USE_LABEL, writeCount, writeSummary } from "./importLogic";
+import { formatCents, getCurrency, type Currency } from "./money";
 import { formatInteger } from "./locale";
 
 // The four screens of the import, one component each. They show what they are given and report what the person does; the page
@@ -63,8 +63,8 @@ export function ChooseFileStep(props: {
         </div>
         <ul className="imp-rules">
           <li>A header row and at least one row of data. Commas, semicolons or tabs.</li>
-          <li>UTF-8 text, up to 2 MB and 20,000 rows.</li>
-          <li>Only balances are imported, into this account. Amounts are read as US dollars.</li>
+          <li>UTF-8 text, up to 2 MB and {formatInteger(20000)} rows.</li>
+          <li>Only balances are imported, into this account. Amounts are read in this account’s currency.</li>
           <li>The file is read for this import and is not kept.</li>
         </ul>
       </div>
@@ -84,13 +84,15 @@ export function MapStep(props: {
   dateFormat: string | null;
   formatChoices: string[];
   onFormat: (format: string | null) => void;
+  numberFormat: string | null;
+  onNumberFormat: (format: string | null) => void;
   onPick: () => void;
   onBack: () => void;
   onContinue: () => void;
   onCancel: () => void;
 }) {
   const { read, uses } = props;
-  const ready: Readiness = readiness(uses, read, props.dateFormat);
+  const ready: Readiness = readiness(uses, read, props.dateFormat, props.numberFormat);
   const delimiter = { ",": "comma", ";": "semicolon", "\t": "tab" }[read.delimiter] ?? "comma";
   return (
     <>
@@ -129,7 +131,28 @@ export function MapStep(props: {
                             </select>
                           </>
                         )}
+                        {use === "balance" && (
+                          <>
+                            <span className="lbl">in the format</span>
+                            {read.canonical && column.index === read.suggested.balance && uses[read.suggested.date ?? -1] === "date" ? <span>Plain decimal (Northstar CSV)</span> : (
+                              <select aria-label="Number style" value={props.numberFormat ?? ""}
+                                onChange={(event) => props.onNumberFormat(event.target.value || null)}>
+                                <option value="">{column.number_formats.length ? "Choose…" : "Detect"}</option>
+                                {(column.number_formats.length ? column.number_formats : read.number_formats).map(format => (
+                                  <option key={format} value={format}>{styleLabel(format, read.currency.minor_units)}</option>
+                                ))}
+                              </select>
+                            )}
+                          </>
+                        )}
                       </div>
+                      {use === "balance" && <div className="imp-fmt">
+                        {props.numberFormat && column.number_previews[props.numberFormat] != null
+                          ? <span className="ok">✓ {column.samples[0]} reads as {formatCents(column.number_previews[props.numberFormat]!, read.currency)}. The review shows every amount as read.</span>
+                          : <span className="warn">{column.number_formats.length > 1
+                            ? "These values can be read more than one way. Choose the format they are written in."
+                            : "Some values may not fit this currency’s precision. The review lists the problems."}</span>}
+                      </div>}
                       {use === "date" && <DateFormatNote column={column} chosen={props.dateFormat} />}
                     </td>
                   </tr>
@@ -174,6 +197,7 @@ const PROBLEMS_SHOWN = 100;
 export type ReviewState = { data: ImportReview | null; error: string | null; loading: boolean };
 
 export function ReviewStep(props: {
+  currency?: Currency;
   fileName: string;
   review: ReviewState;
   policy: ImportPolicy;
@@ -222,7 +246,8 @@ export function ReviewStep(props: {
             </>
           ) : (
             <>
-              <p>Nothing has been saved yet. Dates are shown as read, and all balances are treated as US dollars.</p>
+              <p>Nothing has been saved yet. Dates are shown as read, and all balances are treated as {(props.currency ?? getCurrency()).code}.</p>
+              {(data?.notes ?? []).map((note) => <p key={note} className="notice warn" role="status">{note}</p>)}
               {counts && (
                 <div className="imp-counts" aria-label="What will happen">
                   <div><b>{formatInteger(counts.add)}</b><small>will be added</small></div>
@@ -256,8 +281,8 @@ export function ReviewStep(props: {
                             {row.outcome === "skip" && <span className="m"> differs</span>}
                             {changed.has(row.date) && <span className="tag chg">changed</span>}
                           </td>
-                          <td className="r">{row.old_cents === null ? "–" : formatCents(row.old_cents)}</td>
-                          <td className="r">{formatCents(row.amount_cents)}{row.note && <div className="m">{row.note}</div>}</td>
+                          <td className="r">{row.old_cents === null ? "–" : formatCents(row.old_cents, props.currency)}</td>
+                          <td className="r">{formatCents(row.amount_cents, props.currency)}{row.note && <div className="m">{row.note}</div>}</td>
                         </tr>
                       ))}
                     </tbody>

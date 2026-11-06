@@ -4,11 +4,11 @@ import { formatInteger } from "./locale";
 // What each column of the file is used as. The page keeps one choice per column and turns it into the mapping the server
 // takes (a column for each target), so a column can only have one use, and a use can only be on one column.
 
-export const TARGETS = ["date", "balance", "note", "currency"] as const;
+export const TARGETS = ["date", "balance", "note"] as const;
 export type Target = (typeof TARGETS)[number];
 export type Use = Target | "ignore";
 
-export const USE_LABEL: Record<Use, string> = { ignore: "Ignore", date: "Date", balance: "Balance", note: "Note", currency: "Currency" };
+export const USE_LABEL: Record<Use, string> = { ignore: "Ignore", date: "Date", balance: "Balance", note: "Note" };
 
 /** One use per column, from the mapping the server suggested. */
 export function usesFrom(mapping: ImportMapping, columns: number): Use[] {
@@ -25,7 +25,7 @@ export function mappingFrom(uses: Use[]): ImportMapping {
     const column = uses.indexOf(target);
     return column === -1 ? null : column;
   };
-  return { date: at("date"), balance: at("balance"), note: at("note"), currency: at("currency") };
+  return { date: at("date"), balance: at("balance"), note: at("note") };
 }
 
 /** Use a column as something. That thing can only be on one column, so it moves from wherever it was, which goes back to Ignore. */
@@ -44,15 +44,24 @@ export function formatChoices(column: ImportColumn | undefined, all: string[]): 
   return column !== undefined && column.date_formats.length > 0 ? column.date_formats : all;
 }
 
+/** The name of a number style with the account's own decimal places, as the server words it in a refusal: 1,234.56 for two, 1,234.567
+ *  for three, and 1,234 for none. */
+export function styleLabel(format: string, minorUnits: number): string {
+  return format.replace(/([.,])56$/, (_, mark: string) => (minorUnits === 0 ? "" : mark + "567".slice(0, minorUnits)));
+}
+
 export type Readiness = { ready: boolean; reason: string | null };
 
 /** Whether the mapping can go on to the review, and if not, why, in words for the person. */
-export function readiness(uses: Use[], read: ImportRead, dateFormat: string | null): Readiness {
+export function readiness(uses: Use[], read: ImportRead, dateFormat: string | null, numberFormat: string | null = null): Readiness {
   const date = uses.indexOf("date");
   if (date === -1) return { ready: false, reason: "Choose which column holds the date." };
   if (!uses.includes("balance")) return { ready: false, reason: "Choose which column holds the balance." };
   if (read.columns[date].date_formats.length > 1 && dateFormat === null) {
     return { ready: false, reason: "Choose the date format to continue." };
+  }
+  if (read.columns[uses.indexOf("balance")].number_formats.length > 1 && numberFormat === null) {
+    return { ready: false, reason: "Choose the number style to continue." };
   }
   return { ready: true, reason: null };
 }

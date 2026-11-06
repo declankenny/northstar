@@ -68,7 +68,7 @@ The detail is in [locale.md](../locale.md).
 
 ## CSV
 
-**Export** (decided). The Northstar CSV stays canonical and independent of locale: `YYYY-MM-DD` and a plain decimal amount, now in the account's currency and precision. Whether to add a Currency column is open. It would be informational because the importer does not read it.
+**Export** (decided). The Northstar CSV stays canonical and independent of locale: `YYYY-MM-DD` and a plain decimal amount, now in the account's currency and precision. Export changes, including any informational Currency column, are outside #128. The existing four-column export stays as it is.
 
 **Import** (decided). Import trusts that the file is in the account's currency. There is no Currency column mapping and no currency-symbol block, so the spec's current handling of a mapped Currency column is removed when this ships. The review says "all balances are treated as" followed by the chosen account's currency, as it says dollars today. Number-style detection must use the account's precision: `1.234` is only thousands for a currency with no minor unit, and is ambiguous for one with three decimals, so the person chooses. A file in another currency imported into the wrong account is a user error that Northstar does not try to detect.
 
@@ -96,7 +96,7 @@ The acceptance list from the interview carries over: existing USD results unchan
 
 - Missing-coverage presentation (truncated series or hidden graph).
 - Rate table shape and precision, and whether conversion sits behind a view.
-- Whether the export gains a Currency column.
+- Whether a later feature adds an informational export Currency column (outside #128).
 - Catalog policy for withdrawn and special codes, and for precision changes.
 - Provider terms, publication time and range limits.
 - Wizard behaviour after a partial fetch, and manual-only coverage review.

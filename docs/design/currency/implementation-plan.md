@@ -16,7 +16,7 @@ Steps with the same number can be done in any order or in parallel.
 | 3 | Currency catalog, account currency and USD migration | #56 | [#125](https://github.com/declankenny/northstar/issues/125) | #124 |
 | 3 | Admin Currencies page: the catalog as a read-only list | #56 | [#141](https://github.com/declankenny/northstar/issues/141) | #125 |
 | 4 | Locale core: per-user locale, parser, date formatter | #56 | [#126](https://github.com/declankenny/northstar/issues/126) | #125 |
-| 4 | Importer and exporter on account currency | #56 | [#128](https://github.com/declankenny/northstar/issues/128) | #125 |
+| 4 | Importer on account currency | #56 | [#128](https://github.com/declankenny/northstar/issues/128) | #125 |
 | 4 | Rates and conversion | #56 | [#130](https://github.com/declankenny/northstar/issues/130) | #125 |
 | 5 | Locale controls: profile and new-user flow | #56 | [#127](https://github.com/declankenny/northstar/issues/127) | #126 |
 | 5 | Import number style defaults from locale | #56 | [#129](https://github.com/declankenny/northstar/issues/129) | #126, #128 |
@@ -66,10 +66,10 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 - Tests: parser and formatter vectors per supported locale, including refused input; a changed default affects new users only; the foreign key rejects an unsupported tag; backup, restore and upgrade.
 - Docs: a decisions entry for the table, the generator and the date approach.
 
-### 4b. Importer and exporter (#128)
+### 4b. Importer (#128)
 
-- Scope: import trusts the account's currency, drops the Currency column mapping, and uses the account's precision for number-style detection and the review line; export writes the account's currency precision.
-- Tests: no minor unit and three-decimal cases; round trip of an export; undo of an import made before the migration.
+- Scope: import trusts the account's currency, drops the Currency column mapping and symbol block, and uses the account's precision for number-style detection and the review line. The Date picker stays inline and Balance gains an inline number-style picker with an interpreted-amount preview. Exports are outside this feature.
+- Tests: no minor unit and three-decimal imports, ambiguous styles and excess precision; importing existing Northstar CSV independently of locale; undo of an import made before the migration.
 
 ### 4c. Rates and conversion (#130)
 

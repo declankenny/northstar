@@ -26,13 +26,6 @@ MAX_ROWS = 20_000
 DELIMITERS = (",", ";", "\t")
 SNIFFED_RECORDS = 50
 
-# Until multi-currency (v0.3) every amount is US dollars, so anything else is refused. These are the two places that change.
-CURRENCY = "USD"
-# Decimal places an amount may have. The amount formats below can never be read two ways only because of this limit: with
-# three decimals "1,234" would be 1234 or 1.234 and the person would have to choose. Raise it and the test that checks this
-# fails, which means the number format choice has to come back for that currency.
-DECIMALS = 2
-
 
 class CsvError(ValidationError):
     """The file as a whole cannot be used."""
@@ -140,7 +133,7 @@ def read_table(data: bytes, delimiter: str | None = None) -> Table:
 
 # -- which column is which --
 
-TARGETS = ("date", "balance", "note", "currency")
+TARGETS = ("date", "balance", "note")
 
 
 @dataclass(frozen=True)
@@ -150,7 +143,6 @@ class Mapping:
     date: int | None = None
     balance: int | None = None
     note: int | None = None
-    currency: int | None = None
 
     def used(self) -> dict[str, int]:
         return {target: getattr(self, target) for target in TARGETS if getattr(self, target) is not None}
@@ -160,7 +152,6 @@ _ALIASES = {
     "date": {"date", "as of", "as of date", "asof", "balance date", "statement date", "day"},
     "balance": {"balance", "amount", "balance amount", "value", "closing balance", "ending balance", "end balance", "total"},
     "note": {"note", "notes", "memo", "comment", "comments", "description"},
-    "currency": {"currency", "currency code", "ccy", "curr"},
 }
 
 
@@ -189,7 +180,7 @@ def mapping_problems(mapping: Mapping, columns: int) -> list[str]:
     for target, column in used.items():
         if not 0 <= column < columns:
             problems.append(f"The {target} column does not exist in this file.")
-    names = {"date": "Date", "balance": "Balance", "note": "Note", "currency": "Currency"}
+    names = {"date": "Date", "balance": "Balance", "note": "Note"}
     seen: dict[int, str] = {}
     for target, column in used.items():
         if column in seen:
@@ -300,8 +291,8 @@ _GROUP_SPACES = "    "
 _MINUS = "-−"
 
 
-def _number(group: str | None, decimal: str) -> re.Pattern:
-    tail = rf"(?:{re.escape(decimal)}\d{{1,{DECIMALS}}})?"
+def _number(group: str | None, decimal: str, minor_units: int) -> re.Pattern:
+    tail = rf"(?:{re.escape(decimal)}\d{{1,{minor_units}}})?" if minor_units else ""
     head = rf"(?:\d{{1,3}}(?:{group}\d{{3}})+|\d+)" if group else r"\d+"
     return re.compile(head + tail, re.ASCII)
 
@@ -314,7 +305,6 @@ NUMBER_FORMATS = {
     "1234.56": (None, "."),
     "1234,56": (None, ","),
 }
-_NUMBER_PATTERNS = {name: _number(group, decimal) for name, (group, decimal) in NUMBER_FORMATS.items()}
 
 
 @dataclass(frozen=True)
@@ -350,38 +340,48 @@ def _split_amount(text: str) -> tuple[bool, str | None, str]:
     return negative, symbol, s
 
 
-def _amount_matches(core: str) -> list[str]:
-    return [name for name, pattern in _NUMBER_PATTERNS.items() if pattern.fullmatch(core)]
+def _amount_matches(core: str, minor_units: int) -> list[str]:
+    return [name for name, (group, decimal) in NUMBER_FORMATS.items() if _number(group, decimal, minor_units).fullmatch(core)]
 
 
-def _to_cents(negative: bool, core: str, number_format: str) -> int:
+def _to_cents(negative: bool, core: str, number_format: str, minor_units: int) -> int:
     group, decimal = NUMBER_FORMATS[number_format]
     digits = re.sub(group, "", core) if group else core
-    return money.parse_cents(("-" if negative else "") + digits.replace(decimal, "."))
+    return money.parse_amount(("-" if negative else "") + digits.replace(decimal, "."), minor_units)
 
 
-def parse_amount(text: str, number_format: str) -> Amount:
-    """An amount in integer cents, never through floating point. Blank is an error, zero is valid, signs are kept as typed."""
+def style_label(number_format: str, minor_units: int) -> str:
+    """The name of a number style with the account's own decimal places: 1,234.56 for two, 1,234.567 for three, 1,234 for none."""
+    return re.sub(r"([.,])56$", lambda found: found.group(1) + "567"[:minor_units] if minor_units else "", number_format)
+
+
+def _precision_rule(minor_units: int) -> str:
+    return ("This currency has no decimal places." if minor_units == 0
+            else f"Use at most {minor_units} decimal places; amounts are never rounded.")
+
+
+def parse_amount(text: str, number_format: str, minor_units: int) -> Amount:
+    """An amount in integer minor units, never through floating point. Blank is an error, zero is valid, signs are kept as typed."""
     if number_format not in NUMBER_FORMATS:
         raise CsvError(f"{number_format!r} is not a number format Northstar reads.")
     if not text.strip():
         raise ValidationError("The amount is blank.")
     negative, symbol, core = _split_amount(text)
-    if not _NUMBER_PATTERNS[number_format].fullmatch(core):
-        raise ValidationError(f"{text.strip()!r} is not an amount in the format {number_format}.")
-    return Amount(_to_cents(negative, core, number_format), symbol)
+    if not _number(*NUMBER_FORMATS[number_format], minor_units).fullmatch(core):
+        raise ValidationError(f"{text.strip()!r} is not an amount in the format {style_label(number_format, minor_units)}. "
+                              f"{_precision_rule(minor_units)}")
+    return Amount(_to_cents(negative, core, number_format, minor_units), symbol)
 
 
 @dataclass(frozen=True)
 class NumberDetection:
-    """`formats` are the formats under which every value is an amount. They always agree on the value of every cell (see
-    DECIMALS), so which one is used does not matter; none means `errors` say which records do not fit."""
+    """Formats under which every value fits; with three decimals they may give different amounts."""
     formats: list[str]
     errors: list[RowError] = field(default_factory=list)
     best: str | None = None        # when none fits every value, the one that fits most, so other errors are still found
 
 
-def detect_number_formats(cells: list[tuple[int, str]]) -> NumberDetection:
+def detect_number_formats(cells: list[tuple[int, str]], minor_units: int) -> NumberDetection:
     """Per column, never per row: a column that mixes formats (1,234.50 with 1.234,50) is an error naming the records."""
     present = []
     errors = []
@@ -393,7 +393,7 @@ def detect_number_formats(cells: list[tuple[int, str]]) -> NumberDetection:
         except ValidationError as error:
             errors.append(RowError(record, None, str(error)))
             continue
-        present.append((record, text.strip(), _amount_matches(core)))
+        present.append((record, text.strip(), _amount_matches(core, minor_units)))
     if errors:
         return NumberDetection([], errors)
     formats = [name for name in NUMBER_FORMATS if present and all(name in matches for _, _, matches in present)]
@@ -407,7 +407,8 @@ def detect_number_formats(cells: list[tuple[int, str]]) -> NumberDetection:
         if matches:
             errors.append(RowError(record, None, f"{text!r} is in a different number format from the rest of the column."))
         else:
-            errors.append(RowError(record, None, f"{text!r} is not an amount. Use at most {DECIMALS} decimal places."))
+            errors.append(RowError(record, None, f"{text!r} is not an amount. " + (
+                "This currency has no decimal places." if minor_units == 0 else f"Use at most {minor_units} decimal places.")))
     return NumberDetection([], errors, best if any(best in matches for _, _, matches in present) else None)
 
 
@@ -423,17 +424,90 @@ class ParsedRow:
 
 @dataclass(frozen=True)
 class ParseResult:
-    """Every row, or every error: when there is any error there are no rows, so nothing invalid is ever dropped silently.
-    `unsupported_currencies` lists the codes and symbols that blocked the file."""
+    """Every row, or every error: when there is any error there are no rows, so nothing invalid is ever dropped silently."""
     rows: list[ParsedRow]
     errors: list[RowError]
     date_format: str | None = None
-    unsupported_currencies: list[str] = field(default_factory=list)
+    number_format: str | None = None
 
 
-def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: date) -> ParseResult:
+SAMPLED = 50
+
+
+def number_choices(cells: list[tuple[int, str]], minor_units: int) -> list[str]:
+    """One choice per interpretation of the whole column, not one per equivalent spelling convention."""
+    # Every value has to fit a format, so a column whose first values do not is not an amount column whatever follows. Saying so
+    # from those few spares reading, and building an error for, every cell of every text and date column of a large file.
+    if not detect_number_formats([cell for cell in cells if cell[1].strip()][:SAMPLED], minor_units).formats:
+        return []
+    detection = detect_number_formats(cells, minor_units)
+    seen, choices = set(), []
+    for fmt in detection.formats:
+        try:
+            values = tuple(parse_amount(text, fmt, minor_units).cents for _, text in cells if text.strip())
+        except ValidationError:
+            # The review reports limits and malformed values; the mapping can still proceed to it.
+            return detection.formats[:1] if minor_units < 3 else detection.formats
+        if values not in seen:
+            choices.append(fmt)
+            seen.add(values)
+    return choices
+
+
+# Headers that look like a currency column. The import does not read one (the file is taken to be in the account's currency), but
+# the review says so when one names another currency, so a file for the wrong account is not imported without a word.
+CURRENCY_HEADERS = {"currency", "currency code", "ccy", "curr"}
+# The symbols that name one currency. "$" and "\u00a5" are left out: each is shared by several.
+SYMBOL_CURRENCIES = {"\u20ac": "EUR", "\u00a3": "GBP"}
+
+
+def currency_notes(table: Table, mapping: Mapping, account_code: str) -> list[str]:
+    """Things in the file that say it is in a currency other than the account's, in words for the review. They do not block: nothing
+    is converted, and the person decides. A file that agrees with the account has none."""
+    notes = []
+    used = set(mapping.used().values())
+    for index, header in enumerate(table.headers):
+        if index in used or _normal(header) not in CURRENCY_HEADERS:
+            continue
+        others = sorted({cell.strip().upper() for _, cell in table.values(index) if cell.strip()} - {account_code})
+        if others:
+            notes.append(f"The {header.strip()!r} column says {', '.join(others)}, and this account is in {account_code}. "
+                         f"Nothing is converted: every amount is read as {account_code}.")
+    symbols = set()
+    for _, cell in table.values(mapping.balance) if mapping.balance is not None else []:
+        try:
+            symbol = _split_amount(cell)[1]
+        except ValidationError:
+            continue
+        if symbol is not None and SYMBOL_CURRENCIES.get(symbol, account_code) != account_code:
+            symbols.add(symbol)
+    for symbol in sorted(symbols):
+        notes.append(f"Some amounts have {symbol}, and this account is in {account_code}. "
+                     f"Nothing is converted: every amount is read as {account_code}.")
+    return notes
+
+
+def canonical_amounts(table: Table, mapping: Mapping) -> bool:
+    """Recognise the existing Northstar CSV contract, independently of filename and user locale."""
+    return table.headers == ["Account ID", "Account Name", "Balance Date", "Balance Amount"] and mapping.date == 2 and mapping.balance == 3
+
+
+def number_previews(samples: list[str], minor_units: int) -> dict[str, int | None]:
+    """Read the first sample in each file convention; invalid readings are left for the review's row errors."""
+    previews = {}
+    for fmt in NUMBER_FORMATS:
+        try:
+            previews[fmt] = parse_amount(samples[0], fmt, minor_units).cents if samples else None
+        except ValidationError:
+            previews[fmt] = None
+    return previews
+
+
+def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: date,
+               minor_units: int, number_format: str | None = None) -> ParseResult:
     """Check the whole file and return every row, or every blocking error with its record number. `date_format` is the one
-    the person chose; when it is None the column has to decide it by itself."""
+    the person chose; when it is None the column has to decide it by itself. `minor_units` is the decimal places of the account's
+    currency and has no default: an amount is never read in a precision nobody chose."""
     problems = mapping_problems(mapping, len(table.headers))
     if problems:
         raise CsvError(" ".join(problems))
@@ -465,12 +539,22 @@ def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: d
     elif chosen not in DATE_FORMATS:
         raise CsvError(f"{chosen!r} is not a date format Northstar reads.")
 
-    amounts = detect_number_formats(column(mapping.balance))
-    errors += [RowError(e.record, mapping.balance, e.message) for e in amounts.errors]
-    reported_amounts = {e.record for e in amounts.errors}
-    number_format = amounts.formats[0] if amounts.formats else amounts.best
+    reported_amounts = set()
+    if canonical_amounts(table, mapping):
+        if number_format not in (None, "1234.56"):
+            raise CsvError("Northstar CSV amounts use a decimal point and no thousands separators.")
+        number_format = "1234.56"
+    if number_format is None:
+        amounts = detect_number_formats(column(mapping.balance), minor_units)
+        errors += [RowError(e.record, mapping.balance, e.message) for e in amounts.errors]
+        reported_amounts = {e.record for e in amounts.errors}
+        choices = number_choices(column(mapping.balance), minor_units)
+        if len(choices) > 1:
+            errors.append(RowError(None, mapping.balance, "The number format can't be told from the data. Choose the number style."))
+        number_format = choices[0] if choices else amounts.best
+    elif number_format not in NUMBER_FORMATS:
+        raise CsvError(f"{number_format!r} is not a number format Northstar reads.")
 
-    blocked: set[str] = set()
     parsed: list[ParsedRow] = []
     for row in good:
         failed = False
@@ -490,27 +574,11 @@ def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: d
             failed = True
         if number_format is not None:
             try:
-                amount = parse_amount(row.cells[mapping.balance], number_format)
+                amount = parse_amount(row.cells[mapping.balance], number_format, minor_units)
                 cents = amount.cents
-                if amount.symbol is not None and amount.symbol != "$":
-                    blocked.add(amount.symbol)
-                    errors.append(RowError(row.number, mapping.balance,
-                                           f"The amount has the currency symbol {amount.symbol}, and only US dollars are supported."))
-                    failed = True
             except ValidationError as error:
                 if row.number not in reported_amounts:
                     errors.append(RowError(row.number, mapping.balance, str(error)))
-                failed = True
-        if mapping.currency is not None:
-            code = row.cells[mapping.currency].strip()
-            if not code:
-                errors.append(RowError(row.number, mapping.currency, "The currency is blank. If every amount is in US dollars, "
-                                                                     "set the Currency column to Ignore."))
-                failed = True
-            elif code.upper() != CURRENCY:
-                blocked.add(code.upper())
-                errors.append(RowError(row.number, mapping.currency,
-                                       f"The currency {code.upper()} is not supported yet. Only {CURRENCY} is."))
                 failed = True
         note = None
         if mapping.note is not None:
@@ -523,4 +591,4 @@ def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: d
             parsed.append(ParsedRow(row.number, day, cents, note))
 
     errors.sort(key=lambda e: (e.record is not None, e.record or 0, e.column is None, e.column or 0))
-    return ParseResult([] if errors else parsed, errors, decided, sorted(blocked))
+    return ParseResult([] if errors else parsed, errors, decided, number_format)

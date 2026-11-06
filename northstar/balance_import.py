@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Iterable
 
-from northstar import accounts, balances, currencies, db, locales, writer
+from northstar import accounts, balances, db, locales, writer
 from northstar.csvparse import Mapping, ParsedRow, RowError
 from northstar.errors import ValidationError
 from northstar.writer import Operation
@@ -144,15 +144,6 @@ def _classify(row: ParsedRow, existing: sqlite3.Row | None, policy: str) -> Plan
     return PlannedRow(row.record, row.date, outcome, row.cents, row.note, old_cents, old_note, result_note, existing["id"])
 
 
-def require_supported_currency(conn: sqlite3.Connection, account_id: int) -> None:
-    """The importer reads amounts as two-decimal US dollars until it learns the account's currency, so it refuses an
-    account whose currency has another precision, rather than write an amount that means something else."""
-    currency = currencies.account_currency(conn, account_id)
-    if currency.minor_units != 2:
-        raise ValidationError(
-            f"Importing into an account in {currency.code} isn't supported yet: the import reads two decimal places.")
-
-
 def plan_import(conn: sqlite3.Connection, account_id: int, rows: list[ParsedRow], policy: str = "skip") -> ImportPlan:
     """What importing `rows` into this account would do. The account comes from the caller (the entry point the person
     started from), never from the file. A missing or deleted account is NotFoundError and a closed one is refused, as for any
@@ -160,7 +151,6 @@ def plan_import(conn: sqlite3.Connection, account_id: int, rows: list[ParsedRow]
     if policy not in POLICIES:
         raise ValidationError("Choose whether to skip or replace the dates that already have a balance.")
     balances.require_open(accounts.get_account(conn, account_id))
-    require_supported_currency(conn, account_id)
     existing = _existing(conn, account_id)
     planned = [_classify(row, existing.get(row.date.isoformat()), policy) for row in rows]
     return ImportPlan(account_id, policy, planned, _duplicate_errors(rows),
@@ -206,7 +196,7 @@ def _file_name(name: str | None) -> str | None:
 
 def commit_import(conn: sqlite3.Connection, actor_id: int | None, account_id: int, rows: list[ParsedRow], policy: str,
                   reviewed: Reviewed, file_name: str | None = None, mapping: Mapping | None = None,
-                  date_format: str | None = None) -> ImportResult:
+                  date_format: str | None = None, number_format: str | None = None) -> ImportResult:
     """Write the import, or refuse and write nothing.
 
     All of it runs in one write transaction, so the plan is recomputed from the balances as they are while the write lock is
@@ -236,7 +226,7 @@ def commit_import(conn: sqlite3.Connection, actor_id: int | None, account_id: in
         if written:
             operation = Operation(conn, actor_id, "import", {
                 "account_id": account_id, "file": _file_name(file_name), "policy": policy, "date_format": date_format,
-                "mapping": None if mapping is None else mapping.used(),
+                "mapping": None if mapping is None else mapping.used(), "number_format": number_format,
                 "counts": {"added": result.added, "updated": result.updated, "unchanged": result.unchanged,
                            "skipped": result.skipped}})
             for row in written:

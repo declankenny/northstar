@@ -32,14 +32,14 @@ export function currencyMark(): string {
 
 /** 123456 becomes "$1,234.56" for US dollars in US English, "EUR 1,234.56" otherwise, and "1.234,56 EUR" where the locale puts
  *  the currency after the number. A negative amount has its minus at the very start. */
-export function formatCents(cents: number): string {
+export function formatCents(cents: number, currency: Currency = current): string {
   const locale = getLocale();
   const abs = Math.abs(cents);
-  const number = formatInteger(Math.floor(abs / 10 ** current.minor_units)) + decimals(abs, current.minor_units);
+  const number = formatInteger(Math.floor(abs / 10 ** currency.minor_units)) + decimals(abs, currency.minor_units);
   const minus = cents < 0 ? "-" : "";
-  if (current.code === "USD" && locale.tag === "en-US") return `${minus}$${number}`;
+  if (currency.code === "USD" && locale.tag === "en-US") return `${minus}$${number}`;
   const spacing = locale.currency_code_spacing;
-  return minus + (locale.currency_position === "prefix" ? `${current.code}${spacing}${number}` : `${number}${spacing}${current.code}`);
+  return minus + (locale.currency_position === "prefix" ? `${currency.code}${spacing}${number}` : `${number}${spacing}${currency.code}`);
 }
 
 // About 10^13 minor units, whatever the currency: the same limit as the server's, so a typo is caught the same way.

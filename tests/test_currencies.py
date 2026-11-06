@@ -302,12 +302,11 @@ def test_an_account_in_yen_refuses_decimals_in_every_way_amounts_are_entered(con
     assert conn.execute("SELECT COUNT(*) FROM live_accounts").fetchone()[0] == 2
 
 
-def test_the_importer_refuses_an_account_whose_currency_is_not_two_decimals_yet(conn):
+def test_the_importer_accepts_a_whole_unit_account(conn):
     from northstar import balance_import
     use_currency(conn, "JPY")
     account = accounts.add_account(op(conn), "Test savings", ASSET_CLASS, type_id(conn, "Savings"))
-    with pytest.raises(ValidationError, match="JPY isn't supported yet"):
-        balance_import.plan_import(conn, account, [])
+    assert balance_import.plan_import(conn, account, []).errors == []
 
 
 # -- upgrading from v0.2 on a copy of a database --

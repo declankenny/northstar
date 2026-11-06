@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from pydantic import ValidationError as BadShape
 
-from northstar import accounts, balance_import, balances, clock, csvparse
+from northstar import accounts, balance_import, balances, clock, csvparse, currencies
 from northstar.balance_import import Expectation, PlannedRow, Reviewed
 from northstar.errors import ValidationError
 from northstar.web.auth_routes import current_user, run
@@ -33,7 +33,6 @@ class MappingBody(BaseModel):
     date: int | None = None
     balance: int | None = None
     note: int | None = None
-    currency: int | None = None
 
 
 class FileBody(BaseModel):
@@ -44,6 +43,7 @@ class FileBody(BaseModel):
 class ReviewBody(FileBody):
     mapping: MappingBody
     date_format: str | None = None
+    number_format: str | None = None
     policy: Literal["skip", "replace"] = "skip"
 
 
@@ -67,6 +67,14 @@ class ColumnOut(BaseModel):
     header: str
     samples: list[str]
     date_formats: list[str]            # the formats under which every value is a date: one decides it, several need a choice
+    number_formats: list[str]
+    number_previews: dict[str, int | None]
+
+
+class ImportCurrency(BaseModel):
+    code: str
+    name: str
+    minor_units: int      # the decimal places of the account's currency, which every amount in the file is read with
 
 
 class ReadOut(BaseModel):
@@ -76,6 +84,9 @@ class ReadOut(BaseModel):
     suggested: MappingBody
     date_formats: list[str]            # every format the import reads, for the choice
     today: str
+    currency: ImportCurrency
+    number_formats: list[str]
+    canonical: bool
 
 
 class ProblemOut(BaseModel):
@@ -103,12 +114,12 @@ class ReviewedOut(BaseModel):
 class ReviewOut(BaseModel):
     can_commit: bool
     errors: list[ProblemOut]
-    unsupported_currencies: list[str]
     date_format: str | None
     counts: dict[str, int] | None      # complete, whatever is listed below
     rows: list[RowOut]                 # newest first, at most ROWS_SHOWN of each outcome that is not "unchanged"
     hidden: dict[str, int]             # how many more of each outcome there are than are listed
     reviewed: ReviewedOut | None       # to be sent back with the commit; only when it can be committed
+    notes: list[str]                   # what in the file says another currency than the account's; they do not block the import
 
 
 class CommitOut(BaseModel):
@@ -155,12 +166,11 @@ def file_bytes(body: FileBody) -> bytes:
 def open_account(conn, account_id: int):
     """A missing or deleted account is NotFoundError, and a closed one is refused, as for any change to its balances."""
     account = balances.require_open(accounts.get_account(conn, account_id))
-    balance_import.require_supported_currency(conn, account_id)
     return account
 
 
 def mapping_of(body: MappingBody) -> csvparse.Mapping:
-    return csvparse.Mapping(body.date, body.balance, body.note, body.currency)
+    return csvparse.Mapping(body.date, body.balance, body.note)
 
 
 def problems(errors) -> list[dict]:
@@ -191,13 +201,21 @@ def read(conn, account_id: int, body: FileBody) -> dict:
     open_account(conn, account_id)
     today = clock.today()
     table = csvparse.read_table(file_bytes(body))
-    columns = [{"index": index, "header": header, "samples": sample_values(table, index),
-                "date_formats": date_formats(table, index, today)}
-               for index, header in enumerate(table.headers)]
+    currency = currencies.account_currency(conn, account_id)
     suggested = csvparse.suggest_mapping(table.headers)
+    canonical = csvparse.canonical_amounts(table, suggested)
+    columns = []
+    for index, header in enumerate(table.headers):
+        samples = sample_values(table, index)
+        choices = ["1234.56"] if canonical and index == suggested.balance else csvparse.number_choices(table.values(index), currency.minor_units)
+        columns.append({"index": index, "header": header, "samples": samples,
+                        "date_formats": date_formats(table, index, today), "number_formats": choices,
+                        "number_previews": csvparse.number_previews(samples, currency.minor_units)})
     return {"delimiter": table.delimiter, "row_count": len(table.rows), "columns": columns,
             "suggested": {target: getattr(suggested, target) for target in csvparse.TARGETS},
-            "date_formats": list(csvparse.DATE_FORMATS), "today": today.isoformat()}
+            "date_formats": list(csvparse.DATE_FORMATS), "today": today.isoformat(),
+            "number_formats": list(csvparse.NUMBER_FORMATS), "canonical": canonical,
+            "currency": {"code": currency.code, "name": currency.name, "minor_units": currency.minor_units}}
 
 
 def listed(plan: balance_import.ImportPlan) -> tuple[list[dict], dict[str, int]]:
@@ -222,8 +240,10 @@ def row_out(row: PlannedRow) -> dict:
 def review(conn, account_id: int, body: ReviewBody) -> dict:
     open_account(conn, account_id)
     today = clock.today()
-    parsed = csvparse.parse_file(csvparse.read_table(file_bytes(body)), mapping_of(body.mapping), body.date_format, today)
-    nothing = {"can_commit": False, "unsupported_currencies": parsed.unsupported_currencies,
+    table = csvparse.read_table(file_bytes(body))
+    currency = currencies.account_currency(conn, account_id)
+    parsed = csvparse.parse_file(table, mapping_of(body.mapping), body.date_format, today, currency.minor_units, body.number_format)
+    nothing = {"can_commit": False, "notes": csvparse.currency_notes(table, mapping_of(body.mapping), currency.code),
                "date_format": body.date_format or parsed.date_format, "counts": None, "rows": [], "hidden": {}, "reviewed": None}
     if parsed.errors:
         return {**nothing, "errors": problems(parsed.errors)}
@@ -240,13 +260,14 @@ def review(conn, account_id: int, body: ReviewBody) -> dict:
 
 def commit(conn, actor_id: int, account_id: int, body: CommitBody) -> dict:
     open_account(conn, account_id)
-    parsed = csvparse.parse_file(csvparse.read_table(file_bytes(body)), mapping_of(body.mapping), body.date_format, clock.today())
+    parsed = csvparse.parse_file(csvparse.read_table(file_bytes(body)), mapping_of(body.mapping), body.date_format, clock.today(),
+                                 currencies.account_currency(conn, account_id).minor_units, body.number_format)
     if parsed.errors:
         raise ValidationError(f"The file has {len(parsed.errors)} problem(s) that must be fixed first. Review it again.")
     reviewed = Reviewed([Expectation(e.date, e.balance_id, e.version) for e in body.reviewed.expectations],
                         body.reviewed.fingerprint)
     result = balance_import.commit_import(conn, actor_id, account_id, parsed.rows, body.policy, reviewed, body.file_name,
-                                          mapping_of(body.mapping), body.date_format or parsed.date_format)
+                                          mapping_of(body.mapping), body.date_format or parsed.date_format, parsed.number_format)
     return {"added": result.added, "updated": result.updated, "unchanged": result.unchanged, "skipped": result.skipped}
 
 
