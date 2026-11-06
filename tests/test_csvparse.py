@@ -23,7 +23,7 @@ def table(text, **kw):
 
 
 def result(text, mapping=BASIC, date_format=None, today=TODAY):
-    return parse_file(table(text), mapping, date_format, today)
+    return parse_file(table(text), mapping, date_format, today, 2)
 
 
 def messages(parsed: ParseResult):
@@ -247,7 +247,7 @@ def test_a_column_with_no_dates_at_all_has_no_candidates_and_no_error_of_its_own
     ("1234,56", "1234,56", 123456), ("1234,56", "5,5", 550),
 ])
 def test_every_number_format_reads_its_amounts_into_integer_cents(fmt, text, cents):
-    amount = parse_amount(text, fmt)
+    amount = parse_amount(text, fmt, 2)
     assert amount.cents == cents and isinstance(amount.cents, int)
 
 
@@ -258,7 +258,7 @@ def test_every_number_format_reads_its_amounts_into_integer_cents(fmt, text, cen
     ("¥100", 10000, "¥"), ("-€5", -500, "€"), ("€-5", -500, "€"),
 ])
 def test_signs_parentheses_and_currency_symbols(text, cents, symbol):
-    assert parse_amount(text, "1,234.56") == csvparse.Amount(cents, symbol)
+    assert parse_amount(text, "1,234.56", 2) == csvparse.Amount(cents, symbol)
 
 
 @pytest.mark.parametrize("text", [
@@ -267,24 +267,24 @@ def test_signs_parentheses_and_currency_symbols(text, cents, symbol):
 ])
 def test_things_that_are_not_amounts_are_refused(text):
     with pytest.raises(ValidationError):
-        parse_amount(text, "1,234.56")
+        parse_amount(text, "1,234.56", 2)
 
 
 def test_the_blank_amount_has_its_own_message_and_zero_is_valid():
     with pytest.raises(ValidationError, match="amount is blank"):
-        parse_amount("  ", "1234.56")
-    assert parse_amount("0", "1234.56").cents == 0
+        parse_amount("  ", "1234.56", 2)
+    assert parse_amount("0", "1234.56", 2).cents == 0
 
 
 def test_the_largest_amount_is_the_same_limit_as_everywhere_else():
-    assert parse_amount("99999999999.99", "1234.56").cents == 99_999_999_999_99
+    assert parse_amount("99999999999.99", "1234.56", 2).cents == 99_999_999_999_99
     with pytest.raises(ValidationError, match="too large"):
-        parse_amount("100000000000.00", "1234.56")
+        parse_amount("100000000000.00", "1234.56", 2)
 
 
 def test_an_unknown_number_format_is_a_programming_error():
     with pytest.raises(CsvError):
-        parse_amount("5", "1'234.56")
+        parse_amount("5", "1'234.56", 2)
 
 
 def test_two_decimal_formats_have_no_conflicting_interpretations():
@@ -294,7 +294,7 @@ def test_two_decimal_formats_have_no_conflicting_interpretations():
     for length in range(1, 7):
         for chars in itertools.product("0125.,  ", repeat=length):
             core = "".join(chars)
-            values = {csvparse._to_cents(False, core, name) for name in csvparse._amount_matches(core)}
+            values = {csvparse._to_cents(False, core, name, 2) for name in csvparse._amount_matches(core, 2)}
             if len(values) > 1:
                 disagreements.append(core)
     assert disagreements == []
@@ -324,19 +324,19 @@ def test_three_decimals_allow_conflicting_interpretations():
     (["1,234.50", ""], ["1,234.56"]),
 ])
 def test_the_column_decides_which_number_formats_fit(values, formats):
-    detection = detect_number_formats(cells(*values))
+    detection = detect_number_formats(cells(*values), 2)
     assert detection.formats == formats and detection.errors == []
 
 
 def test_the_formats_that_remain_agree_on_every_value_of_the_column():
-    detection = detect_number_formats(cells("1234", "-5", "$20"))
+    detection = detect_number_formats(cells("1234", "-5", "$20"), 2)
     assert len(detection.formats) == 5
     for text in ("1234", "-5", "$20"):
-        assert len({parse_amount(text, name).cents for name in detection.formats}) == 1
+        assert len({parse_amount(text, name, 2).cents for name in detection.formats}) == 1
 
 
 def test_a_column_that_mixes_number_formats_is_an_error_naming_the_records():
-    detection = detect_number_formats(cells("1,234.50", "1.234,50", "10.00", "1,234", "oops"))
+    detection = detect_number_formats(cells("1,234.50", "1.234,50", "10.00", "1,234", "oops"), 2)
     assert detection.formats == []
     assert [(e.record, e.message) for e in detection.errors] == [
         (3, "'1.234,50' is in a different number format from the rest of the column."),
@@ -344,7 +344,7 @@ def test_a_column_that_mixes_number_formats_is_an_error_naming_the_records():
 
 
 def test_a_value_with_two_minus_signs_is_an_error_not_a_crash():
-    detection = detect_number_formats(cells("10.00", "--5"))
+    detection = detect_number_formats(cells("10.00", "--5"), 2)
     assert detection.formats == [] and [e.record for e in detection.errors] == [3]
 
 
@@ -460,7 +460,6 @@ def test_other_problems_are_still_listed_when_a_columns_format_is_mixed():
     parsed = result(text)
     assert parsed.rows == []
     assert [(e.record, e.column) for e in parsed.errors] == [(3, 1), (4, 1)]    # mixed and blank; the symbol is accepted
-    assert parsed.unsupported_currencies == []
 
 
 def test_a_file_of_the_largest_size_is_read_in_full():

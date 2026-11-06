@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ImportColumn, ImportRead } from "./api";
-import { decidedFormat, formatChoices, hiddenSummary, mappingFrom, readiness, setUse, usesFrom, writeCount, writeSummary } from "./importLogic";
+import { decidedFormat, formatChoices, hiddenSummary, mappingFrom, readiness, setUse, styleLabel, usesFrom, writeCount, writeSummary } from "./importLogic";
 
 const column = (index: number, date_formats: string[] = []): ImportColumn => ({ index, header: `Column ${index}`, samples: [], date_formats, number_formats: [], number_previews: {} });
 const read = (columns: ImportColumn[]): ImportRead => ({
@@ -95,5 +95,16 @@ describe("how the review is described", () => {
     expect(hiddenSummary({})).toBe("");
     expect(hiddenSummary({ add: 250, skip: 3 })).toBe("250 more to add, 3 more to skip");
     expect(hiddenSummary({ add: 0, replace: 1 })).toBe("1 more to replace");
+  });
+});
+
+
+describe("naming a number style with the account's decimal places", () => {
+  it.each([
+    ["1,234.56", 0, "1,234"], ["1,234.56", 2, "1,234.56"], ["1,234.56", 3, "1,234.567"],
+    ["1.234,56", 0, "1.234"], ["1.234,56", 2, "1.234,56"], ["1.234,56", 3, "1.234,567"],
+    ["1234.56", 0, "1234"], ["1234,56", 3, "1234,567"], ["1 234,56", 3, "1 234,567"],
+  ])("writes %s with %i places as %s", (format, places, name) => {
+    expect(styleLabel(format, places)).toBe(name);
   });
 });

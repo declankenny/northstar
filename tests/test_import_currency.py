@@ -100,3 +100,88 @@ def test_an_import_before_currency_migration_can_still_be_undone(tmp_path, v02_m
     assert conn.execute("SELECT amount_cents FROM live_balances").fetchall()[0][0] == 123456
     assert conn.execute("SELECT COUNT(*) FROM live_balances").fetchone()[0] == 1
     conn.close()
+
+
+# -- the precision is the account's and is never assumed --
+
+TODAY = date(2026, 11, 6)
+
+
+def test_the_file_parser_has_no_default_precision():
+    table = csvparse.read_table(b"Date,Balance\n2026-01-31,1234\n")
+    mapping = csvparse.suggest_mapping(table.headers)
+    with pytest.raises(TypeError):
+        csvparse.parse_file(table, mapping, None, TODAY)
+    for minor_units, expected in ((0, 1234), (2, 123400), (3, 1234000)):
+        assert [row.cents for row in csvparse.parse_file(table, mapping, None, TODAY, minor_units).rows] == [expected]
+
+
+def test_the_lower_level_readers_have_no_default_either():
+    with pytest.raises(TypeError):
+        csvparse.parse_amount("1", "1,234.56")
+    with pytest.raises(TypeError):
+        csvparse.detect_number_formats([(2, "1")])
+
+
+# -- a column that is plainly not amounts is not read to the end --
+
+def test_a_text_column_is_decided_from_its_first_values(monkeypatch):
+    seen = []
+    real = csvparse.detect_number_formats
+    monkeypatch.setattr(csvparse, "detect_number_formats", lambda cells, units: seen.append(len(cells)) or real(cells, units))
+    words = [(index + 2, f"memo {index}") for index in range(5000)]
+    assert csvparse.number_choices(words, 2) == []
+    assert seen == [csvparse.SAMPLED]                               # one look at the first few, and no more
+
+
+def test_a_numeric_column_is_still_read_whole_and_decides_as_before(monkeypatch):
+    seen = []
+    real = csvparse.detect_number_formats
+    monkeypatch.setattr(csvparse, "detect_number_formats", lambda cells, units: seen.append(len(cells)) or real(cells, units))
+    amounts = [(index + 2, f"{index}.50") for index in range(5000)]
+    assert csvparse.number_choices(amounts, 2) == ["1,234.56"]            # equivalent styles are one choice
+    assert seen == [csvparse.SAMPLED, 5000]
+
+
+def test_a_bad_value_after_the_first_few_still_stops_a_column_being_offered_a_style():
+    cells = [(index + 2, "1.50") for index in range(200)] + [(300, "oops")]
+    assert csvparse.number_choices(cells, 2) == []
+
+
+def test_blank_cells_do_not_count_towards_the_first_values():
+    cells = [(index + 2, "") for index in range(80)] + [(100, "5.00"), (101, "6.00")]
+    assert csvparse.number_choices(cells, 2) == ["1,234.56"]            # equivalent styles are one choice
+    assert csvparse.number_choices([(2, ""), (3, "  ")], 2) == []
+
+
+# -- what the refusal says follows the account's currency --
+
+@pytest.mark.parametrize("units, name", [(0, "1,234"), (2, "1,234.56"), (3, "1,234.567")])
+def test_a_number_style_is_named_with_the_accounts_own_decimal_places(units, name):
+    assert csvparse.style_label("1,234.56", units) == name
+    assert csvparse.style_label("1234.56", units) == name.replace(",", "")
+    assert csvparse.style_label("1.234,56", units) == name.replace(",", "\u0000").replace(".", ",").replace("\u0000", ".")
+
+
+def test_excess_precision_says_what_the_currency_allows():
+    with pytest.raises(csvparse.ValidationError) as yen:
+        csvparse.parse_amount("12.5", "1,234.56", 0)
+    assert "in the format 1,234. This currency has no decimal places." in str(yen.value)
+    with pytest.raises(csvparse.ValidationError) as dinar:
+        csvparse.parse_amount("1.2345", "1,234.56", 3)
+    assert "in the format 1,234.567. Use at most 3 decimal places; amounts are never rounded." in str(dinar.value)
+
+
+def test_a_column_of_non_amounts_for_yen_says_there_are_no_decimal_places():
+    text = "Date,Balance\n2026-01-31,12.5\n2026-02-28,oops\n"
+    table = csvparse.read_table(text.encode("utf-8"))
+    parsed = csvparse.parse_file(table, csvparse.suggest_mapping(table.headers), None, TODAY, 0)
+    assert any("This currency has no decimal places." in error.message for error in parsed.errors)
+
+
+def test_the_review_no_longer_carries_a_field_that_was_always_empty(client):
+    account = currency_account(client, "USD")
+    body = client.post(url(account, "review"), json=settings("Date;Balance\n2026-01-31;10.00\n", mapping={"date": 0, "balance": 1})).json()
+    assert "unsupported_currencies" not in body
+    bad = client.post(url(account, "review"), json=settings("Date;Balance\n2026-01-31;oops\n", mapping={"date": 0, "balance": 1})).json()
+    assert "unsupported_currencies" not in bad

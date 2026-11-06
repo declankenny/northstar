@@ -42,7 +42,7 @@ export function ImportBalances({ id }: { id: number }) {
   const dateColumn = mapping.date === null ? undefined : columns[mapping.date];
   const dateFormat = chosenFormat ?? decidedFormat(dateColumn);
   const balanceColumn = mapping.balance === null ? undefined : columns[mapping.balance];
-  const numberFormat = chosenNumberFormat ?? (balanceColumn?.number_formats?.length === 1 ? balanceColumn.number_formats[0] : null);
+  const numberFormat = chosenNumberFormat ?? (balanceColumn?.number_formats.length === 1 ? balanceColumn.number_formats[0] : null);
   const settings = file && read.data ? { file, mapping, dateFormat, numberFormat, policy } : null;
 
   const review = useRequest(

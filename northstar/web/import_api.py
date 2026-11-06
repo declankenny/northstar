@@ -71,6 +71,12 @@ class ColumnOut(BaseModel):
     number_previews: dict[str, int | None]
 
 
+class ImportCurrency(BaseModel):
+    code: str
+    name: str
+    minor_units: int      # the decimal places of the account's currency, which every amount in the file is read with
+
+
 class ReadOut(BaseModel):
     delimiter: str
     row_count: int
@@ -78,7 +84,7 @@ class ReadOut(BaseModel):
     suggested: MappingBody
     date_formats: list[str]            # every format the import reads, for the choice
     today: str
-    currency: dict
+    currency: ImportCurrency
     number_formats: list[str]
     canonical: bool
 
@@ -108,7 +114,6 @@ class ReviewedOut(BaseModel):
 class ReviewOut(BaseModel):
     can_commit: bool
     errors: list[ProblemOut]
-    unsupported_currencies: list[str]
     date_format: str | None
     counts: dict[str, int] | None      # complete, whatever is listed below
     rows: list[RowOut]                 # newest first, at most ROWS_SHOWN of each outcome that is not "unchanged"
@@ -236,7 +241,7 @@ def review(conn, account_id: int, body: ReviewBody) -> dict:
     today = clock.today()
     parsed = csvparse.parse_file(csvparse.read_table(file_bytes(body)), mapping_of(body.mapping), body.date_format, today,
                                  currencies.account_currency(conn, account_id).minor_units, body.number_format)
-    nothing = {"can_commit": False, "unsupported_currencies": parsed.unsupported_currencies,
+    nothing = {"can_commit": False,
                "date_format": body.date_format or parsed.date_format, "counts": None, "rows": [], "hidden": {}, "reviewed": None}
     if parsed.errors:
         return {**nothing, "errors": problems(parsed.errors)}

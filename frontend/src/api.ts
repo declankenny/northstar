@@ -474,7 +474,6 @@ export type ImportReviewed = {
 export type ImportReview = {
   can_commit: boolean;
   errors: ImportProblem[];
-  unsupported_currencies: string[];
   date_format: string | null;
   counts: Record<ImportOutcome, number> | null; // complete, whatever is listed
   rows: ImportRow[]; // newest first, at most 200 of each outcome that is not "unchanged"

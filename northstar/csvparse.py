@@ -291,7 +291,7 @@ _GROUP_SPACES = "    "
 _MINUS = "-−"
 
 
-def _number(group: str | None, decimal: str, minor_units: int = 2) -> re.Pattern:
+def _number(group: str | None, decimal: str, minor_units: int) -> re.Pattern:
     tail = rf"(?:{re.escape(decimal)}\d{{1,{minor_units}}})?" if minor_units else ""
     head = rf"(?:\d{{1,3}}(?:{group}\d{{3}})+|\d+)" if group else r"\d+"
     return re.compile(head + tail, re.ASCII)
@@ -340,17 +340,27 @@ def _split_amount(text: str) -> tuple[bool, str | None, str]:
     return negative, symbol, s
 
 
-def _amount_matches(core: str, minor_units: int = 2) -> list[str]:
+def _amount_matches(core: str, minor_units: int) -> list[str]:
     return [name for name, (group, decimal) in NUMBER_FORMATS.items() if _number(group, decimal, minor_units).fullmatch(core)]
 
 
-def _to_cents(negative: bool, core: str, number_format: str, minor_units: int = 2) -> int:
+def _to_cents(negative: bool, core: str, number_format: str, minor_units: int) -> int:
     group, decimal = NUMBER_FORMATS[number_format]
     digits = re.sub(group, "", core) if group else core
     return money.parse_amount(("-" if negative else "") + digits.replace(decimal, "."), minor_units)
 
 
-def parse_amount(text: str, number_format: str, minor_units: int = 2) -> Amount:
+def style_label(number_format: str, minor_units: int) -> str:
+    """The name of a number style with the account's own decimal places: 1,234.56 for two, 1,234.567 for three, 1,234 for none."""
+    return re.sub(r"([.,])56$", lambda found: found.group(1) + "567"[:minor_units] if minor_units else "", number_format)
+
+
+def _precision_rule(minor_units: int) -> str:
+    return ("This currency has no decimal places." if minor_units == 0
+            else f"Use at most {minor_units} decimal places; amounts are never rounded.")
+
+
+def parse_amount(text: str, number_format: str, minor_units: int) -> Amount:
     """An amount in integer minor units, never through floating point. Blank is an error, zero is valid, signs are kept as typed."""
     if number_format not in NUMBER_FORMATS:
         raise CsvError(f"{number_format!r} is not a number format Northstar reads.")
@@ -358,8 +368,8 @@ def parse_amount(text: str, number_format: str, minor_units: int = 2) -> Amount:
         raise ValidationError("The amount is blank.")
     negative, symbol, core = _split_amount(text)
     if not _number(*NUMBER_FORMATS[number_format], minor_units).fullmatch(core):
-        raise ValidationError(f"{text.strip()!r} is not an amount in the format {number_format}. "
-                              f"Use at most {minor_units} decimal places; amounts are never rounded.")
+        raise ValidationError(f"{text.strip()!r} is not an amount in the format {style_label(number_format, minor_units)}. "
+                              f"{_precision_rule(minor_units)}")
     return Amount(_to_cents(negative, core, number_format, minor_units), symbol)
 
 
@@ -371,7 +381,7 @@ class NumberDetection:
     best: str | None = None        # when none fits every value, the one that fits most, so other errors are still found
 
 
-def detect_number_formats(cells: list[tuple[int, str]], minor_units: int = 2) -> NumberDetection:
+def detect_number_formats(cells: list[tuple[int, str]], minor_units: int) -> NumberDetection:
     """Per column, never per row: a column that mixes formats (1,234.50 with 1.234,50) is an error naming the records."""
     present = []
     errors = []
@@ -397,7 +407,8 @@ def detect_number_formats(cells: list[tuple[int, str]], minor_units: int = 2) ->
         if matches:
             errors.append(RowError(record, None, f"{text!r} is in a different number format from the rest of the column."))
         else:
-            errors.append(RowError(record, None, f"{text!r} is not an amount. Use at most {minor_units} decimal places."))
+            errors.append(RowError(record, None, f"{text!r} is not an amount. " + (
+                "This currency has no decimal places." if minor_units == 0 else f"Use at most {minor_units} decimal places.")))
     return NumberDetection([], errors, best if any(best in matches for _, _, matches in present) else None)
 
 
@@ -413,17 +424,22 @@ class ParsedRow:
 
 @dataclass(frozen=True)
 class ParseResult:
-    """Every row, or every error: when there is any error there are no rows, so nothing invalid is ever dropped silently.
-    `unsupported_currencies` is retained as an empty field for older API consumers."""
+    """Every row, or every error: when there is any error there are no rows, so nothing invalid is ever dropped silently."""
     rows: list[ParsedRow]
     errors: list[RowError]
     date_format: str | None = None
-    unsupported_currencies: list[str] = field(default_factory=list)
     number_format: str | None = None
+
+
+SAMPLED = 50
 
 
 def number_choices(cells: list[tuple[int, str]], minor_units: int) -> list[str]:
     """One choice per interpretation of the whole column, not one per equivalent spelling convention."""
+    # Every value has to fit a format, so a column whose first values do not is not an amount column whatever follows. Saying so
+    # from those few spares reading, and building an error for, every cell of every text and date column of a large file.
+    if not detect_number_formats([cell for cell in cells if cell[1].strip()][:SAMPLED], minor_units).formats:
+        return []
     detection = detect_number_formats(cells, minor_units)
     seen, choices = set(), []
     for fmt in detection.formats:
@@ -455,9 +471,10 @@ def number_previews(samples: list[str], minor_units: int) -> dict[str, int | Non
 
 
 def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: date,
-               minor_units: int = 2, number_format: str | None = None) -> ParseResult:
+               minor_units: int, number_format: str | None = None) -> ParseResult:
     """Check the whole file and return every row, or every blocking error with its record number. `date_format` is the one
-    the person chose; when it is None the column has to decide it by itself."""
+    the person chose; when it is None the column has to decide it by itself. `minor_units` is the decimal places of the account's
+    currency and has no default: an amount is never read in a precision nobody chose."""
     problems = mapping_problems(mapping, len(table.headers))
     if problems:
         raise CsvError(" ".join(problems))
@@ -541,4 +558,4 @@ def parse_file(table: Table, mapping: Mapping, date_format: str | None, today: d
             parsed.append(ParsedRow(row.number, day, cents, note))
 
     errors.sort(key=lambda e: (e.record is not None, e.record or 0, e.column is None, e.column or 0))
-    return ParseResult([] if errors else parsed, errors, decided, [], number_format)
+    return ParseResult([] if errors else parsed, errors, decided, number_format)

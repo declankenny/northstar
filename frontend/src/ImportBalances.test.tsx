@@ -36,7 +36,7 @@ const row = (record: number, date: string, outcome: ImportRow["outcome"], cents:
 });
 
 const reviewOf = (over: Partial<ImportReview> = {}): ImportReview => ({
-  can_commit: true, errors: [], unsupported_currencies: [], date_format: "YYYY-MM-DD",
+  can_commit: true, errors: [], date_format: "YYYY-MM-DD",
   counts: { add: 2, replace: 0, unchanged: 0, skip: 1 },
   rows: [row(4, "2026-03-31", "add", 120000), row(3, "2026-02-28", "skip", 110050, 99999), row(2, "2026-01-31", "add", 100000)],
   hidden: {}, reviewed: { fingerprint: "abc", expectations: [{ date: "2026-01-31", balance_id: null, version: null }] }, ...over,
@@ -52,6 +52,31 @@ async function toMap(read = readOf()) {
   pick();
   await screen.findByText(/Tell Northstar what each column holds/);
 }
+
+describe("the Northstar CSV in the number style box", () => {
+  const exported = (suggested: ImportRead["suggested"], over: Partial<ImportRead> = {}) => readOf({
+    canonical: true, suggested,
+    columns: [column(0, "Account ID", ["1"]), column(1, "Account Name", ["Demo"]), column(2, "Balance Date", ["2026-01-31"], ["YYYY-MM-DD"]),
+      column(3, "Balance Amount", ["1234.56"])].map((c) => (c.index === 3 ? { ...c, number_formats: ["1234.56"] } : c)), ...over });
+
+  it("says the amounts are plain decimals, wherever the server says the balance and date are", async () => {
+    await toMap(exported({ date: 2, balance: 3, note: null }));
+    expect(screen.getByText("Plain decimal (Northstar CSV)")).toBeTruthy();
+    expect(screen.queryByLabelText("Number style")).toBeNull();
+  });
+
+  it("follows the columns the server suggested and not fixed positions", async () => {
+    await toMap(exported({ date: 0, balance: 3, note: null }));          // the server says the date is in column 0 and the balance in 3
+    expect(screen.getByText("Plain decimal (Northstar CSV)")).toBeTruthy();
+    expect(screen.queryByLabelText("Number style")).toBeNull();
+  });
+
+  it("shows the choice when the file is not the Northstar CSV, even with the same columns", async () => {
+    await toMap(exported({ date: 2, balance: 3, note: null }, { canonical: false }));
+    expect(screen.queryByText("Plain decimal (Northstar CSV)")).toBeNull();
+    expect(screen.getByLabelText("Number style")).toBeTruthy();
+  });
+});
 
 async function toReview(review = reviewOf(), read = readOf()) {
   vi.mocked(fetchImportReview).mockResolvedValue(review);

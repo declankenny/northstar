@@ -1,7 +1,7 @@
 import { type DragEvent, type ReactNode, useState } from "react";
 import type { ImportOutcome, ImportPolicy, ImportRead, ImportResult, ImportReview } from "./api";
 import { formatDate } from "./dates";
-import { hiddenSummary, plural, readiness, type Readiness, TARGETS, type Use, USE_LABEL, writeCount, writeSummary } from "./importLogic";
+import { hiddenSummary, plural, readiness, type Readiness, styleLabel, TARGETS, type Use, USE_LABEL, writeCount, writeSummary } from "./importLogic";
 import { formatCents, getCurrency, type Currency } from "./money";
 import { formatInteger } from "./locale";
 
@@ -134,12 +134,12 @@ export function MapStep(props: {
                         {use === "balance" && (
                           <>
                             <span className="lbl">in the format</span>
-                            {read.canonical && column.index === 3 && uses[2] === "date" ? <span>Plain decimal (Northstar CSV)</span> : (
+                            {read.canonical && column.index === read.suggested.balance && uses[read.suggested.date ?? -1] === "date" ? <span>Plain decimal (Northstar CSV)</span> : (
                               <select aria-label="Number style" value={props.numberFormat ?? ""}
                                 onChange={(event) => props.onNumberFormat(event.target.value || null)}>
-                                <option value="">{column.number_formats?.length ? "Choose…" : "Detect"}</option>
-                                {(column.number_formats?.length ? column.number_formats : read.number_formats ?? []).map(format => (
-                                  <option key={format} value={format}>{format.replace(/([.,])56$/, read.currency.minor_units ? `$1${"567".slice(0, read.currency.minor_units)}` : "")}</option>
+                                <option value="">{column.number_formats.length ? "Choose…" : "Detect"}</option>
+                                {(column.number_formats.length ? column.number_formats : read.number_formats).map(format => (
+                                  <option key={format} value={format}>{styleLabel(format, read.currency.minor_units)}</option>
                                 ))}
                               </select>
                             )}
@@ -147,9 +147,9 @@ export function MapStep(props: {
                         )}
                       </div>
                       {use === "balance" && <div className="imp-fmt">
-                        {props.numberFormat && column.number_previews?.[props.numberFormat] != null
+                        {props.numberFormat && column.number_previews[props.numberFormat] != null
                           ? <span className="ok">✓ {column.samples[0]} reads as {formatCents(column.number_previews[props.numberFormat]!, read.currency)}. The review shows every amount as read.</span>
-                          : <span className="warn">{(column.number_formats?.length ?? 0) > 1
+                          : <span className="warn">{column.number_formats.length > 1
                             ? "These values can be read more than one way. Choose the format they are written in."
                             : "Some values may not fit this currency’s precision. The review lists the problems."}</span>}
                       </div>}

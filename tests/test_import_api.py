@@ -263,7 +263,6 @@ def test_review_ignores_a_currency_column(client, account):
     text = "Date,Balance,Currency\n2026-01-31,10.00,USD\n2026-02-28,11.00,EUR\n"
     body = review(client, account, text=text, mapping={"date": 0, "balance": 1, "note": None, "currency": 2}).json()
     assert body["can_commit"] is True
-    assert body["unsupported_currencies"] == []
 
 
 def test_review_needs_a_date_format_when_the_data_cannot_decide(client, account):

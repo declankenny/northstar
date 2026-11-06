@@ -44,6 +44,12 @@ export function formatChoices(column: ImportColumn | undefined, all: string[]): 
   return column !== undefined && column.date_formats.length > 0 ? column.date_formats : all;
 }
 
+/** The name of a number style with the account's own decimal places, as the server words it in a refusal: 1,234.56 for two, 1,234.567
+ *  for three, and 1,234 for none. */
+export function styleLabel(format: string, minorUnits: number): string {
+  return format.replace(/([.,])56$/, (_, mark: string) => (minorUnits === 0 ? "" : mark + "567".slice(0, minorUnits)));
+}
+
 export type Readiness = { ready: boolean; reason: string | null };
 
 /** Whether the mapping can go on to the review, and if not, why, in words for the person. */
@@ -54,7 +60,7 @@ export function readiness(uses: Use[], read: ImportRead, dateFormat: string | nu
   if (read.columns[date].date_formats.length > 1 && dateFormat === null) {
     return { ready: false, reason: "Choose the date format to continue." };
   }
-  if ((read.columns[uses.indexOf("balance")].number_formats?.length ?? 0) > 1 && numberFormat === null) {
+  if (read.columns[uses.indexOf("balance")].number_formats.length > 1 && numberFormat === null) {
     return { ready: false, reason: "Choose the number style to continue." };
   }
   return { ready: true, reason: null };
