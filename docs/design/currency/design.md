@@ -82,7 +82,7 @@ The detail is in [locale.md](../locale.md).
 
 ## Currency page
 
-A currency's page is where an admin works with it: the name on the Currencies list opens it. The Enabled switch saves at once in both directions, with no confirmation, because disabling deletes nothing and is undone by switching it on again, and helper text under it states the effect. The Rates start date is a field on the page. Rates are listed newest first, and one Add rate button opens a dialog that also serves Correct. The page allows rates only while the currency is enabled or has an account, and the system currency's page says it needs none. There is no Add Currency wizard: what it was to decide moves here, and #131 adds a rate source (manual or automatic) and "fetch rates from [date]" to this page.
+A currency's page is where an admin works with it: the name on the Currencies list opens it. The Enabled switch saves at once in both directions, with no confirmation, because disabling deletes nothing and is undone by switching it on again, and helper text under it states the effect. The Rates start date is a field on the page once the currency is on. While it is off the field is hidden and the helper text names the date switching on will use (the kept one, or the default), which is then changed in the field. Rates are listed newest first, and one Add rate button opens a dialog that also serves Correct. The page allows rates only while the currency is enabled or has an account, and the system currency's page says it needs none. There is no Add Currency wizard: what it was to decide moves here, and #131 adds a rate source (manual or automatic) and "fetch rates from [date]" to this page.
 
 ## Migration and recovery
 

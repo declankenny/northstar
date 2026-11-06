@@ -43,6 +43,7 @@ describe("the currency page", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("EUR · Euro");
     expect(screen.getByRole("switch", { name: "Enabled" }).getAttribute("aria-checked")).toBe("true");
     expect((screen.getByLabelText("Rates start") as HTMLInputElement).value).toBe("2020-01-01");
+    expect((screen.getByLabelText("Rates start") as HTMLInputElement).disabled).toBe(false);
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1).map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent));
     expect(rows).toEqual([
       ["May 12, 2026", "1.0840", "Manual", "May 12, 2026", "Correct"],
@@ -74,13 +75,13 @@ describe("the currency page", () => {
     expect(formatRate("0.000039")).toBe("0,000039");
   });
 
-  it("shows a currency that is off with the default start date, no Add rate button and a way to switch it on", async () => {
+  it("shows a currency that is off with no start date box (the default is named in the text), no Add rate button and a way to switch it on", async () => {
     await open(page({ is_enabled: false, rates_start: null, can_add_rates: false, rates: [], account_count: 0, open_account_count: 0 }));
     expect(screen.getByRole("switch", { name: "Enabled" }).getAttribute("aria-checked")).toBe("false");
-    expect((screen.getByLabelText("Rates start") as HTMLInputElement).value).toBe("2000-01-01");
+    expect(screen.queryByLabelText("Rates start")).toBeNull();          // the date is changed once the currency is on
     expect(screen.queryByRole("button", { name: "Add rate" })).toBeNull();
     expect(screen.getByText("Switch on EUR to add rates.")).toBeTruthy();
-    expect(screen.getByText(/Switch on to allow new accounts in EUR. An account's currency is permanent./)).toBeTruthy();
+    expect(screen.getByText(/Switch on to allow new accounts in EUR. Its rates start from Jan 1, 2000, which can be changed once it is on. An account's currency is permanent./)).toBeTruthy();
   });
 });
 

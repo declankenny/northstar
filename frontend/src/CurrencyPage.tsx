@@ -89,10 +89,11 @@ export function CurrencyPage({ code }: { code: string }) {
             </button>
           )}
         </div>
-        {!page.is_system && (
+        {!page.is_system && page.is_enabled && (
           <div className="cur-fact">
             <label className="k" htmlFor="rates-start">Rates start</label>
-            <input id="rates-start" type="date" value={shownStart} max={page.today} onChange={(e) => editStart(e.target.value)} />
+            <input id="rates-start" type="date" value={shownStart} max={page.today} disabled={busy}
+              onChange={(e) => editStart(e.target.value)} />
           </div>
         )}
         <div className="cur-fact"><div className="k">Decimals</div><div className="v">{page.minor_units}</div></div>
@@ -113,7 +114,8 @@ export function CurrencyPage({ code }: { code: string }) {
               + (page.account_count > 0
                 ? `The ${page.account_count} existing ${page.account_count === 1 ? "account keeps" : "accounts keep"} working and still need rates.`
                 : "")
-            : `Switch on to allow new accounts in ${code}. An account's currency is permanent.`}
+            : `Switch on to allow new accounts in ${code}. Its rates start from ${formatDate(shownStart)}, which can be changed once it is on. `
+              + "An account's currency is permanent."}
       </p>
 
       {page.stale && (
