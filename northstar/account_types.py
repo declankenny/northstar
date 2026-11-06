@@ -7,7 +7,7 @@ from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
 
-STALE_DAYS_PROPERTY = "balance.stale"   # the system property that says how many stale-after days a new type starts with
+STALE_DAYS_PROPERTY = "system.balance.stale_days"   # the system property that says how many stale-after days a new type starts with
 
 
 def default_stale_after_days(conn: sqlite3.Connection) -> int:
