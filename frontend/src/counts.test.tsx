@@ -21,12 +21,12 @@ afterEach(() => {
 });
 
 const account = (over: Partial<ListedAccount> = {}): ListedAccount => ({
-  id: 7, name: "Test checking", class_name: "Asset", type_name: "Checking", notes: null, balance_count: 1234, last_date: "2026-10-31",
+  id: 7, name: "Test checking", currency: { code: "EUR", name: "Euro", minor_units: 2 }, class_name: "Asset", type_name: "Checking", notes: null, balance_count: 1234, last_date: "2026-10-31",
   last_cents: 123456, days_since: 1095, stale: true, ...over,
 });
 
 const list = (): AccountList => ({
-  currency: { code: "EUR", name: "Euro", minor_units: 2 }, closed: false, accounts: [account()], totals: { assets: 123456, liabilities: 0 },
+  currency: { code: "EUR", name: "Euro", minor_units: 2 }, currencies: [{ code: "EUR", name: "Euro", minor_units: 2 }], closed: false, accounts: [account()], totals: { assets: 123456, liabilities: 0 },
   classes: [], today: "2026-11-05",
 });
 

@@ -3,7 +3,7 @@ import type { Conflict } from "./api";
 import { conflictBanner, conflictText, rowConflictNote } from "./conflicts";
 
 const conflict = (over: Partial<Conflict> = {}): Conflict => ({
-  kind: "changed", account_id: 7, account_name: "Demo Savings", date: "2026-03-31", balance_id: 11, version: 9,
+  kind: "changed", account_id: 7, account_name: "Demo Savings", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, date: "2026-03-31", balance_id: 11, version: 9,
   amount_cents: 120000, note: null, by: "Sam Example", on: "2026-11-02", ...over,
 });
 

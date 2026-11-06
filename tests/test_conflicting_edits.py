@@ -112,6 +112,7 @@ def test_an_edit_of_a_balance_changed_since_is_refused_and_says_what_it_is_now_a
     assert response.json()["reason"] == "conflict"
     assert (conflict["kind"], conflict["account_name"], conflict["date"], conflict["amount_cents"], conflict["by"]) == (
         "changed", "Demo Savings", "2026-03-31", 120000, "Sam Example")
+    assert conflict["currency"] == {"code": "USD", "name": "US Dollar", "minor_units": 2}
     assert len(conflict["on"]) == 10 and conflict["balance_id"] == entry["id"]
     assert conflict["version"] == loaded(client, account, "2026-03-31")["version"]    # what "Use the current value" sends next
     assert everything(client) == before                                                # nothing was written

@@ -17,6 +17,13 @@ _SELECT = (
 )
 
 
+def with_currency(item: dict) -> dict:
+    """The row's currency columns as one `currency` entry, the way the API shows an account's currency."""
+    item["currency"] = {"code": item.pop("currency_code"), "name": item.pop("currency_name"),
+                        "minor_units": item.pop("currency_minor_units")}
+    return item
+
+
 def get_account(conn: sqlite3.Connection, account_id: int) -> sqlite3.Row:
     row = conn.execute(_SELECT + "WHERE a.id = ?", (account_id,)).fetchone()
     if row is None:
@@ -28,6 +35,7 @@ def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> d
     """The account plus what its page shows: balance count, earliest date, latest balance,
     its age in days and whether that is stale for the account's type."""
     summary = dict(get_account(conn, account_id))
+    summary["currency"] = currencies.as_dict(currencies.account_currency(conn, account_id))
     summary["stale_after_days"] = conn.execute(
         "SELECT stale_after_days FROM account_types WHERE id = ?", (summary["type_id"],)
     ).fetchone()[0]
@@ -65,6 +73,7 @@ def account_rows(conn: sqlite3.Connection, today: date, closed: bool = False) ->
     """
     rows = conn.execute(
         "SELECT a.id, a.name, c.name AS class_name, t.name AS type_name, t.stale_after_days, a.notes, a.is_open, "
+        "  cu.code AS currency_code, cu.name AS currency_name, cu.minor_units AS currency_minor_units, "
         "  (SELECT COUNT(*) FROM live_balances b WHERE b.account_id = a.id) AS balance_count, "
         "  (SELECT b.as_of_date FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_date, "
@@ -73,13 +82,14 @@ def account_rows(conn: sqlite3.Connection, today: date, closed: bool = False) ->
         "FROM live_accounts a "
         "JOIN account_classes c ON c.id = a.class_id "
         "JOIN account_types t ON t.id = a.type_id "
+        "JOIN currencies cu ON cu.id = a.currency_id "
         "WHERE a.is_open = ? "
         "ORDER BY a.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
         (0 if closed else 1,),
     ).fetchall()
     result = []
     for row in rows:
-        item = dict(row)
+        item = with_currency(dict(row))
         item["days_since"] = staleness.days_since(row["last_date"], today)
         item["stale"] = bool(row["is_open"]) and staleness.is_stale(row["last_date"], today, row["stale_after_days"])
         result.append(item)

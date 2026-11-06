@@ -37,7 +37,8 @@ function Row({ account, showStale, actions }: { account: ListedAccount; showStal
         {stale && <span className="badge stale">Stale</span>}
       </td>
       <td className="m">{account.type_name}</td>
-      <td className="r">{account.last_cents === null ? <span className="m">—</span> : formatCents(account.last_cents)}</td>
+      <td>{account.currency.code}</td>
+      <td className="r">{account.last_cents === null ? <span className="m">—</span> : formatCents(account.last_cents, account.currency)}</td>
       <td>
         {account.last_date === null ? (
           <span className={stale ? "w" : "m"}>No balances yet</span>
@@ -130,11 +131,11 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
               </div>
               <table className="num list">
                 <colgroup>
-                  <col style={{ width: "21%" }} /><col style={{ width: "12%" }} /><col style={{ width: "15%" }} />
-                  <col style={{ width: "20%" }} /><col style={{ width: "8%" }} /><col /><col style={{ width: "64px" }} />
+                  <col style={{ width: "19%" }} /><col style={{ width: "11%" }} /><col style={{ width: "8%" }} /><col style={{ width: "14%" }} />
+                  <col style={{ width: "19%" }} /><col style={{ width: "8%" }} /><col /><col style={{ width: "64px" }} />
                 </colgroup>
                 <thead>
-                  <tr><th>Account</th><th>Type</th><th className="r">Latest balance</th><th>As of</th><th className="r">Balances</th><th className="note">Notes</th><th /></tr>
+                  <tr><th>Account</th><th>Type</th><th>Currency</th><th className="r">Latest balance</th><th>As of</th><th className="r">Balances</th><th className="note">Notes</th><th /></tr>
                 </thead>
                 <tbody>
                   {g.rows.map((a) => <Row key={a.id} account={a} showStale={!closed} actions={actions} />)}

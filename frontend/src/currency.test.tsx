@@ -66,7 +66,7 @@ describe("amounts in the currency's minor unit", () => {
 });
 
 const accountList = (currency: AccountList["currency"]): AccountList => ({
-  currency, closed: false, accounts: [], totals: { assets: 0, liabilities: 0 }, today: "2026-11-04",
+  currency, currencies: currency ? [currency] : [], closed: false, accounts: [], totals: { assets: 0, liabilities: 0 }, today: "2026-11-04",
   classes: [{ id: 1, name: "Asset", types: [{ id: 1, name: "Savings" }] }, { id: 2, name: "Liability", types: [] }],
 });
 

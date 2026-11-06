@@ -84,6 +84,23 @@ def list_with_counts(conn: sqlite3.Connection) -> list[dict]:
             "FROM currencies c ORDER BY c.code")]
 
 
+def as_dict(currency: Currency) -> dict:
+    """A currency as the API shows it."""
+    return {"code": currency.code, "name": currency.name, "minor_units": currency.minor_units}
+
+
+def choosable(conn: sqlite3.Connection) -> list[dict]:
+    """The currencies a new account can be in, for the Add account dialog: the system currency first, then the others that are
+    enabled and have at least one stored rate, by code. Nothing is offered while the system currency is unset."""
+    system = system_currency(conn)
+    if system is None:
+        return []
+    others = conn.execute(
+        "SELECT c.id, c.code, c.name, c.minor_units FROM currencies c WHERE c.is_enabled = 1 AND c.id != ? "
+        "AND EXISTS (SELECT 1 FROM exchange_rates r WHERE r.currency_id = c.id) ORDER BY c.code", (system.id,)).fetchall()
+    return [as_dict(system)] + [as_dict(_currency(row)) for row in others]
+
+
 def account_currency(conn: sqlite3.Connection, account_id: int) -> Currency:
     """The currency of an account that is not deleted."""
     row = conn.execute(

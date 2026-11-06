@@ -33,9 +33,16 @@ class OtherClass(BaseModel):
     types: list[TypeOut]
 
 
+class CurrencyOut(BaseModel):
+    code: str
+    name: str
+    minor_units: int
+
+
 class AccountOut(BaseModel):
     id: int
     name: str
+    currency: CurrencyOut    # the account's own currency: every amount on its page is in it
     class_name: str
     type_id: int
     type_name: str
@@ -57,6 +64,7 @@ class AccountOut(BaseModel):
 class ListedAccount(BaseModel):
     id: int
     name: str
+    currency: CurrencyOut    # the currency last_cents is in
     class_name: str
     type_name: str
     notes: str | None
@@ -78,14 +86,9 @@ class Totals(BaseModel):
     liabilities: int
 
 
-class CurrencyOut(BaseModel):
-    code: str
-    name: str
-    minor_units: int
-
-
 class AccountList(BaseModel):
     currency: CurrencyOut | None     # the system currency; null while it is unset, when no account can be added
+    currencies: list[CurrencyOut]    # what a new account can be in: the system currency first, then the other usable ones
     closed: bool
     accounts: list[ListedAccount]    # grouped by class, then type, then name
     totals: Totals | None            # as of today, from net_worth_on; only for the open list
@@ -98,6 +101,7 @@ class NewAccount(BaseModel):
     name: str
     type_id: int
     notes: str | None = None
+    currency: str | None = None      # a currency code; left out means the system currency
     amount: str | None = None        # typed text; blank adds the account with no balance
     date: str | None = None          # as of; blank means today
     locale: str | None = None        # the number and date format the page was using, refused if it is no longer the saved one
@@ -132,7 +136,7 @@ def _page(conn, account_id: int) -> dict:
 def _list(conn, closed: bool) -> dict:
     today = clock.today()
     totals = None if closed else networth.net_worth_on(conn, today)
-    return {"currency": currencies.system_currency_dict(conn), "closed": closed,
+    return {"currency": currencies.system_currency_dict(conn), "currencies": currencies.choosable(conn), "closed": closed,
             "accounts": accounts.account_rows(conn, today, closed),
             "totals": totals, "classes": accounts.classes_with_types(conn), "today": today.isoformat()}
 
@@ -147,7 +151,7 @@ def add_account(body: NewAccount, request: Request):
     """Adds the account (and its first balance, if an amount is typed) and answers with the open list."""
     def action(conn):
         balances.add_account_with_balance(operation(request, conn), body.account_class, body.name, body.type_id,
-                                          body.notes, body.amount, body.date, clock.today(), body.locale)
+                                          body.notes, body.amount, body.date, clock.today(), body.locale, body.currency)
         return _list(conn, closed=False)
     return run(request, action)
 

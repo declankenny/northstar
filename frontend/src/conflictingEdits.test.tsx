@@ -14,7 +14,7 @@ vi.mock("./NetWorthChart", () => ({ NetWorthChart: () => null }));
 import { deleteBalance, editBalance, fetchAccount, fetchNetWorth, fetchUpdate, saveUpdate } from "./api";
 
 const conflict = (over: Partial<Conflict> = {}): Conflict => ({
-  kind: "changed", account_id: 7, account_name: "Demo Savings", date: "2026-03-31", balance_id: 11, version: 9,
+  kind: "changed", account_id: 7, account_name: "Demo Savings", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, date: "2026-03-31", balance_id: 11, version: 9,
   amount_cents: 120000, note: "Sam's correction", by: "Sam Example", on: "2026-11-02", ...over,
 });
 
@@ -32,7 +32,7 @@ afterEach(() => {
 // -- the account page: edit and delete --
 
 const account = (): Account => ({
-  id: 7, name: "Demo Savings", class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
+  id: 7, name: "Demo Savings", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
   balance_count: 2, earliest_date: "2026-02-28", last_date: "2026-03-31", last_cents: 100000, days_since: 10, stale: false,
   balances: [
     { id: 11, as_of_date: "2026-03-31", amount_cents: 100000, note: null, version: 5 },
@@ -156,7 +156,7 @@ describe("deleting a balance that changed since it was opened", () => {
 // -- the Update screen --
 
 const row = (id: number, name: string, over: Partial<UpdateRow> = {}): UpdateRow => ({
-  id, name, class_name: "Asset", type_name: "Savings", stale_after_days: 30, last_date: "2026-02-28", last_cents: 90000, days_since: 20,
+  id, name, currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_name: "Savings", stale_after_days: 30, last_date: "2026-02-28", last_cents: 90000, days_since: 20,
   stale: false, existing_cents: null, existing_version: null, ...over,
 });
 
