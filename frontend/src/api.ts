@@ -328,7 +328,7 @@ export type TypeRow = {
   id: number; name: string; class_id: number; class_name: string; stale_after_days: number; account_count: number;
   deleted_account_count: number;
 };
-/** `default_stale_after_days` is what a new type's form starts at: the server's balance.stale system property. */
+/** `default_stale_after_days` is what a new type's form starts at: the server's system.balance.stale_days system property. */
 export type TypeList = { types: TypeRow[]; classes: { id: number; name: string }[]; default_stale_after_days: number };
 
 export async function fetchTypes(signal?: AbortSignal): Promise<TypeList> {

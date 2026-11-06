@@ -47,7 +47,7 @@ Decided in principle, details proposed. A table named `ref_*` is loaded by a mig
 
 ## Names
 
-Proposed. A name is lowercase segments separated by dots, with at least two segments, for example `currency.exchangerate.staleness_days`. A CHECK enforces the pattern, and a test confirms every seeded name matches. The first segment is the property's group, and anything that lists properties groups by it. There is no category table, because the first segment does the same job and cannot disagree with the name. A name is a stable key: it is never renamed, so code and documentation can refer to it.
+Proposed. A name is lowercase segments separated by dots, with at least two segments, for example `currency.exchangerate.staleness_days`. A CHECK enforces the pattern, and a test confirms every seeded name matches. The first segment is the property's group, and anything that lists properties groups by it. There is no category table, because the first segment does the same job and cannot disagree with the name. A name is a stable key: once a release has carried it, it is never renamed, so code and documentation can refer to it. A name that no release has carried can still be changed by a migration, as `balance.stale` was.
 
 ## Data types
 

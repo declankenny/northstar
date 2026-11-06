@@ -32,7 +32,7 @@ class ClassRow(BaseModel):
 class TypeList(BaseModel):
     types: list[TypeRow]     # ordered by class, then creation
     classes: list[ClassRow]
-    default_stale_after_days: int    # what the Add type form starts at: the balance.stale system property
+    default_stale_after_days: int    # what the Add type form starts at: the system.balance.stale_days system property
 
 
 class NewType(BaseModel):
