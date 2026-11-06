@@ -21,13 +21,14 @@ const account = (over: Partial<AccountPage> = {}): AccountPage => ({
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30", ...over,
 });
 
-const column = (index: number, header: string, samples: string[], date_formats: string[] = []): ImportColumn => ({ index, header, samples, date_formats });
+const column = (index: number, header: string, samples: string[], date_formats: string[] = []): ImportColumn => ({ index, header, samples, date_formats, number_formats: [], number_previews: {} });
 
 const readOf = (over: Partial<ImportRead> = {}): ImportRead => ({
+  currency: {code: "USD", name: "US Dollar", minor_units: 2}, number_formats: ["1,234.56"], canonical: false,
   delimiter: ",", row_count: 3, today: "2026-10-30", date_formats: ALL_FORMATS,
   columns: [column(0, "Date", ["2026-01-31", "2026-02-28", "2026-03-31"], ["YYYY-MM-DD"]), column(1, "Balance", ["1000.00", "1100.50", "1200.00"]),
     column(2, "Note", ["Opening", "Bonus"])],
-  suggested: { date: 0, balance: 1, note: 2, currency: null }, ...over,
+  suggested: { date: 0, balance: 1, note: 2 }, ...over,
 });
 
 const row = (record: number, date: string, outcome: ImportRow["outcome"], cents: number, old: number | null = null): ImportRow => ({
@@ -61,6 +62,45 @@ async function toReview(review = reviewOf(), read = readOf()) {
 
 const useOf = (header: string) => screen.getByLabelText(`Use of column ${header}`) as HTMLSelectElement;
 const lastReview = () => vi.mocked(fetchImportReview).mock.calls.at(-1)![1];
+
+const dinars = (): ImportRead => readOf({
+  currency: { code: "KWD", name: "Kuwaiti Dinar", minor_units: 3 },
+  number_formats: ["1,234.56", "1.234,56"],
+  columns: [column(0, "Date", ["2026-01-31"], ["YYYY-MM-DD"]), {
+    ...column(1, "Balance", ["1.234"]), number_formats: ["1,234.56", "1.234,56"],
+    number_previews: { "1,234.56": 1234, "1.234,56": 1234000 },
+  }], suggested: { date: 0, balance: 1, note: null },
+});
+
+it("requires an ambiguous number style inline and carries the chosen interpretation into review and commit", async () => {
+  vi.mocked(fetchImportReview).mockResolvedValue(reviewOf({rows: [row(2, "2026-01-31", "add", 1234000)]}));
+  vi.mocked(commitImport).mockResolvedValue({ added: 1, updated: 0, unchanged: 0, skipped: 0 });
+  await toMap(dinars());
+  const next = screen.getByRole("button", { name: "Continue to review" }) as HTMLButtonElement;
+  expect(next.disabled).toBe(true);
+  const picker = screen.getByLabelText("Number style");
+  expect(picker.closest(".imp-use")).toBe(useOf("Balance").closest(".imp-use"));
+  expect(within(useOf("Balance")).queryByRole("option", {name: "Currency"})).toBeNull();
+  fireEvent.change(picker, { target: { value: "1.234,56" } });
+  expect(screen.getByText(/1.234 reads as KWD 1,234.000/)).toBeTruthy();
+  expect(next.disabled).toBe(false);
+  fireEvent.click(next);
+  await screen.findByText(/all balances are treated as KWD/);
+  expect(lastReview().numberFormat).toBe("1.234,56");
+  expect(screen.getByText("KWD 1,234.000")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Import 2 balances" }));
+  await screen.findByText(/Imported from/);
+  expect(vi.mocked(commitImport).mock.calls[0][1].numberFormat).toBe("1.234,56");
+});
+
+it("clears the number style when the Balance mapping changes", async () => {
+  await toMap(dinars());
+  fireEvent.change(screen.getByLabelText("Number style"), {target: {value: "1,234.56"}});
+  fireEvent.change(useOf("Balance"), {target: {value: "ignore"}});
+  fireEvent.change(useOf("Balance"), {target: {value: "balance"}});
+  expect((screen.getByLabelText("Number style") as HTMLSelectElement).value).toBe("");
+  expect((screen.getByRole("button", {name: "Continue to review"}) as HTMLButtonElement).disabled).toBe(true);
+});
 
 beforeEach(() => {
   vi.mocked(fetchAccount).mockResolvedValue(account());
@@ -157,7 +197,7 @@ describe("Import: mapping the columns", () => {
   it("makes the person choose a date format that the data cannot decide, and then continues", async () => {
     const ambiguous = readOf({
       columns: [column(0, "Date", ["01/02/2026", "03/04/2026"], ["MM/DD/YYYY", "DD/MM/YYYY"]), column(1, "Balance", ["10.00", "11.00"])],
-      suggested: { date: 0, balance: 1, note: null, currency: null },
+      suggested: { date: 0, balance: 1, note: null },
     });
     await toMap(ambiguous);
     expect(screen.getByText(/can be read more than one way/)).toBeTruthy();
@@ -175,7 +215,7 @@ describe("Import: mapping the columns", () => {
   });
 
   it("lets the review list the values when no date format fits", async () => {
-    const broken = readOf({ columns: [column(0, "Date", ["2026-01-31", "oops"], []), column(1, "Balance", ["1", "2"])], suggested: { date: 0, balance: 1, note: null, currency: null } });
+    const broken = readOf({ columns: [column(0, "Date", ["2026-01-31", "oops"], []), column(1, "Balance", ["1", "2"])], suggested: { date: 0, balance: 1, note: null } });
     await toMap(broken);
     expect(screen.getByText(/Some values are not dates in a format Northstar reads/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Continue to review" }) as HTMLButtonElement).disabled).toBe(false);
@@ -192,7 +232,7 @@ describe("Import: mapping the columns", () => {
 describe("Import: the review", () => {
   it("says what will happen, in counts and in a list with old and new amounts", async () => {
     await toReview();
-    expect(screen.getByText(/all balances are treated as US dollars/)).toBeTruthy();
+    expect(screen.getByText(/all balances are treated as USD/)).toBeTruthy();
     const counts = within(screen.getByLabelText("What will happen"));
     expect(counts.getByText("will be added").previousSibling?.textContent).toBe("2");
     expect(counts.getByText("left alone (skipped)").previousSibling?.textContent).toBe("1");
@@ -221,7 +261,7 @@ describe("Import: the review", () => {
     vi.mocked(fetchImportReview).mockResolvedValue(reviewOf());
     fireEvent.click(screen.getByRole("button", { name: "Continue to review" }));
     await screen.findByText(/Nothing has been saved yet/);
-    expect(lastReview().mapping).toEqual({ date: 0, balance: 1, note: null, currency: null });
+    expect(lastReview().mapping).toEqual({ date: 0, balance: 1, note: null });
   });
 
   it("says how many more there are than are listed", async () => {

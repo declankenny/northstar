@@ -108,7 +108,7 @@ def test_an_ordinary_user_may_export(member_client):
 def test_the_import_maps_the_export_by_itself(client, account):
     table = csvparse.read_table(export(client, account).content)
     mapping = csvparse.suggest_mapping(table.headers)
-    assert (mapping.date, mapping.balance, mapping.note, mapping.currency) == (2, 3, None, None)
+    assert (mapping.date, mapping.balance, mapping.note) == (2, 3, None)
 
 
 def test_importing_an_export_back_into_the_same_account_changes_nothing(client, account):

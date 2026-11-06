@@ -122,7 +122,7 @@ def test_a_cell_too_large_for_the_csv_reader_is_a_file_error_not_a_crash():
 # -- which column is which --
 
 def test_clear_headers_are_prefilled_whatever_their_case_or_punctuation():
-    assert suggest_mapping(["Statement Date", "Closing_Balance", "Memo", "CCY"]) == Mapping(0, 1, 2, 3)
+    assert suggest_mapping(["Statement Date", "Closing_Balance", "Memo", "CCY"]) == Mapping(0, 1, 2)
     assert suggest_mapping(["AS OF", "Balance ($)"]) == Mapping(date=0, balance=1)
 
 
@@ -134,7 +134,7 @@ def test_unknown_ambiguous_and_doubly_claimed_headers_are_left_for_the_person():
 
 
 def test_a_valid_mapping_has_no_problems_and_every_problem_is_explained():
-    assert mapping_problems(Mapping(0, 1, 2, 3), 4) == []
+    assert mapping_problems(Mapping(0, 1, 2), 4) == []
     assert mapping_problems(Mapping(), 3) == ["Choose which column is the Date.", "Choose which column is the Balance."]
     assert mapping_problems(Mapping(date=0, balance=0), 2) == [
         "One column can't be both Date and Balance. Choose a different column for one of them."]
@@ -287,10 +287,9 @@ def test_an_unknown_number_format_is_a_programming_error():
         parse_amount("5", "1'234.56")
 
 
-def test_no_string_can_be_read_two_ways_so_the_person_never_has_to_choose_a_number_format():
-    """The reason there is no number format control: with at most DECIMALS decimal places, every string that fits more than one
+def test_two_decimal_formats_have_no_conflicting_interpretations():
+    """With at most two decimal places, every string that fits more than one
     format means the same amount in all of them. Checked over every string of up to six characters from this alphabet."""
-    assert csvparse.DECIMALS == 2
     disagreements = []
     for length in range(1, 7):
         for chars in itertools.product("0125.,  ", repeat=length):
@@ -301,10 +300,9 @@ def test_no_string_can_be_read_two_ways_so_the_person_never_has_to_choose_a_numb
     assert disagreements == []
 
 
-def test_raising_the_decimal_limit_brings_the_ambiguity_back(monkeypatch):
-    """This is the guard on DECIMALS: at three decimals "1,234" is 1234 or 1.234, and the number format choice must return."""
-    monkeypatch.setattr(csvparse, "DECIMALS", 3)
-    patterns = {name: csvparse._number(group, decimal) for name, (group, decimal) in csvparse.NUMBER_FORMATS.items()}
+def test_three_decimals_allow_conflicting_interpretations():
+    """At three decimals "1,234" is 1234 or 1.234, and the number format choice must return."""
+    patterns = {name: csvparse._number(group, decimal, 3) for name, (group, decimal) in csvparse.NUMBER_FORMATS.items()}
     readings = set()
     for name, pattern in patterns.items():
         if pattern.fullmatch("1,234"):
@@ -440,38 +438,13 @@ def test_a_bad_mapping_or_date_format_is_a_programming_error_not_a_row_error():
 
 # -- currency --
 
-CURRENCY = Mapping(date=0, balance=1, currency=2)
-
-
-def test_usd_in_any_case_passes():
-    parsed = result("Date,Balance,Currency\n2026-01-31,1,USD\n2026-02-28,2,usd\n2026-03-31,3, Usd \n", CURRENCY)
-    assert parsed.errors == [] and len(parsed.rows) == 3
-
-
-def test_any_other_code_blocks_the_file_and_the_codes_are_listed_once_each():
-    parsed = result("Date,Balance,Currency\n2026-01-31,1,EUR\n2026-02-28,2,USD\n2026-03-31,3,eur\n2026-04-30,4,CAD\n", CURRENCY)
-    assert parsed.rows == [] and parsed.unsupported_currencies == ["CAD", "EUR"]
-    assert [e.record for e in parsed.errors] == [2, 4, 5]
-    assert parsed.errors[0].message == "The currency EUR is not supported yet. Only USD is."
-
-
-def test_a_blank_currency_in_a_mapped_column_is_an_error_and_ignoring_the_column_is_the_consent():
-    text = "Date,Balance,Currency\n2026-01-31,1,USD\n2026-02-28,2,\n"
-    parsed = result(text, CURRENCY)
-    assert [(e.record, e.column) for e in parsed.errors] == [(3, 2)] and "set the Currency column to Ignore" in parsed.errors[0].message
-    assert len(result(text, BASIC).rows) == 2                    # not mapped: every amount is taken as US dollars
-
-
-def test_a_dollar_sign_is_accepted_and_another_symbol_blocks_the_file_and_is_listed():
-    assert result("Date,Balance\n2026-01-31,$1.00\n2026-02-28,-$2.00\n").errors == []
-    parsed = result("Date,Balance\n2026-01-31,€1.00\n2026-02-28,$2.00\n2026-03-31,£3.00\n")
-    assert parsed.rows == [] and parsed.unsupported_currencies == ["£", "€"]
-    assert [e.record for e in parsed.errors] == [2, 4]
-
-
-def test_a_dollar_sign_against_a_currency_column_that_says_otherwise_blocks_the_file():
-    parsed = result("Date,Balance,Currency\n2026-01-31,$1.00,EUR\n", CURRENCY)
-    assert parsed.rows == [] and parsed.unsupported_currencies == ["EUR"]
+def test_currency_columns_are_ignored_and_symbols_do_not_decide_currency():
+    text = "Date,Balance,Currency\n2026-01-31,€1.00,EUR\n2026-02-28,£2.00,\n"
+    mapping = suggest_mapping(["Date", "Balance", "Currency"])
+    assert mapping == Mapping(0, 1)
+    parsed = result(text, mapping)
+    assert parsed.errors == []
+    assert [row.cents for row in parsed.rows] == [100, 200]
 
 
 # -- uploaded content is never logged --
@@ -486,8 +459,8 @@ def test_other_problems_are_still_listed_when_a_columns_format_is_mixed():
     text = 'Date,Balance\n2026-01-31,1.234\n2026-02-28,"1,234"\n2026-03-31,\n2026-04-30,€5\n'
     parsed = result(text)
     assert parsed.rows == []
-    assert [(e.record, e.column) for e in parsed.errors] == [(3, 1), (4, 1), (5, 1)]    # mixed, blank and a symbol, in one pass
-    assert parsed.unsupported_currencies == ["€"]
+    assert [(e.record, e.column) for e in parsed.errors] == [(3, 1), (4, 1)]    # mixed and blank; the symbol is accepted
+    assert parsed.unsupported_currencies == []
 
 
 def test_a_file_of_the_largest_size_is_read_in_full():

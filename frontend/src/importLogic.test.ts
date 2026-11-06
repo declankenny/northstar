@@ -2,35 +2,36 @@ import { describe, expect, it } from "vitest";
 import type { ImportColumn, ImportRead } from "./api";
 import { decidedFormat, formatChoices, hiddenSummary, mappingFrom, readiness, setUse, usesFrom, writeCount, writeSummary } from "./importLogic";
 
-const column = (index: number, date_formats: string[] = []): ImportColumn => ({ index, header: `Column ${index}`, samples: [], date_formats });
+const column = (index: number, date_formats: string[] = []): ImportColumn => ({ index, header: `Column ${index}`, samples: [], date_formats, number_formats: [], number_previews: {} });
 const read = (columns: ImportColumn[]): ImportRead => ({
+  currency: {code: "USD", name: "US Dollar", minor_units: 2}, number_formats: ["1,234.56"], canonical: false,
   delimiter: ",", row_count: 3, columns, date_formats: ["YYYY-MM-DD", "MM/DD/YYYY", "DD/MM/YYYY"],
-  suggested: { date: null, balance: null, note: null, currency: null }, today: "2026-10-30",
+  suggested: { date: null, balance: null, note: null }, today: "2026-10-30",
 });
 
 describe("the use of each column", () => {
   it("is worked out from the suggested mapping, and everything else is ignored", () => {
-    expect(usesFrom({ date: 0, balance: 2, note: null, currency: null }, 4)).toEqual(["date", "ignore", "balance", "ignore"]);
-    expect(usesFrom({ date: null, balance: null, note: null, currency: null }, 2)).toEqual(["ignore", "ignore"]);
+    expect(usesFrom({ date: 0, balance: 2, note: null }, 4)).toEqual(["date", "ignore", "balance", "ignore"]);
+    expect(usesFrom({ date: null, balance: null, note: null }, 2)).toEqual(["ignore", "ignore"]);
   });
 
   it("turns back into the mapping the server takes, by position", () => {
-    expect(mappingFrom(["note", "date", "ignore", "balance"])).toEqual({ date: 1, balance: 3, note: 0, currency: null });
-    expect(mappingFrom(usesFrom({ date: 1, balance: 0, note: 3, currency: 2 }, 4))).toEqual({ date: 1, balance: 0, note: 3, currency: 2 });
+    expect(mappingFrom(["note", "date", "ignore", "balance"])).toEqual({ date: 1, balance: 3, note: 0 });
+    expect(mappingFrom(usesFrom({ date: 1, balance: 0, note: 3 }, 4))).toEqual({ date: 1, balance: 0, note: 3 });
   });
 
   it("ignores a suggestion for a column the file does not have", () => {
-    expect(usesFrom({ date: 5, balance: 0, note: null, currency: null }, 2)).toEqual(["balance", "ignore"]);
+    expect(usesFrom({ date: 5, balance: 0, note: null }, 2)).toEqual(["balance", "ignore"]);
   });
 
   it("moves a use from the column that had it, so no use is on two columns", () => {
-    const start = usesFrom({ date: 0, balance: 1, note: null, currency: null }, 3);
+    const start = usesFrom({ date: 0, balance: 1, note: null }, 3);
     expect(setUse(start, 2, "date")).toEqual(["ignore", "balance", "date"]);
     expect(setUse(start, 0, "balance")).toEqual(["balance", "ignore", "ignore"]);
   });
 
   it("lets any number of columns be ignored, and a column change its own use", () => {
-    const start = usesFrom({ date: 0, balance: 1, note: null, currency: null }, 3);
+    const start = usesFrom({ date: 0, balance: 1, note: null }, 3);
     expect(setUse(start, 0, "ignore")).toEqual(["ignore", "balance", "ignore"]);
     expect(setUse(start, 0, "note")).toEqual(["note", "balance", "ignore"]);
     expect(setUse(setUse(start, 2, "ignore"), 1, "ignore")).toEqual(["date", "ignore", "ignore"]);

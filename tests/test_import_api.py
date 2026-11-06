@@ -12,7 +12,7 @@ from conftest import add_account, add_balance, op, with_db
 
 ASSET = 1
 CSV = "Date,Balance,Note\n2026-01-31,1000.00,Opening\n2026-02-28,1100.50,\n2026-03-31,1200.00,Bonus\n"
-MAPPING = {"date": 0, "balance": 1, "note": 2, "currency": None}
+MAPPING = {"date": 0, "balance": 1, "note": 2}
 SENT = {"date": 0, "balance": 1}      # a mapping with only the required columns
 
 
@@ -101,7 +101,7 @@ def test_read_describes_the_columns(client, account):
     assert [c["header"] for c in body["columns"]] == ["Date", "Balance", "Note"]
     assert body["columns"][0]["samples"] == ["2026-01-31", "2026-02-28", "2026-03-31"]
     assert body["columns"][2]["samples"] == ["Opening", "Bonus"]       # blank cells are not samples
-    assert body["suggested"] == {"date": 0, "balance": 1, "note": 2, "currency": None}
+    assert body["suggested"] == {"date": 0, "balance": 1, "note": 2}
     assert body["today"]
 
 
@@ -259,11 +259,11 @@ def test_review_names_every_record_of_a_duplicate_date(client, account):
     assert "Jan 31, 2026" in body["errors"][0]["message"]
 
 
-def test_review_blocks_a_currency_that_is_not_dollars_and_lists_it(client, account):
+def test_review_ignores_a_currency_column(client, account):
     text = "Date,Balance,Currency\n2026-01-31,10.00,USD\n2026-02-28,11.00,EUR\n"
     body = review(client, account, text=text, mapping={"date": 0, "balance": 1, "note": None, "currency": 2}).json()
-    assert body["can_commit"] is False
-    assert body["unsupported_currencies"] == ["EUR"]
+    assert body["can_commit"] is True
+    assert body["unsupported_currencies"] == []
 
 
 def test_review_needs_a_date_format_when_the_data_cannot_decide(client, account):
@@ -287,7 +287,7 @@ def test_review_reads_the_account_from_the_address_and_never_from_the_file(clien
         other = add_account(conn, "Demo Checking", ASSET, "Checking")
         conn.commit()
     text = f"Date,Balance,Account\n2026-01-31,10.00,{other}\n"
-    mapped = {"date": 0, "balance": 1, "note": None, "currency": None}      # the Account column is simply not mapped
+    mapped = {"date": 0, "balance": 1, "note": None}      # the Account column is simply not mapped
     reviewed = review(client, account, text=text, mapping=mapped).json()["reviewed"]
     assert commit(client, account, reviewed, text=text, mapping=mapped).status_code == 200
     assert len(balances_of(client, account)) == 1

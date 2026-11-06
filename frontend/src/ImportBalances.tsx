@@ -25,6 +25,7 @@ export function ImportBalances({ id }: { id: number }) {
   const [fileError, setFileError] = useState<string | null>(null);
   const [changedUses, setChangedUses] = useState<Use[] | null>(null);       // null until the person changes a column's use
   const [chosenFormat, setChosenFormat] = useState<string | null>(null);    // null until the person chooses one
+  const [chosenNumberFormat, setChosenNumberFormat] = useState<string | null>(null);
   const [policy, setPolicy] = useState<ImportPolicy>("skip");
   const [committing, setCommitting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);              // the import was refused for some other reason
@@ -40,11 +41,13 @@ export function ImportBalances({ id }: { id: number }) {
   const mapping = mappingFrom(uses);
   const dateColumn = mapping.date === null ? undefined : columns[mapping.date];
   const dateFormat = chosenFormat ?? decidedFormat(dateColumn);
-  const settings = file && read.data ? { file, mapping, dateFormat, policy } : null;
+  const balanceColumn = mapping.balance === null ? undefined : columns[mapping.balance];
+  const numberFormat = chosenNumberFormat ?? (balanceColumn?.number_formats?.length === 1 ? balanceColumn.number_formats[0] : null);
+  const settings = file && read.data ? { file, mapping, dateFormat, numberFormat, policy } : null;
 
   const review = useRequest(
     (signal) => fetchImportReview(id, settings!, signal),
-    [id, file, JSON.stringify(mapping), dateFormat, policy],
+    [id, file, JSON.stringify(mapping), dateFormat, numberFormat, policy],
     { skip: step !== "review" || settings === null, reset: true },
   );
 
@@ -62,6 +65,7 @@ export function ImportBalances({ id }: { id: number }) {
     setStep("file");
     setChangedUses(null);
     setChosenFormat(null);
+    setChosenNumberFormat(null);
     setPolicy("skip");
     setStale(null);
     setFailure(null);
@@ -118,9 +122,10 @@ export function ImportBalances({ id }: { id: number }) {
   } else if (step === "map" && read.data && file) {
     body = (
       <MapStep fileName={file.name} read={read.data} uses={uses} dateFormat={dateFormat}
-        formatChoices={formatChoices(dateColumn, read.data.date_formats)}
+        formatChoices={formatChoices(dateColumn, read.data.date_formats)} numberFormat={numberFormat} onNumberFormat={setChosenNumberFormat}
         onUse={(column, use) => {
           setChangedUses(setUse(uses, column, use));
+          if (use === "balance" || uses[column] === "balance") setChosenNumberFormat(null);
           if (use === "date" || uses[column] === "date") setChosenFormat(null);      // another column, another format
         }}
         onFormat={setChosenFormat} onPick={() => picker.current?.click()} onBack={() => setStep("file")}
@@ -128,14 +133,14 @@ export function ImportBalances({ id }: { id: number }) {
     );
   } else if (step === "review" && file) {
     body = (
-      <ReviewStep fileName={file.name} review={review} policy={policy} onPolicy={setPolicy} stale={stale} failure={failure}
+      <ReviewStep currency={read.data?.currency} fileName={file.name} review={review} policy={policy} onPolicy={setPolicy} stale={stale} failure={failure}
         committing={committing} onBack={() => setStep("map")} onImport={() => void importNow()} onPick={() => picker.current?.click()}
         onCancel={leave} />
     );
   } else if (step === "result" && file && result) {
     body = (
       <ResultStep fileName={file.name} result={result} onExit={leave}
-        onAnother={() => { setFile(null); setStep("file"); setResult(null); setChangedUses(null); setChosenFormat(null); setPolicy("skip"); }} />
+        onAnother={() => { setFile(null); setStep("file"); setResult(null); setChangedUses(null); setChosenFormat(null); setChosenNumberFormat(null); setPolicy("skip"); }} />
     );
   } else {
     body = (

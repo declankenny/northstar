@@ -426,16 +426,21 @@ export function downloadExport(accountId: number): void {
 }
 
 /** The column for each thing the import needs, by position in the file, or null. */
-export type ImportMapping = { date: number | null; balance: number | null; note: number | null; currency: number | null };
+export type ImportMapping = { date: number | null; balance: number | null; note: number | null };
 
 export type ImportColumn = {
   index: number;
   header: string;
   samples: string[]; // the first values that are not blank
+  number_formats: string[];
+  number_previews: Record<string, number | null>;
   date_formats: string[]; // the formats under which every value is a date: one decides it, several need a choice
 };
 
 export type ImportRead = {
+  currency: Currency;
+  number_formats: string[];
+  canonical: boolean;
   delimiter: string;
   row_count: number;
   columns: ImportColumn[];
@@ -484,7 +489,7 @@ export type ImportPolicy = "skip" | "replace";
 /** The file as the server takes it: its name and its bytes as base64 text. */
 export type ImportFile = { name: string; content: string };
 
-export type ImportSettings = { file: ImportFile; mapping: ImportMapping; dateFormat: string | null; policy: ImportPolicy };
+export type ImportSettings = { file: ImportFile; mapping: ImportMapping; dateFormat: string | null; numberFormat: string | null; policy: ImportPolicy };
 
 /** Read a file chosen in the browser into memory. It is sent again with every step and kept nowhere on the server. */
 export function readImportFile(file: File): Promise<ImportFile> {
@@ -506,6 +511,7 @@ const importBody = (settings: ImportSettings) => ({
   file_name: settings.file.name,
   mapping: settings.mapping,
   date_format: settings.dateFormat,
+  number_format: settings.numberFormat,
   policy: settings.policy,
 });
 
