@@ -1,11 +1,11 @@
 """Local user accounts. Plain functions plus a small command line.
 
-    python -m northstar.users create EMAIL NAME [--admin]
     python -m northstar.users set-password EMAIL
     python -m northstar.users list
 
-Passwords are asked for at a prompt, never taken from the command line, so they stay out of shell
-history. Nothing here prints a password or a hash.
+The first admin is made on the first-run setup page (see setup.py), and later users on the Users page, so there is
+no command to create one. The password is asked for at a prompt, never taken from the command line, so it stays out of
+shell history. Nothing here prints a password or a hash.
 """
 
 import argparse
@@ -127,6 +127,20 @@ def _clean_email(email: str) -> str:
 def _check_password(password: str) -> None:
     if len(password) < MIN_PASSWORD_LENGTH:
         raise ValidationError(f"The password must be at least {MIN_PASSWORD_LENGTH} characters.")
+
+
+def check_new_user(email: str, display_name: str, password: str) -> dict[str, str]:
+    """Every refusal `add_user` would make from these three fields, by field name, so a form can show them together. It
+    reads nothing from the database, so an email that is already taken is not among them."""
+    problems: dict[str, str] = {}
+    for field, check in (("email", lambda: _clean_email(email)),
+                         ("display_name", lambda: _clean_name(display_name)),
+                         ("password", lambda: _check_password(password))):
+        try:
+            check()
+        except ValidationError as refusal:
+            problems[field] = str(refusal)
+    return problems
 
 
 def create_user(op: Operation, email: str, display_name: str, password: str,
@@ -323,11 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m northstar.users",
         description="Manage Northstar users (NORTHSTAR_DB, default data/northstar.db).")
     commands = parser.add_subparsers(dest="command", required=True)
-    create = commands.add_parser("create", help="add a user (asks for a password)")
-    create.add_argument("email")
-    create.add_argument("name")
-    create.add_argument("--admin", action="store_true", help="make the user an admin")
-    reset = commands.add_parser("set-password", help="change a user's password and sign them out")
+    reset =commands.add_parser("set-password", help="change a user's password and sign them out")
     reset.add_argument("email")
     commands.add_parser("list", help="list users")
     args = parser.parse_args(argv)
@@ -338,10 +348,7 @@ def main(argv: list[str] | None = None) -> int:
         with closing(db.connect(path)) as conn:
             db.require_current(conn, path)
             op = Operation(conn, None, "cli")      # the command line has no signed-in user
-            if args.command == "create":
-                _, restored = add_user(op, args.email, args.name, _ask_password(), args.admin)
-                print(f"{'Restored' if restored else 'Created'} {args.email.strip().lower()}{' (admin)' if args.admin else ''}.")
-            elif args.command == "set-password":
+            if args.command == "set-password":
                 set_password(op, args.email, _ask_password())
                 print(f"Password changed for {args.email.strip().lower()}. They are signed out everywhere.")
             else:

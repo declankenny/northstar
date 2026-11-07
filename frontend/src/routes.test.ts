@@ -13,6 +13,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/currencies")).toBe("currencies");
     expect(routeFromPath("/profile")).toBe("profile");
     expect(routeFromPath("/login")).toBe("login");
+    expect(routeFromPath("/setup")).toBe("setup");
   });
 
   it("opens an account at /accounts/<number>", () => {

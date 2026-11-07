@@ -63,6 +63,46 @@ export async function requestSignIn(email: string, password: string, next: strin
   return (await send<{ next: string }>("POST", "/api/auth/login", { email, password, next }))!.next;
 }
 
+// -- First-run setup. Nobody is signed in, so a 401 here means the setup session is missing or ended, never "sign in". --
+
+/** Which screen setup shows: the token, the form (a setup session exists), or "complete" once an administrator exists. */
+export type SetupState = "token" | "form" | "complete";
+
+/** What the setup form offers and where each choice starts. An existing locked currency comes as it is, to be shown read-only. */
+export type SetupOptions = {
+  currency: { value: string | null; locked: boolean };
+  currencies: Currency[];
+  locale: string; // the stored default format's tag
+  locales: Locale[]; // whole rows, so the form can show an example in each format
+  timezone: string; // the stored zone, UTC when none is set
+  timezones: string[];
+};
+
+export type SetupForm = {
+  email: string; display_name: string; password: string; currency: string | null; locale: string; timezone: string;
+};
+
+export async function fetchSetupState(signal?: AbortSignal): Promise<SetupState> {
+  return (await send<{ state: SetupState }>("GET", "/api/setup/status", undefined, signal, false))!.state;
+}
+
+/** Give the setup token and get a setup session (a cookie the page never sees). A wrong token is a RequestError (400), too many
+ *  a 429, and 409 means setup is already complete. */
+export async function sendSetupToken(token: string): Promise<void> {
+  await send("POST", "/api/setup/token", { token }, undefined, false);
+}
+
+/** A RequestError with status 401 means the setup session has ended and the token is needed again. */
+export async function fetchSetupOptions(signal?: AbortSignal): Promise<SetupOptions> {
+  return (await send<SetupOptions>("GET", "/api/setup/options", undefined, signal, false))!;
+}
+
+/** Create the administrator and save the initial settings, or save nothing. Resolves to the administrator's email. A refused field is
+ *  a RequestError whose `errors` say which (422), 401 means the setup session ended and 409 that setup was already completed. */
+export async function completeSetup(form: SetupForm): Promise<string> {
+  return (await send<{ email: string }>("POST", "/api/setup", form, undefined, false))!.email;
+}
+
 /** End the session on the server, then go to the sign-in page. Throws if the server could not be asked, so the person is not
  *  told they are signed out when they are not. An answer of 401 means the session had already ended. */
 export async function signOut(): Promise<void> {
@@ -106,14 +146,14 @@ export class RequestError extends Error {
 }
 
 /** Send a change and return the JSON answer, or throw an Error whose message is fit to show the user. */
-async function send<T>(method: string, url: string, body: unknown, signal?: AbortSignal): Promise<T | null> {
+async function send<T>(method: string, url: string, body: unknown, signal?: AbortSignal, signInOn401 = true): Promise<T | null> {
   const response = await fetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal,
   });
-  if (response.status === 401) {
+  if (response.status === 401 && signInOn401) {
     signIn(); // the session ended: sign in again
     throw new Error("You are signed out.");
   }

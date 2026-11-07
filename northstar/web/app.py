@@ -11,18 +11,19 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from northstar import config, db, scheduler, sessions, system_properties, throttle, users
+from northstar import config, db, scheduler, sessions, setup, system_properties, throttle, users
 from northstar.web import (account_api, api_routes, auth_routes, currencies_api, errors, import_api, imports_api, profile_api, security_headers,
-                           system_properties_api, types_api, update_api, users_api, version_api)
+                           setup_api, system_properties_api, types_api, update_api, users_api, version_api)
 
 WEB_DIR = Path(__file__).parent
 SPA_DIR = WEB_DIR / "spa"        # the built React app (see frontend/); absent until it is built
 # First parts of an address that belong to the server. The React app owns every other address.
-SERVER_PATHS = ("api", "login", "static")
+SERVER_PATHS = ("api", "login", "setup", "static")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
-# What a signed-out visitor may fetch: the sign-in page, its endpoint, and the files the page is made of.
-PUBLIC_PATHS = ("/login", "/api/auth/login")
-PUBLIC_PREFIXES = ("/static/", "/assets/")
+# What a signed-out visitor may fetch: the sign-in page, its endpoint, the first-run setup page and its endpoints (which
+# refuse everything once an administrator exists, see setup.py), and the files the page is made of.
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/setup", "/api/setup")
+PUBLIC_PREFIXES = ("/static/", "/assets/", "/api/setup/")
 
 
 async def refuse_cross_site_posts(request: Request, call_next):
@@ -71,6 +72,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     db.upgrade(db_path)     # a backup first if a migration is pending, and a refusal if the database is newer
     with closing(db.connect(db_path)) as conn:
         system_properties.apply_timezone(conn)      # what "today" is: the system.timezone setting, from TZ the first time
+        gate = setup.SetupGate.start(conn)          # while no administrator exists: the setup token, printed once in the log
     throttle.log_limits()
     warn_if_cookie_is_not_secure()
     users.prepare_dummy_hash()
@@ -88,6 +90,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
 
     app = FastAPI(title="Northstar", lifespan=lifespan)
     app.state.db_path = db_path
+    app.state.setup = gate
     app.middleware("http")(refuse_cross_site_posts)
     app.middleware("http")(require_login)
     errors.install(app)
@@ -96,6 +99,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.state.spa_index = SPA_DIR / "index.html"      # the sign-in page is that page (see auth_routes.sign_in_page)
     app.include_router(auth_routes.pages)
     app.include_router(auth_routes.router)
+    app.include_router(setup_api.pages)
+    app.include_router(setup_api.router)
     app.include_router(types_api.router)
     app.include_router(system_properties_api.router)
     app.include_router(currencies_api.router)

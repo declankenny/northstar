@@ -11,6 +11,7 @@ from northstar import backup, clock, db, users
 from northstar.errors import ValidationError
 from northstar.version import VERSION
 from northstar.web.app import create_app
+from conftest import op
 
 FIRST_ONLY = ["0001_initial"]
 REST = sorted(file.stem for file in db.MIGRATIONS_DIR.glob("*.sql"))[1:]    # what an upgrade from FIRST_ONLY applies
@@ -245,7 +246,7 @@ def cli(monkeypatch, tmp_path):
 
 def test_the_command_line_refuses_a_database_that_does_not_exist_and_creates_nothing(cli, tmp_path, capsys):
     target = tmp_path / "data" / "northstar.db"
-    assert cli(target, "create", "a@example.com", "A", "--admin") == 1
+    assert cli(target, "set-password", "a@example.com") == 1
     assert "Start Northstar" in capsys.readouterr().err
     assert not target.exists() and not target.parent.exists()
 
@@ -253,7 +254,7 @@ def test_the_command_line_refuses_a_database_that_does_not_exist_and_creates_not
 def test_the_command_line_refuses_a_database_with_pending_migrations_and_leaves_it_alone(cli, tmp_path, older_migrations, capsys):
     path = database_at_an_older_version(tmp_path, older_migrations)
     before = path.read_bytes()
-    assert cli(path, "create", "a@example.com", "A", "--admin") == 1
+    assert cli(path, "set-password", "a@example.com") == 1
     assert "Start Northstar" in capsys.readouterr().err
     assert path.read_bytes() == before and backups_of(path) == []
 
@@ -272,6 +273,8 @@ def test_the_command_line_refuses_a_newer_database(cli, tmp_path, capsys):
 def test_the_command_line_works_on_a_current_database(cli, tmp_path, capsys):
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
-    assert cli(path, "create", "a@example.com", "A", "--admin") == 0
+    with db.connect(path) as conn:
+        users.create_user(op(conn), "a@example.com", "A", PASSWORD, is_admin=True)
+    assert cli(path, "set-password", "a@example.com") == 0
     assert cli(path, "list") == 0
     assert "a@example.com" in capsys.readouterr().out

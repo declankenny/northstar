@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { signOut } from "./api";
+import { SETUP_EMAIL_KEY } from "./Setup";
 import { SignIn } from "./SignIn";
 
 const assign = vi.fn();
@@ -31,6 +32,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   assign.mockReset();
+  sessionStorage.clear();
   Object.defineProperty(window, "location", { configurable: true, value: realLocation });
 });
 
@@ -117,5 +119,36 @@ describe("signing out", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
     await expect(signOut()).rejects.toThrow("Could not sign out");
     expect(assign).not.toHaveBeenCalled();
+  });
+});
+
+describe("the sign-in page right after first-run setup", () => {
+  it("says setup is complete and starts with the new administrator's email filled in, never a password", () => {
+    visit("?setup=complete");
+    sessionStorage.setItem(SETUP_EMAIL_KEY, "alex@example.com");
+    render(<SignIn />);
+    expect(screen.getByRole("heading", { name: "Setup complete" })).toBeTruthy();
+    expect(screen.getByText("Your administrator account and household settings are ready.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Sign in to Northstar" })).toBeTruthy();
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("alex@example.com");
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+    expect(document.activeElement).toBe(screen.getByLabelText("Password")); // the email is known, so the password is next
+    expect(sessionStorage.getItem(SETUP_EMAIL_KEY)).toBeNull(); // read once
+  });
+
+  it("works without the remembered email, as when the browser blocks storage", () => {
+    visit("?setup=complete");
+    render(<SignIn />);
+    expect(screen.getByRole("heading", { name: "Setup complete" })).toBeTruthy();
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("");
+    expect(document.activeElement).toBe(screen.getByLabelText("Email"));
+  });
+
+  it("is the ordinary sign-in page otherwise, and ignores a remembered email", () => {
+    sessionStorage.setItem(SETUP_EMAIL_KEY, "alex@example.com");
+    render(<SignIn />);
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeTruthy();
+    expect(screen.queryByText("Setup complete")).toBeNull();
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("");
   });
 });

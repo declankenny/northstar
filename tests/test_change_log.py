@@ -394,13 +394,11 @@ def _weak_hash(password):
 
 # -- the command line and the web --
 
-def test_the_command_line_is_the_system_user_with_the_cli_kind(tmp_path, monkeypatch):
+def test_the_command_line_is_the_system_user_with_the_cli_kind(tmp_path):
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
-    monkeypatch.setenv("NORTHSTAR_DB", str(path))
-    monkeypatch.setattr("getpass.getpass", lambda prompt="": PASSWORD)
-    assert users.main(["create", "first@example.com", "First", "--admin"]) == 0
     conn = db.connect(path)
+    users.create_user(op(conn, None, "cli"), "first@example.com", "First", PASSWORD, is_admin=True)
     [header] = headers(conn)
     assert (header["kind"], header["user_id"]) == ("cli", system_id(conn))
 

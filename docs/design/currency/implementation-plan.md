@@ -30,7 +30,7 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 - **The money column is not renamed.** `amount_cents` keeps holding integers, now in the account currency's minor unit. A decisions entry in step 3 records the meaning, and the spec, `CLAUDE.md` and `docs/schema.md` say "minor units". Integer minor units suit SQLite, which has no decimal type and sums integers exactly in the database.
 - **An existing installation's system currency** is USD if it has at least one account, and unset otherwise. While it is unset, the Add Account action warns and the server refuses to create an account, until an admin sets the currency on the System Properties screen.
-- **`python -m northstar.users create` is removed** in v0.3, replaced by the setup page. `reset-password` stays.
+- **`python -m northstar.users create` is removed** in v0.3, replaced by the setup page. `set-password` stays (the plan first called it `reset-password`).
 - **The setup page's only condition** is whether an admin exists.
 - **#126 and #127 ship together** as stacked pull requests, so the locale can be chosen in the interface from the first release.
 
@@ -97,7 +97,7 @@ The epic is [#56](https://github.com/declankenny/northstar/issues/56). System Pr
 
 ### 6. First-run setup page (#64)
 
-- Scope: an unauthenticated page, available only while no admin exists and guarded by a one-time token printed in the container log, that creates the first admin and, in the same motion, sets initial system properties. It replaces `users create`, which is removed together with its operating guide text. The token lifecycle, whether the currency field is required, and the reserved route name are drafted on the issue.
+- Scope: an unauthenticated page, available only while no admin exists and guarded by a one-time token printed in the container log, that creates the first admin and, in the same motion, sets initial system properties. It replaces `users create`, which is removed together with its operating guide text. The agreed design, including the token lifecycle, is [../first-run-setup.md](../first-run-setup.md).
 - Tests: the page is gone once an admin exists; a wrong or reused token is refused; two simultaneous submissions create one admin; the admin and the properties are written in one transaction.
 - Docs: a mockup first; the spec's "First admin" bullet and `docs/operating.md`.
 

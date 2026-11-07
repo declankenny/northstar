@@ -222,24 +222,22 @@ def test_the_system_user_cannot_be_reactivated_or_added(conn, admin):
 
 # -- the command line --
 
-def test_the_command_line_creates_restores_and_hides(tmp_path, monkeypatch, capsys):
+def test_the_command_line_hides_a_deleted_user_and_refuses_to_set_their_password(tmp_path, monkeypatch, capsys):
+    """Creating and restoring a user is the Users page's job (see the API tests below): the command line only lists and resets."""
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
     monkeypatch.setenv("NORTHSTAR_DB", str(path))
     monkeypatch.setattr("getpass.getpass", lambda prompt="": PASSWORD)
-    assert users.main(["create", "boss@example.com", "Boss", "--admin"]) == 0
-    assert users.main(["create", "gone@example.com", "Gone"]) == 0
-    assert "Created gone@example.com" in capsys.readouterr().out
     conn = db.connect(path)
-    gone = conn.execute("SELECT id FROM users WHERE email = 'gone@example.com'").fetchone()[0]
-    boss = conn.execute("SELECT id FROM users WHERE email = 'boss@example.com'").fetchone()[0]
+    boss = users.create_user(op(conn), "boss@example.com", "Boss", PASSWORD, is_admin=True)
+    gone = users.create_user(op(conn), "gone@example.com", "Gone", PASSWORD)
+    assert users.main(["list"]) == 0
+    assert "gone@example.com" in capsys.readouterr().out
     users.delete_user(op(conn, boss), gone, boss)
     assert users.main(["list"]) == 0
     assert "gone@example.com" not in capsys.readouterr().out
     assert users.main(["set-password", "gone@example.com"]) == 1
-    assert users.main(["create", "gone@example.com", "Gone"]) == 0
-    assert "Restored gone@example.com" in capsys.readouterr().out
-    assert conn.execute("SELECT id, deleted FROM users WHERE email = 'gone@example.com'").fetchone()[:] == (gone, 0)
+    assert "no user with that email" in capsys.readouterr().err
 
 
 # -- the web API --

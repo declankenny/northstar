@@ -328,6 +328,27 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .signin .error { margin: 0 0 14px; padding: 10px 12px; border-radius: 9px; font-size: 14px; color: var(--neg);
   border: 1px solid var(--neg); background: transparent; }
 
+/* First-run setup shares the sign-in card: wider for the form, with the administrator's fields above the household's. */
+.signin.wide { max-width: 580px; }
+.signin h2 { margin: 22px 0 12px; font-size: 16px; }
+.signin h1 + .help { margin: -8px 0 16px; }
+.signin .help { margin: 0; font-size: 13px; color: var(--muted); }
+.signin .help.centered { text-align: center; }
+.signin .warning { margin: 0; font-size: 13px; color: var(--warn); }
+.signin .field { display: flex; flex-direction: column; gap: 6px; }
+.signin .field > label { font-size: 13px; color: var(--muted); }
+.signin .field-error { margin: 0; font-size: 13px; color: var(--neg); }
+.signin input[aria-invalid="true"] { border-color: var(--neg); }
+.signin select { font: inherit; font-size: 15px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; }
+.signin select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.signin input[readonly] { color: var(--muted); }
+.signin .setup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.signin .password-row { display: flex; gap: 8px; }
+.signin .password-row input { flex: 1; min-width: 0; }
+.signin button.quiet { margin-top: 0; color: var(--text); background: transparent; border: 1px solid var(--border); font-weight: 500; }
+@media (max-width: 560px) { .signin .setup-row { grid-template-columns: 1fr; } }
+
 /* System properties page: a list of groups on the left, the chosen group's settings on the right */
 .sp-page { display: flex; flex-direction: column; flex: 1; min-height: 0; padding-bottom: 28px; overflow: auto; }
 .sp-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; align-items: start; margin-top: 20px; max-width: 900px; }
