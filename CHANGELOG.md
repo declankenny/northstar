@@ -6,7 +6,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-## [0.3.0] - TODO release date
+## [0.3.0] - 2026-11-07
 
 Multi-currency and locale-aware formatting. Every account has a currency, household totals are converted into one system currency with exchange rates that Northstar fetches daily from Frankfurter (or that an admin enters), and each person chooses their number and date format. A new installation is set up on a first-run page, with a one-time token from the container log, in place of the `users create` command.
 
