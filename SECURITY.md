@@ -64,5 +64,6 @@ The details and the reasons are in [`docs/spec.md`](docs/spec.md) ("Security") a
 - **Use long, unique passwords.** The minimum is 12 characters. A password manager is the easy way.
 - **Keep it up to date.** Fixes arrive as patch releases. Once the published image exists, updating is `docker compose pull && docker compose up -d`.
 - **Back up the database** with `python -m northstar.backup create FILE`, and keep backups private.
+- **Know what leaves the machine.** Northstar makes one outbound request, once a day, to `api.frankfurter.dev` over HTTPS for exchange rates. It carries only currency codes and dates, never an amount, account or name, and no credential is involved. If the host must not call out, clear the system property `currency.rate.fetch_time`.
 - **Keep the container log private until first-run setup is finished.** A new installation prints a one-time setup token in it, and whoever has the token and can reach `/setup` can create the first administrator. The token is gone once setup is finished or the app restarts.
 - **If an admin forgets their password**, the command line is the way back in: `python -m northstar.users set-password EMAIL`. Recovery when no active admin remains is not built yet.
