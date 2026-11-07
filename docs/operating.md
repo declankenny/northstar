@@ -140,14 +140,26 @@ The image is `latest` in the example, which moves to each new release. For an in
 
 **The app protects your data on its own.** If an upgrade has a database change to apply, Northstar first writes a checked backup of the database as it is, to `/data/backups/pre-migration-<version>-<UTC time>.db`, and only then changes it. The version in the name is the new one, the one that made the backup. The newest five are kept. If the backup fails, the app refuses to start and leaves the database alone. If the database was last used by a newer version than the one you are running, the app also refuses to start, and says so in the log (`docker compose logs northstar`).
 
+### Upgrading from 0.2 to 0.3
+
+Version 0.3 adds currencies, number and date formats, exchange rates and the first-run setup page. What an upgrade does to an installation that already runs 0.2:
+
+- **A checked backup is made first**, as for any database change (see above), and the app starts only if it worked.
+- **Installations with at least one account** get US dollars as the system currency, locked, because every existing amount is a dollar amount. Your accounts and balances are unchanged and are now US dollar accounts.
+- **Installations with no account** have no system currency yet. Until an admin chooses one under Admin, System properties, no account can be added, and the Add account dialog says so. The currency is chosen once and cannot be changed afterwards.
+- **Nobody sees the setup page**: you already have an administrator, so `/setup` goes to the sign-in page and no token is printed. Everyone keeps US English formats until they choose another on their profile, and an admin can set the default for new users.
+- **Your `TZ` is saved once** as the system time zone, so "today" stays what it was. After that, change it under Admin, System properties.
+- **Northstar now makes one outbound request a day**, to `api.frankfurter.dev` over HTTPS, at 18:00 in your time zone, for exchange rates. It sends only currency codes and dates. It does nothing until you enable a currency other than the system currency, and clearing `currency.rate.fetch_time` under System properties turns it off completely. See "Exchange rates" below.
+- **The old `users create` command is gone.** Add users on the Users page.
+
 ### Rolling back
 
-You can't just start the old image on an upgraded database, because it doesn't understand the new schema. Restore the backup the upgrade made, under the old image:
+You can't just start the old image on an upgraded database, because it doesn't understand the new schema. Restore the backup the upgrade made, under the old image. The file name has the version that made it and the UTC time, so take the newest one from the list:
 
 ```
 docker compose stop
 docker compose run --rm northstar ls /data/backups
-docker compose run --rm northstar python -m northstar.backup restore /data/backups/pre-migration-0.2.0-20261101-100000.db --replace
+docker compose run --rm northstar python -m northstar.backup restore /data/backups/pre-migration-0.3.0-20261120-100000.db --replace
 ```
 
 Then change the `image:` line back to the old version, for example `ghcr.io/declankenny/northstar:0.1`, and run `docker compose up -d`. The restore moves the upgraded database aside as `northstar.db.before-restore-<time>` and never deletes it. Anything you entered after the upgrade is not in the backup.
@@ -203,7 +215,7 @@ The backup is checked before anything changes. The database it replaces is moved
 
 ## Exchange rates
 
-Northstar fetches exchange rates for you once a day, from [Frankfurter](https://frankfurter.dev/), which publishes central-bank rates. The container needs to reach `api.frankfurter.dev` over HTTPS. A request carries only currency codes and dates, never an amount, an account or a name. The time of day is the system property `currency.rate.fetch_time` under Admin, System properties (18:00 in the time zone set in `system.timezone` until you change it), and clearing it turns automatic fetching off. A currency's page under Admin, Currencies shows when it runs and how the last run went. The fetch only adds dates that have no rate, so a rate you typed or corrected is never replaced. To fetch now, for example the first time after you enable a currency, run:
+Northstar fetches exchange rates for you once a day, from [Frankfurter](https://frankfurter.dev/), which publishes central-bank rates. The container needs to reach `api.frankfurter.dev` over HTTPS. A request carries only currency codes and dates, never an amount, an account or a name. The time of day is the system property `currency.rate.fetch_time` under Admin, System properties (18:00 in the time zone set in `system.timezone` until you change it), and clearing it turns automatic fetching off. A currency's page under Admin, Currencies shows when it runs and how the last run went. The fetch only adds dates that have no rate, so a rate you typed or corrected is never replaced, and a currency Frankfurter does not list is skipped, so enter its rates by hand. It is the only request Northstar makes to another host, and a deployment that must not call out clears `currency.rate.fetch_time`. To fetch now, for example the first time after you enable a currency, run:
 
 ```sh
 docker compose exec northstar python -m northstar.rates fetch
@@ -220,7 +232,9 @@ docker compose exec northstar python -m northstar.users list
 docker compose exec northstar python -m northstar.users set-password name@example.com
 ```
 
-`set-password` asks for the new password and signs that user out everywhere. There is no command that creates a user: use the Users page. Recovery when no active admin remains at all is not built yet.
+`set-password` asks for the new password and signs that user out everywhere. There is no command that creates a user: use the Users page.
+
+**If no active admin remains at all** (every admin was deleted), there is no command to make one, and the setup page stays closed on purpose, because it counts deleted admins so that deleting one can never open it to a stranger. The way back is to restore a backup taken while an admin existed (see "Restoring"). Anything entered after that backup is lost, which is the reason to keep recent backups. A command that recovers without a restore is planned ([issue 158](https://github.com/declankenny/northstar/issues/158)).
 
 Passwords need at least 12 characters. They are hashed with scrypt, which is deliberately slow and memory-hungry: a sign-in takes about half a second and 128 MiB, more time on a small device such as a Raspberry Pi, and at most two run at the same time.
 
@@ -230,9 +244,10 @@ A person who gets the password wrong is limited: 5 attempts in 15 minutes per em
 
 ## Known behaviour
 
-- **Two people editing the same balance at the same moment: the last save wins.** The Update balances screen only saves the amounts you changed, so it will not overwrite other rows, but a balance edited by two people at once keeps the later change. Detecting this is planned ([issue 10](https://github.com/declankenny/northstar/issues/10)).
+- **Two people editing the same balance at the same moment:** the second save is refused, nothing is written, and the screen says who changed it and shows what it is now, so the person decides. Adding a balance on a date that already has one replaces it.
 - **Sessions last 30 days** from sign-in, and are not extended by use.
-- **Amounts are US dollars,** as dollars and cents.
+- **Every account has one currency,** chosen when it is created and never changed. Household totals are in the system currency, converted with the latest exchange rate on or before each date. A date on which an account has no rate has no net worth, and the app says which currencies need one.
+- **Crypto is not a currency here.** Enter a balance held in crypto as its value in the system currency at the time.
 - **The secure cookie on `http://localhost`** has been checked in a Chromium-based browser only. Other browsers may behave differently, and if sign-in fails on `localhost`, set `NORTHSTAR_COOKIE_SECURE=0`.
 
 ## Where to get help
