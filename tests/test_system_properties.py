@@ -53,7 +53,7 @@ def test_the_first_properties_are_seeded_by_the_system_user(conn):
         "ui.theme.default": ("Lookup", "dark"), "system.balance.stale_days": ("Integer", "35"),
         "system.currency": ("String", "USD"), "ui.locale.default": ("String", "en-US"),
         "currency.rate.stale_days": ("Integer", "14"), "currency.rate.start.default": ("Date", "2000-01-01"),
-        "system.timezone": ("String", None)}
+        "system.timezone": ("String", None), "currency.rate.fetch_time": ("Time", "18:00")}
     system_user = conn.execute("SELECT id FROM users WHERE is_system = 1").fetchone()[0]
     assert {row["created_by"] for row in rows.values()} == {system_user}
 

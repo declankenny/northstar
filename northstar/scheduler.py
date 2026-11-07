@@ -1,6 +1,6 @@
 """The in-app scheduler: runs registered jobs once a day at an admin-chosen time. See docs/design/scheduler/design.md.
 
-A job is code in `REGISTRY`; the database holds only what changes at run time, in two tables of the application's own,
+A job is code in the registry (`jobs.REGISTRY`); the database holds only what changes at run time, in two tables of the application's own,
 `sys_jobs` (one row per job, its lock) and `sys_job_runs` (the record of every run). A daemon thread calls `run_due`
 about once a minute. `run_due` is a plain function that takes everything it needs in an `Env`, so tests give it a fake
 clock and never sleep.
@@ -92,8 +92,10 @@ class Job:
     retry_pauses: tuple[int, ...] = RETRY_PAUSES
 
 
-# The catalog: a job exists because code says so. The rate fetch (#131) is the first.
-REGISTRY: tuple[Job, ...] = ()
+def default_registry() -> tuple[Job, ...]:
+    """The catalog: a job exists because code says so (northstar/jobs.py). Read late, because the jobs import this module."""
+    from northstar import jobs
+    return jobs.REGISTRY
 
 
 def stamp(moment: datetime) -> str:
@@ -232,8 +234,8 @@ class JobContext:
     way it commits. Every one keeps the lease alive and stops the job when the lock is lost, the deadline has come or
     the application is stopping."""
 
-    def __init__(self, env: Env, job: Job, token: str, run_id: int, lease: datetime):
-        self.env, self.job, self.token, self.run_id = env, job, token, run_id
+    def __init__(self, env: Env, job: Job, token: str, run_id: int, lease: datetime, started_by: str = "scheduled"):
+        self.env, self.job, self.token, self.run_id, self.started_by = env, job, token, run_id, started_by
         self.conn = env.conn
         self.lease_until = lease
         self.deadline = env.now() + timedelta(seconds=job.deadline_seconds)
@@ -325,9 +327,9 @@ def _record(env: Env, job: Job, token: str, run_id: int, outcome: str, detail: s
     log.error("The outcome of %s could not be recorded. Its lock will expire and the run will be marked abandoned.", job.name)
 
 
-def execute(env: Env, job: Job, token: str, run_id: int, lease: datetime) -> str:
+def execute(env: Env, job: Job, token: str, run_id: int, lease: datetime, started_by: str = "scheduled") -> str:
     """Run a claimed job with its retries, record the outcome and return it."""
-    ctx = JobContext(env, job, token, run_id, lease)
+    ctx = JobContext(env, job, token, run_id, lease, started_by)
     outcome, detail = "succeeded", "Completed."
     attempts = 0
     try:
@@ -387,7 +389,7 @@ def run_now(env: Env, job: Job) -> str | None:
         reconcile(env.conn, env.now())
     now = env.now()
     claimed = claim(env.conn, job.name, now.astimezone(zone_of(env.conn)).date().isoformat(), "manual", now)
-    return None if claimed is None else execute(env, job, *claimed)
+    return None if claimed is None else execute(env, job, *claimed, "manual")
 
 
 class Scheduler:
@@ -396,7 +398,7 @@ class Scheduler:
 
     def __init__(self, db_path: str | Path, registry: tuple[Job, ...] | None = None):
         self.db_path = db_path
-        self.registry = REGISTRY if registry is None else registry
+        self.registry = default_registry() if registry is None else registry
         self.stop_event = threading.Event()
         self.thread: threading.Thread | None = None
         self.errors = ErrorLog()
