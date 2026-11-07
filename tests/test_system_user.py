@@ -155,7 +155,6 @@ def test_the_command_line_does_not_list_or_reset_the_system_user(tmp_path, monke
     assert SYSTEM_EMAIL not in capsys.readouterr().out
     assert users.main(["set-password", SYSTEM_EMAIL]) == 1
     assert "no user with that email" in capsys.readouterr().err
-    assert users.main(["create", SYSTEM_EMAIL, "X"]) == 1
 
 
 def test_the_users_api_hides_and_refuses_the_system_user(client):
@@ -195,13 +194,12 @@ def test_an_edit_by_another_user_changes_updated_by_and_not_created_by(client):
     assert (row["created_by"], row["updated_by"]) == (first["created_by"], other)
 
 
-def test_the_command_line_creates_users_as_the_system_user(tmp_path, monkeypatch):
+def test_an_operation_with_no_user_creates_users_as_the_system_user(tmp_path):
+    """What the command line used to do, and what first-run setup does for the administrator: nobody is signed in."""
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path)
-    monkeypatch.setenv("NORTHSTAR_DB", str(path))
-    monkeypatch.setattr("getpass.getpass", lambda prompt="": "synthetic-pass-123")
-    assert users.main(["create", "first@example.com", "First", "--admin"]) == 0
     conn = db.connect(path)
+    users.create_user(op(conn, None, "cli"), "first@example.com", "First", "synthetic-pass-123", is_admin=True)
     row = conn.execute("SELECT created_by, updated_by FROM users WHERE email = 'first@example.com'").fetchone()
     assert (row["created_by"], row["updated_by"]) == (system_id(conn), system_id(conn))
 

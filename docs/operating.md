@@ -21,13 +21,17 @@ docker compose up -d
 docker compose ps
 ```
 
-After about a minute `docker compose ps` shows the container as `healthy`. There is no default user, so create the first admin. The command asks for the password twice, and it must be at least 12 characters:
+After about a minute `docker compose ps` shows the container as `healthy`. There is no default user, so the first start prints a one-time setup token in the log. Show it:
 
 ```
-docker compose exec northstar python -m northstar.users create you@example.com "Your Name" --admin
+docker compose logs northstar
 ```
 
-Then open <http://localhost:8000>, sign in, and before adding the first account choose the system currency under Admin, System properties. It is the currency every amount is in, it is chosen once and locked as soon as it is saved, and a new installation has none chosen. An installation upgraded from 0.2 that already has accounts is set to US dollars. The app listens on `127.0.0.1` only, so you can reach it from this machine and nothing else can. That is on purpose: it serves plain HTTP, which is fine for trying it out and wrong for anything else, because a sign-in sends a password and a 30-day cookie. To use it from your phone or another computer, put it behind HTTPS as described next.
+Look for the line that begins "Northstar has no administrator yet" and copy the token under it. Then open <http://localhost:8000/setup>, paste the token, and fill in one form: your name, email and password (at least 12 characters), the household reporting currency, the default number and date format, and the time zone. The currency is the one every amount is in. It is chosen once and **cannot be changed after setup**, so choose it carefully. The form saves the administrator and those settings together, and then you sign in with the new account.
+
+The token stops working when setup is finished. Restarting Northstar before then ends it and prints a new one, so run `docker compose logs northstar` again. A setup page left open for 30 minutes asks for the token again and keeps what you typed, except the password. Five wrong tokens in 15 minutes lock the page for a while. Until setup is finished, anyone who can read the log and reach the page can create the first administrator, so keep the log private and finish setup soon. Once an administrator exists, `/setup` goes to the sign-in page and no token is printed. An installation upgraded from 0.2 already has users, so it has no setup page and nothing changes for it, and one that has accounts has its system currency set to US dollars.
+
+The app listens on `127.0.0.1` only, so you can reach it from this machine and nothing else can. That is on purpose: it serves plain HTTP, which is fine for trying it out and wrong for anything else, because a sign-in sends a password and a 30-day cookie. To use it from your phone or another computer, put it behind HTTPS as described next.
 
 If sign-in appears to do nothing on an address such as `http://192.168.1.10:8000`, that is the cookie setting below doing its job: browsers drop a `Secure` cookie on plain HTTP, except on `localhost`. Use HTTPS, or for a trial on your own network set `NORTHSTAR_COOKIE_SECURE=0` in `.env` and accept the warning in the log.
 
@@ -209,15 +213,14 @@ It prints `Rates fetched.` when it worked. If a run fails, the next day's run tr
 
 ## Users and passwords
 
-Admins add and remove users, and manage account types, from the app. Everyone who signs in sees all the household's data. These commands do the same from the command line, and are the way back in if every admin is locked out:
+Admins add and remove users, and manage account types, from the app, and the first admin is made on the setup page. Everyone who signs in sees all the household's data. The command line lists users and resets a password, which is the way back in if an admin forgets theirs:
 
 ```
 docker compose exec northstar python -m northstar.users list
-docker compose exec northstar python -m northstar.users create name@example.com "Their Name"
 docker compose exec northstar python -m northstar.users set-password name@example.com
 ```
 
-`set-password` signs that user out everywhere. Add `--admin` to `create` to make an admin.
+`set-password` asks for the new password and signs that user out everywhere. There is no command that creates a user: use the Users page. Recovery when no active admin remains at all is not built yet.
 
 Passwords need at least 12 characters. They are hashed with scrypt, which is deliberately slow and memory-hungry: a sign-in takes about half a second and 128 MiB, more time on a small device such as a Raspberry Pi, and at most two run at the same time.
 

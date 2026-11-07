@@ -162,10 +162,15 @@ def set_property(op: Operation, name: str, text: str | None) -> str | None:
     """Set a property from submitted text and return what is now stored (None when unset). A submission that, once
     normalized, equals the stored value writes nothing and runs no validator. Saving the time zone also makes it the
     zone `today()` uses, once the change has been committed."""
-    stored = _set_property(op, name, text)
+    stored = save_property(op, name, text)
     if name == SYSTEM_TIMEZONE:
         clock.set_zone(stored)
     return stored
+
+
+def is_read_only(conn: sqlite3.Connection, name: str) -> bool:
+    """Whether a property is locked, so a value can no longer be written to it."""
+    return bool(_row(conn, name)["read_only"])
 
 
 def apply_timezone(conn: sqlite3.Connection, environment: str | None = None) -> None:
@@ -177,7 +182,10 @@ def apply_timezone(conn: sqlite3.Connection, environment: str | None = None) -> 
     clock.set_zone(use)
 
 
-def _set_property(op: Operation, name: str, text: str | None) -> str | None:
+def save_property(op: Operation, name: str, text: str | None) -> str | None:
+    """The write of `set_property`, without its last step. A caller that saves several properties in one transaction of its
+    own (first-run setup) uses this, and applies the time zone itself once that transaction has committed: the clock is
+    process-wide, so it must not change for a save that is rolled back."""
     conn = op.conn
     with db.write_transaction(conn):
         row = _row(conn, name)

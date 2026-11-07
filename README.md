@@ -18,13 +18,13 @@ docker compose -f compose.dev.yaml up -d --build
 docker compose -f compose.dev.yaml ps
 ```
 
-When `ps` shows `healthy`, create the first admin. There is no default user. This runs inside the container, and the command asks for the password twice (at least 12 characters):
+When `ps` shows `healthy`, set up the first admin. There is no default user. The first start prints a one-time setup token in the log:
 
 ```
-docker compose -f compose.dev.yaml exec northstar python -m northstar.users create you@example.com "Your Name" --admin
+docker compose -f compose.dev.yaml logs northstar
 ```
 
-Then open <http://localhost:8000> and sign in. The app listens on `127.0.0.1` only. Settings go in `.env`: `TZ`, `NORTHSTAR_PORT` and `NORTHSTAR_COOKIE_SECURE`, which [docs/operating.md](docs/operating.md) explains, together with why a sign-in on a plain-HTTP address such as `http://192.168.1.10:8000` appears to do nothing.
+Copy the token, open <http://localhost:8000/setup>, paste it, and fill in the form (your name, email and password, the household currency, the number and date format and the time zone). Then sign in. The app listens on `127.0.0.1` only. Settings go in `.env`: `TZ`, `NORTHSTAR_PORT` and `NORTHSTAR_COOKIE_SECURE`, which [docs/operating.md](docs/operating.md) explains, together with why a sign-in on a plain-HTTP address such as `http://192.168.1.10:8000` appears to do nothing.
 
 ## Run it from source, for development
 
@@ -36,13 +36,7 @@ cd frontend && npm ci && npm run build && cd ..
 uvicorn --factory northstar.web.app:create_app
 ```
 
-The build goes into `northstar/web/spa`, and the app serves it from the site root. The first start creates `data/northstar.db`, with its folder. With the app running, open a second terminal and create the first admin, which asks for the password. After signing in, an admin chooses the system currency under Admin, System properties before the first account can be added. The command refuses to run before the app has set up the database:
-
-```
-python -m northstar.users create you@example.com "Your Name" --admin
-```
-
-Open <http://localhost:8000>, which redirects to `/dashboard`. The sign-in page is at `/login`.
+The build goes into `northstar/web/spa`, and the app serves it from the site root. The first start creates `data/northstar.db`, with its folder. On a new database the app prints a one-time setup token in its output. Open <http://localhost:8000/setup>, paste the token and create the first admin and the household settings there. Open <http://localhost:8000>, which redirects to `/dashboard` once you are signed in. The sign-in page is at `/login`.
 
 To work on the frontend with live reload, keep the Python app running on port 8000, then run `npm run dev` in `frontend/` and open <http://127.0.0.1:5173/>. The dev server sends `/api` and `/static` to the Python app.
 

@@ -103,15 +103,20 @@ def test_deleting_a_user_deletes_their_sessions(conn):
     assert conn.execute("SELECT COUNT(*) FROM sys_sessions").fetchone()[0] == 0
 
 
-def test_command_line_creates_a_user_and_never_prints_the_password(tmp_path, monkeypatch, capsys):
+def test_command_line_has_no_create_command_and_never_prints_the_password(tmp_path, monkeypatch, capsys):
+    """The first admin is made on the setup page and later users on the Users page, so the command line only lists users and
+    sets a password. It asks for the password at a prompt and prints neither it nor a hash."""
     db.upgrade(tmp_path / "cli.db")      # the app sets the database up. The command line never does
+    with db.connect(tmp_path / "cli.db") as conn:
+        users.create_user(op(conn), "Admin@Example.com", "Admin Person", "synthetic-first-123", is_admin=True)
     monkeypatch.setenv("NORTHSTAR_DB", str(tmp_path / "cli.db"))
     monkeypatch.setattr("getpass.getpass", lambda prompt="": PASSWORD)
-    assert users.main(["create", "Admin@Example.com", "Admin Person", "--admin"]) == 0
+    assert users.main(["set-password", "admin@example.com"]) == 0
     assert users.main(["list"]) == 0
     out = capsys.readouterr().out
-    assert "admin@example.com" in out and "admin" in out and PASSWORD not in out
-    assert users.main(["create", "admin@example.com", "Again"]) == 1       # duplicate: error, not a crash
+    assert "admin@example.com" in out and "admin" in out and PASSWORD not in out and "scrypt" not in out
+    with pytest.raises(SystemExit):
+        users.main(["create", "again@example.com", "Again"])       # not a command any more
 
 
 def test_command_line_refuses_mismatched_passwords(tmp_path, monkeypatch, capsys):
@@ -119,5 +124,5 @@ def test_command_line_refuses_mismatched_passwords(tmp_path, monkeypatch, capsys
     monkeypatch.setenv("NORTHSTAR_DB", str(tmp_path / "cli.db"))
     answers = iter([PASSWORD, "a-different-password"])
     monkeypatch.setattr("getpass.getpass", lambda prompt="": next(answers))
-    assert users.main(["create", "a@example.com", "A"]) == 1
+    assert users.main(["set-password", "a@example.com"]) == 1
     assert "did not match" in capsys.readouterr().err

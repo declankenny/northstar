@@ -52,14 +52,13 @@ def test_the_add_user_endpoint_uses_the_property(client):
         assert theme_of(conn, "new@example.com") == "light"
 
 
-def test_the_command_line_uses_the_property(tmp_path, monkeypatch):
+def test_an_operation_with_no_user_uses_the_property(tmp_path):
+    """The command line and first-run setup add users with no one signed in."""
     path = tmp_path / "cli.db"
     db.upgrade(path)
     with db.connect(path) as conn:
         sp.set_property(op(conn, kind="cli"), "ui.theme.default", "light")
-    monkeypatch.setenv("NORTHSTAR_DB", str(path))
-    monkeypatch.setattr("getpass.getpass", lambda prompt="": PASSWORD)
-    assert users.main(["create", "cli@example.com", "Cli Person"]) == 0
+        users.create_user(op(conn, kind="cli"), "cli@example.com", "Cli Person", PASSWORD)
     with db.connect(path) as conn:
         assert theme_of(conn, "cli@example.com") == "light"
 

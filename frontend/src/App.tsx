@@ -11,6 +11,7 @@ import { ImportBalances } from "./ImportBalances";
 import { Imports } from "./Imports";
 import { Profile } from "./Profile";
 import { SignIn } from "./SignIn";
+import { Setup } from "./Setup";
 import { SystemProperties } from "./SystemProperties";
 import { setLocale } from "./locale";
 import { RefreshMe } from "./session";
@@ -42,10 +43,11 @@ function NotFound() {
   );
 }
 
-/** The sign-in page is the one page that needs no signed-in user, so it must not ask who is signed in (that would send a
- *  signed-out visitor straight back to it). Every other page is the app, with its navigation. */
+/** The sign-in page and the first-run setup page need no signed-in user, so they must not ask who is signed in (that would send a
+ *  signed-out visitor straight back to sign-in). Every other page is the app, with its navigation. */
 export function App() {
-  return routeFromPath(usePath()) === "login" ? <SignIn /> : <Shell />;
+  const route = routeFromPath(usePath());
+  return route === "login" ? <SignIn /> : route === "setup" ? <Setup /> : <Shell />;
 }
 
 function Shell() {

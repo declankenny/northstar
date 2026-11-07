@@ -14,9 +14,12 @@ from northstar.balances import ConflictingEdit
 from northstar.import_register import UndoBlocked
 from northstar.locales import LocaleChanged
 from northstar.errors import NotFoundError, ValidationError
+from northstar.setup import SetupClosed, SetupSessionEnded
 
 # The most specific class in the error's type chain wins, and ValidationError is in every chain, so every error has a status.
-STATUS = {NotFoundError: 404, StaleImport: 409, UndoBlocked: 409, ConflictingEdit: 409, LocaleChanged: 409, ValidationError: 422}
+# SetupClosed is a 409 (setup is over) and SetupSessionEnded a 401 (the setup page asks for the token again; it is not a sign-in).
+STATUS = {NotFoundError: 404, StaleImport: 409, UndoBlocked: 409, ConflictingEdit: 409, LocaleChanged: 409,
+          SetupClosed: 409, SetupSessionEnded: 401, ValidationError: 422}
 
 
 def status_for(error: ValidationError) -> int:
