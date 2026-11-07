@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SetupOptions } from "./api";
 import { US_ENGLISH } from "./locale";
 import { App } from "./App";
-import { currencyCode, SETUP_COMPLETE_PATH, SETUP_EMAIL_KEY, Setup } from "./Setup";
+import { currencyCode, SETUP_COMPLETE_PATH, SETUP_EMAIL_KEY, Setup, zoneGroups } from "./Setup";
 
 const assign = vi.fn();
 const realLocation = window.location;
@@ -18,7 +18,7 @@ const OPTIONS: SetupOptions = {
   locale: "en-US",
   locales: [US_ENGLISH, GERMAN],
   timezone: "UTC",
-  timezones: ["UTC", "America/Chicago"],
+  timezones: ["America/Chicago", "Europe/London", "Etc/UTC", "UTC"],
 };
 
 type Reply = { status?: number; body?: unknown };
@@ -223,6 +223,75 @@ describe("the setup form", () => {
     fireEvent.click(submitButton());
     await waitFor(() => expect(assign).toHaveBeenCalled());
     expect(calls.find((c) => c.method === "POST" && c.url === "/api/setup")!.body.currency).toBeNull();
+  });
+});
+
+describe("the currency search and the time zone choice", () => {
+  const open = async () => {
+    serve({ "GET /api/setup/status": { body: { state: "form" } }, "GET /api/setup/options": { body: OPTIONS } });
+    render(<Setup />);
+    await screen.findByRole("heading", { name: "Set up Northstar" });
+  };
+  const listed = () => screen.queryByRole("listbox")?.querySelectorAll("[role=option]") ?? [];
+  const names = () => [...listed()].map((o) => o.textContent);
+
+  it("lists every currency when opened, filters by what is typed, and chooses by click", async () => {
+    await open();
+    const box = screen.getByLabelText("Household reporting currency");
+    fireEvent.focus(box);
+    expect(names()).toEqual(["USD US Dollar", "EUR Euro"]);
+    fireEvent.change(box, { target: { value: "eur" } });
+    expect(names()).toEqual(["EUR Euro"]);
+    fireEvent.mouseDown(listed()[0]);
+    expect((box as HTMLInputElement).value).toBe("EUR");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("shows all currencies again after one was chosen, instead of only the chosen one", async () => {
+    await open();
+    const box = screen.getByLabelText("Household reporting currency");
+    fireEvent.change(box, { target: { value: "USD" } });
+    fireEvent.mouseDown(listed()[0]);
+    fireEvent.focus(box);
+    fireEvent.click(box);
+    expect(names().length).toBe(2);
+  });
+
+  it("is used from the keyboard: arrows move, Enter chooses without submitting, Escape closes", async () => {
+    const calls = serve({ "GET /api/setup/status": { body: { state: "form" } }, "GET /api/setup/options": { body: OPTIONS } });
+    render(<Setup />);
+    await screen.findByRole("heading", { name: "Set up Northstar" });
+    const box = screen.getByLabelText("Household reporting currency") as HTMLInputElement;
+    fireEvent.focus(box);
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    expect(box.getAttribute("aria-activedescendant")).toBe("setup-currency-EUR");
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(box.value).toBe("EUR");
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    expect(screen.getByRole("listbox")).toBeTruthy();
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("says so when nothing matches", async () => {
+    await open();
+    fireEvent.change(screen.getByLabelText("Household reporting currency"), { target: { value: "zzz" } });
+    expect(screen.getByText("No currency matches.")).toBeTruthy();
+  });
+
+  it("offers every time zone in a styled select, grouped by region, whatever is selected", async () => {
+    await open();
+    const zone = screen.getByLabelText("Time zone") as HTMLSelectElement;
+    expect(zone.tagName).toBe("SELECT");
+    expect([...zone.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(["America", "Etc", "Europe", "Other"]);
+    expect(zone.options.length).toBe(4);
+    expect(zone.value).toBe("UTC");
+  });
+
+  it("groups zone names, puts those with no region last, and keeps a current value the list lacks", () => {
+    expect(zoneGroups(["UTC", "Europe/Paris", "America/Chicago"], "UTC").map(([g]) => g)).toEqual(["America", "Europe", "Other"]);
+    expect(zoneGroups(["Europe/Paris"], "Mars/Base").map(([g]) => g)).toEqual(["Europe", "Mars"]);
   });
 });
 

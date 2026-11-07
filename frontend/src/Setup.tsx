@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 import { Brand } from "./Brand";
+import { CurrencySearch } from "./CurrencySearch";
 import { completeSetup, fetchSetupOptions, fetchSetupState, RequestError, sendSetupToken, type SetupOptions, type SetupState } from "./api";
 import { formatDate } from "./dates";
 import { formatInteger, setLocale } from "./locale";
@@ -154,6 +155,18 @@ export function currencyCode(text: string, catalog: Currency[]): string {
   return (catalog.find((c) => c.code.toLowerCase() === lower) ?? catalog.find((c) => c.name.toLowerCase() === lower))?.code ?? typed;
 }
 
+/** Zone names grouped by their region (America, Europe, ...). Names with no region, such as UTC, go under "Other". The current value is
+ *  always listed, so a stored name this list lacks is not silently replaced by the first zone. */
+export function zoneGroups(zones: string[], current: string): [string, string[]][] {
+  const names = current && !zones.includes(current) ? [current, ...zones] : zones;
+  const groups = new Map<string, string[]>();
+  for (const zone of names) {
+    const region = zone.includes("/") ? zone.slice(0, zone.indexOf("/")) : "Other";
+    groups.set(region, [...(groups.get(region) ?? []), zone]);
+  }
+  return [...groups.entries()].sort(([x], [y]) => (x === "Other" ? 1 : y === "Other" ? -1 : x.localeCompare(y)));
+}
+
 function FormStep({ options, draft, onDraft, onFailure }:
   { options: SetupOptions; draft: Draft; onDraft: (draft: Draft) => void; onFailure: (error: unknown) => void }) {
   const [password, setPassword] = useState("");
@@ -256,12 +269,8 @@ function FormStep({ options, draft, onDraft, onFailure }:
             <input id="setup-currency" value={lockedCurrency ? `${lockedCurrency.code} · ${lockedCurrency.name}` : options.currency.value ?? ""} readOnly />
           ) : (
             <>
-              {/* The browser's own search box: it filters the catalog by code or name as you type. */}
-              <input id="setup-currency" name="currency" list="setup-currencies" value={draft.currency} autoComplete="off" spellCheck={false}
-                placeholder="Search by currency name or code" onChange={(event) => set({ currency: event.target.value })} {...invalid("currency")} />
-              <datalist id="setup-currencies">
-                {options.currencies.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-              </datalist>
+              <CurrencySearch id="setup-currency" catalog={options.currencies} value={draft.currency}
+                onChange={(text) => set({ currency: text })} invalid={invalid("currency")} />
               {chosenCurrency && <p className="help">{chosenCurrency.code} · {chosenCurrency.name}</p>}
             </>
           )}
@@ -280,11 +289,13 @@ function FormStep({ options, draft, onDraft, onFailure }:
         </div>
         <div className="field">
           <label htmlFor="setup-timezone">Time zone</label>
-          <input id="setup-timezone" name="timezone" list="setup-timezones" value={draft.timezone} autoComplete="off" spellCheck={false}
-            onChange={(event) => set({ timezone: event.target.value })} {...invalid("timezone")} />
-          <datalist id="setup-timezones">
-            {options.timezones.map((zone) => <option key={zone} value={zone} />)}
-          </datalist>
+          <select id="setup-timezone" name="timezone" value={draft.timezone} onChange={(event) => set({ timezone: event.target.value })} {...invalid("timezone")}>
+            {zoneGroups(options.timezones, draft.timezone).map(([group, zones]) => (
+              <optgroup key={group} label={group}>
+                {zones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+              </optgroup>
+            ))}
+          </select>
           <p className="help">Controls today's date and when scheduled jobs run.</p>
           {problem("timezone")}
         </div>
