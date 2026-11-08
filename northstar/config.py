@@ -44,6 +44,8 @@ def public_url() -> str | None:
     raw = os.environ.get("NORTHSTAR_PUBLIC_URL", "").strip()
     if not raw:
         return None
+    if not raw.isprintable() or " " in raw:       # the URL parser would silently drop a tab or line break
+        raise ConfigurationError("NORTHSTAR_PUBLIC_URL must be an address such as https://northstar.example.com, with no path.")
     problem = ConfigurationError(
         "NORTHSTAR_PUBLIC_URL must be an address such as https://northstar.example.com, with no path. "
         "Plain http:// is accepted only for localhost.")

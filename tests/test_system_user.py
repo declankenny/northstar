@@ -27,7 +27,7 @@ def system_id(conn):
 # -- the schema rules --
 
 def test_every_table_is_either_a_sys_table_or_a_household_table_with_audit_columns(conn):
-    assert household_tables(conn) == ["account_classes", "account_types", "accounts", "balances", "currencies", "exchange_rates", "system_properties", "users"]
+    assert household_tables(conn) == ["account_classes", "account_types", "accounts", "balances", "currencies", "exchange_rates", "system_properties", "user_identities", "users"]
     for table in household_tables(conn):
         columns = {row["name"]: row for row in conn.execute(f"PRAGMA table_info({table})")}
         assert set(AUDIT) <= set(columns), table

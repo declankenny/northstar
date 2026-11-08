@@ -115,6 +115,21 @@ def _dummy_hash() -> str:
     return _dummy_hashes[key]
 
 
+def has_usable_password(stored: str) -> bool:
+    """Whether a stored hash is a real one, so that some password could match it. A person who signs in only through the
+    identity provider has the unusable marker instead, as does a deleted user."""
+    return _parse(stored) is not None
+
+
+def new_user_defaults(conn: sqlite3.Connection) -> dict[str, str]:
+    """The theme and number and date format a new or reactivated user starts with, from the system properties."""
+    theme = system_properties.get_value(conn, THEME_PROPERTY)
+    if theme not in THEMES:
+        raise ValidationError(f"The default theme setting ({THEME_PROPERTY}) is not light or dark, so a user cannot be "
+                              "added. Correct the setting first.")
+    return {"theme": theme, "locale": locales.default_tag(conn)}
+
+
 def _clean_email(email: str) -> str:
     email = email.strip().lower()
     if not email or " " in email or email.count("@") != 1 or email.startswith("@") or email.endswith("@"):
@@ -167,11 +182,9 @@ def add_user(op: Operation, email: str, display_name: str, password: str,
     new_hash = hash_password(password)           # slow, so before the write lock is taken
     values = {"display_name": display_name, "password_hash": new_hash, "is_admin": 1 if is_admin else 0}
     with db.write_transaction(op.conn):
-        values["theme"] = system_properties.get_value(op.conn, THEME_PROPERTY)
-        if values["theme"] not in THEMES:
-            raise ValidationError(f"The default theme setting ({THEME_PROPERTY}) is not light or dark, so a user cannot be "
-                                  "added. Correct the setting first.")
-        values["locale"] = locales.default_tag(op.conn) if locale is None else locales.get(op.conn, locale).tag
+        defaults = new_user_defaults(op.conn)
+        values["theme"] = defaults["theme"]
+        values["locale"] = defaults["locale"] if locale is None else locales.get(op.conn, locale).tag
         old = op.conn.execute("SELECT id FROM users WHERE email = ? AND deleted = 1 AND is_system = 0", (email,)).fetchone()
         if old is not None:
             writer.update(op, "users", old["id"], {**values, "deleted": 0})
@@ -185,7 +198,9 @@ def add_user(op: Operation, email: str, display_name: str, password: str,
 def authenticate(conn: sqlite3.Connection, email: str, password: str) -> sqlite3.Row | None:
     """The user if the email and password match, otherwise None. Never says which part was wrong."""
     row = conn.execute("SELECT * FROM users WHERE email = ?", (email.strip(),)).fetchone()
-    if row is None or row["is_system"] or row["deleted"]:       # these are refused exactly like an unknown email
+    if row is None or row["is_system"] or row["deleted"] or not has_usable_password(row["password_hash"]):
+        # These are refused exactly like an unknown email, and take as long: a person who signs in only through the identity
+        # provider has no password hash to check, and refusing at once would show that their account exists.
         verify_password(password, _dummy_hash())
         return None
     if not verify_password(password, row["password_hash"]):

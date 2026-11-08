@@ -81,7 +81,7 @@ def test_only_ids_secrets_and_generated_metadata_are_unlogged(conn):
     assert {("balances", "amount_cents"), ("balances", "as_of_date"), ("accounts", "name")} <= logged
 
 
-SEEDED_KINDS = {"ui_edit", "bulk_update", "import", "undo", "cli", "scheduled"}
+SEEDED_KINDS = {"ui_edit", "bulk_update", "import", "undo", "cli", "scheduled", "oidc"}
 
 
 def test_the_operation_kinds_are_seeded(conn):
@@ -90,7 +90,7 @@ def test_the_operation_kinds_are_seeded(conn):
 
 def test_an_operation_of_an_unknown_kind_is_refused_when_it_first_writes_and_changes_nothing(conn, checking):
     action = op(conn, kind="made_up")
-    with pytest.raises(ValueError, match="'made_up' is not an operation kind. The kinds are bulk_update, cli, import, scheduled, ui_edit, undo"):
+    with pytest.raises(ValueError, match="'made_up' is not an operation kind. The kinds are bulk_update, cli, import, oidc, scheduled, ui_edit, undo"):
         writer.update(action, "accounts", checking, {"notes": "x"})
     assert conn.execute("SELECT notes FROM accounts WHERE id = ?", (checking,)).fetchone()[0] is None
     assert headers(conn) == []

@@ -90,10 +90,10 @@ def iana_timezone(ctx: Context) -> str:
 
 
 def _linked_admin_exists(conn: sqlite3.Connection, issuer: str) -> bool:
-    """Whether an active administrator has signed in through (is linked to) this issuer. Nobody can be linked until the
-    identity storage exists (step 2 of docs/design/oidc, #167), which replaces this with the real query. Until then it
-    refuses, which is the safe answer: password sign-in cannot be switched off."""
-    return False
+    """Whether an active administrator is bound to this issuer, which happens at their first sign-in through it."""
+    return conn.execute(
+        "SELECT 1 FROM user_identities i JOIN users u ON u.id = i.user_id "
+        "WHERE i.issuer = ? AND u.is_admin = 1 AND u.deleted = 0 AND u.is_system = 0 LIMIT 1", (issuer,)).fetchone() is not None
 
 
 def _oidc_missing(conn: sqlite3.Connection) -> list[str]:
@@ -155,8 +155,10 @@ def oidc_issuer(ctx: Context) -> str:
     except ValueError:
         parts, host = None, None
     local = host in ("localhost", "127.0.0.1", "::1")
+    # The URL parser drops tabs and line breaks, so they are refused here, before it can hide them.
     if host is None or (parts.scheme != "https" and not (parts.scheme == "http" and local)) \
-            or parts.username is not None or "?" in ctx.proposed or "#" in ctx.proposed:
+            or parts.username is not None or "?" in ctx.proposed or "#" in ctx.proposed \
+            or not ctx.proposed.isprintable() or " " in ctx.proposed:
         raise ValidationError("Enter the issuer as an https:// address with no query or fragment, such as https://id.example.com.")
     if get_value(ctx.conn, LOCAL_SIGNIN) is False:
         raise ValidationError("Turn password sign-in on before changing the issuer. The admins signed in through the old one.")
