@@ -19,6 +19,8 @@ erDiagram
     users ||--o{ balances : "created_by, updated_by"
     users ||--o{ users : "created_by, updated_by"
     users ||--o{ system_properties : "created_by, updated_by"
+    users ||--o{ user_identities : "user_id"
+    users ||--o{ user_identities : "created_by, updated_by"
     ref_property_data_types ||--o{ system_properties : "data_type_id"
     ref_locales ||--o{ users : "locale"
     system_properties ||--o{ ref_property_lookups : "property_id"
@@ -135,9 +137,19 @@ erDiagram
         text currency_code_spacing "text between a currency code and the number"
         text cldr_version "the CLDR version the row came from"
     }
+    user_identities {
+        integer id PK
+        integer user_id FK "the Northstar user the person is bound to"
+        text issuer "the identity provider's issuer, as configured at the first sign-in"
+        text subject "the provider's identifier for the person"
+        text created_at "UTC"
+        integer created_by FK "who created it"
+        text updated_at "UTC"
+        integer updated_by FK "who last changed it"
+    }
     ref_property_data_types {
         integer id PK
-        text name UK "String, Integer, Lookup, Date or Time"
+        text name UK "String, Integer, Lookup, Date, Time or Boolean"
     }
     ref_property_lookups {
         integer id PK
@@ -154,6 +166,18 @@ erDiagram
     sys_sessions {
         text token_hash PK "SHA-256 of the cookie token"
         integer user_id FK
+        text created_at "UTC"
+        text expires_at "UTC"
+        text auth_method "local or oidc"
+        text config_fingerprint "oidc only: SHA-256 of the issuer and client ID it was made under"
+    }
+    sys_login_transactions {
+        text state_hash PK "SHA-256 of the random state"
+        text binding_hash "SHA-256 of the browser-binding cookie value"
+        text nonce
+        text code_verifier "the PKCE verifier, needed until the code is exchanged"
+        text return_path "a local path"
+        text config_fingerprint "SHA-256 of the issuer and client ID it was started under"
         text created_at "UTC"
         text expires_at "UTC"
     }
@@ -179,7 +203,7 @@ erDiagram
         text detail "short, optional"
     }
     sys_operation_kinds {
-        text kind PK "ui_edit, bulk_update, import, undo, cli or scheduled"
+        text kind PK "ui_edit, bulk_update, import, undo, cli, scheduled or oidc"
     }
     sys_operations {
         integer id PK "also the version it writes onto balances"
@@ -240,7 +264,9 @@ A person checks these against the migrations, because the test cannot read them 
 | `system_properties` | `name` is lowercase dotted segments, at least two, each starting with a letter (a `CHECK`). `value` is null or 1 to 256 characters, and `hint` is 1 to 256. The rows are loaded by migrations: no endpoint adds or deletes one. |
 | `ref_property_lookups` | `UNIQUE (property_id, value)`. At most 20 rows per property, checked by a test. Deleting a property deletes its rows. |
 | `ref_property_validators` | `UNIQUE (property_id, validator)` and `UNIQUE (property_id, position)`. `validator` is a key of `VALIDATORS` in `northstar/system_properties.py`, checked by a test. Deleting a property deletes its rows. |
-| `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. |
+| `user_identities` | `UNIQUE (issuer, subject)`: one binding per person at a provider. `UNIQUE (user_id, issuer)`: one binding per user per issuer, so a second subject is refused and never replaces the first. `issuer` is 1 to 256 characters and `subject` 1 to 255 (a `CHECK`). Triggers refuse deleting a row and changing `user_id`, `issuer` or `subject`. A user is only marked deleted, so a binding stays after the user is deleted. Logged fields: `user_id`, `issuer`, `subject` and who created it and when, never a token or a claim. |
+| `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. `auth_method` is `local` or `oidc` (a `CHECK`, `local` for every session that existed before 0.4) and `config_fingerprint` is a 64-character hash, set exactly when the method is `oidc` (the trigger `sys_sessions_method_and_fingerprint`, because a table check cannot be added to an existing table). |
+| `sys_login_transactions` | One row per sign-in in progress, used and removed once or removed when `expires_at` passes (index on it). The state and the binding value are kept only as hashes, both 64 characters. The nonce and the PKCE verifier are kept as they are, and never logged. |
 | `sys_login_attempts` | Indexes on `(email_hash, attempted_at)` and `(address_hash, attempted_at)`. |
 | `sys_jobs` | One row per registered job, seeded at startup and never by a migration. `owner` and `lease_until` are both set or both empty (a `CHECK`). A job takes its lock with one `UPDATE ... WHERE owner IS NULL`, and every commit it makes checks the token and the unexpired lease in the same transaction. |
 | `sys_job_runs` | A unique index on `(job, run_date)` where `started_by = 'scheduled'`: at most one scheduled run for a job and date, and a manual run is not covered. `finished_at` is empty exactly while `outcome` is `running` (a `CHECK`), `detail` is at most 500 characters, and the loop deletes finished runs older than 90 days. |

@@ -398,7 +398,7 @@ def test_a_database_from_a_newer_version_with_a_stray_ledger_is_refused_without_
     db.upgrade(path)
     stray(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0018_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0019_from_the_future')")
     conn.commit()
     conn.close()
     before = path.read_bytes()

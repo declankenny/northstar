@@ -6,11 +6,13 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-OIDC sign-in, step 1 of v0.4: the settings and their guards. There is no sign-in through a provider yet.
+OIDC sign-in, steps 1 and 2 of v0.4: the settings, their guards and the storage and rules under sign-in. There is no sign-in through a provider yet.
 
 ### Added
 
-- The settings of OIDC sign-in (#166), under System properties: `oidc.enabled`, `oidc.provider`, `oidc.issuer`, `oidc.client_id`, `oidc.user.allow_creation`, `oidc.session.lifetime_hours` and `system.auth.local.enabled`. They change nothing yet, because there is no sign-in through a provider, and they refuse a configuration that could leave nobody able to sign in. Password sign-in can't be switched off yet.
+- The settings of OIDC sign-in (#166), under System properties: `oidc.enabled`, `oidc.provider`, `oidc.issuer`, `oidc.client_id`, `oidc.user.allow_creation`, `oidc.session.lifetime_hours` and `system.auth.local.enabled`. They change nothing yet, because there is no sign-in through a provider, and they refuse a configuration that could leave nobody able to sign in.
+- Storage and rules for sign-in through an identity provider (#167): a table that binds a person to a user by the provider's issuer and subject (never deleted or changed, and kept when the user is deleted), the rules for who an identity is (a verified email links an existing user, a new user is made only when allowed, a deleted user never comes back), sessions that record how they started and, for OIDC, last for the configured hours, and users with no password.
+- Password sign-in is switched off only once an admin has signed in through OIDC, which is now checked against the stored bindings.
 - A Boolean kind of system property, shown as a Yes or No dropdown.
 - `NORTHSTAR_PUBLIC_URL`, `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` and `NORTHSTAR_OIDC_CLIENT_SECRET`, all optional. Setting both forms of the secret stops Northstar starting.
 - `python -m northstar.signin enable-local`, which turns password sign-in back on from the host, with no provider and no session.
@@ -23,6 +25,7 @@ OIDC sign-in, step 1 of v0.4: the settings and their guards. There is no sign-in
 
 - Migration: `0017_oidc_settings` adds the Boolean data type and the seven system properties above, with defaults that change nothing (password sign-in on, OIDC off). A checked backup is made first.
 - Environment variables: `NORTHSTAR_PUBLIC_URL`, `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` and `NORTHSTAR_OIDC_CLIENT_SECRET` are new and optional. An installation that sets none of them is unaffected.
+- Migration: `0018_oidc_identities` adds the `user_identities` table, the `sys_login_transactions` table, the session columns `auth_method` and `config_fingerprint` (every existing session becomes a local one and keeps its expiry), and the operation kind `oidc`. A checked backup is made first.
 - Backup format: nothing.
 
 ## [0.3.0] - 2026-11-07

@@ -186,7 +186,8 @@ def test_password_sign_in_can_always_be_turned_on(conn):
 
 @pytest.mark.parametrize("text", [
     "id.example.test", "ftp://id.example.test", "http://id.example.test", "https://", "https://id.example.test?x=1",
-    "https://id.example.test#frag", "https://user:pw@id.example.test", "https://id.example.test:notaport"])
+    "https://id.example.test#frag", "https://user:pw@id.example.test", "https://id.example.test:notaport",
+    "https://id.example.test\nevil", "https://id.example\t.test", "https://id.example .test"])
 def test_the_issuer_must_be_an_https_address_without_query_or_fragment(conn, text):
     assert "https://" in refused(conn, "oidc.issuer", text)
     assert stored(conn, "oidc.issuer") is None
@@ -291,7 +292,8 @@ def test_the_public_address_is_an_origin(monkeypatch, given, expected):
 @pytest.mark.parametrize("given", [
     "northstar.example.test", "http://northstar.example.test", "http://192.168.1.10:8000", "ftp://northstar.example.test",
     "https://northstar.example.test/app", "https://northstar.example.test?x=1", "https://northstar.example.test#x",
-    "https://user:pw@northstar.example.test", "https://", "https://northstar.example.test:abc"])
+    "https://user:pw@northstar.example.test", "https://", "https://northstar.example.test:abc",
+    "https://northstar.example.test\nevil", "https://northstar.example\t.test", "https://northstar example.test"])
 def test_a_public_address_that_is_not_https_or_not_an_origin_is_refused(monkeypatch, given):
     monkeypatch.setenv("NORTHSTAR_PUBLIC_URL", given)
     with pytest.raises(config.ConfigurationError, match="NORTHSTAR_PUBLIC_URL"):
@@ -353,7 +355,7 @@ def test_enable_local_refuses_a_missing_database_without_creating_one(tmp_path, 
 def test_enable_local_refuses_a_database_the_app_has_not_brought_up_to_date(tmp_path, monkeypatch, capsys):
     path = make_database(tmp_path)
     with db.connect(path) as conn:
-        conn.execute("DELETE FROM sys_schema_migrations WHERE version = '0017_oidc_settings'")
+        conn.execute("DELETE FROM sys_schema_migrations WHERE version = '0018_oidc_identities'")
     assert run_command(monkeypatch, path, "enable-local") == 1
     assert capsys.readouterr().err.startswith("Error:")
 
