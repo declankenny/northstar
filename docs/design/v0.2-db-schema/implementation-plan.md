@@ -63,7 +63,7 @@ Steps 5 and 6 can run in parallel once step 4 has merged. Recording (steps 4 to 
 
 ### 6. Migration B3: account soft delete and the partial name index
 
-- Scope: the `deleted` flag on accounts, the account and its balances leaving every view (including `live_accounts`), net worth history changing as it does today, the unique name index becoming partial (`WHERE deleted = 0`), and the delete confirmation wording. The spec rule that deleting an account permanently deletes its balances changes in the same pull request. Restore is v0.6.
+- Scope: the `deleted` flag on accounts, the account and its balances leaving every view (including `live_accounts`), net worth history changing as it does today, the unique name index becoming partial (`WHERE deleted = 0`), and the delete confirmation wording. The spec rule that deleting an account permanently deletes its balances changes in the same pull request. Restore is v0.7.
 - Tests: deleting an account frees its name; every balance query excludes deleted accounts; the spec and decisions entries are in the pull request.
 - [x] Merged
 

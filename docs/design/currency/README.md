@@ -23,7 +23,7 @@ These are not part of this design. Each has its own design and issue.
 - **System Properties** ([#124](https://github.com/declankenny/northstar/issues/124)): the admin-maintained settings (system currency, new-user locale, rate staleness threshold). Currency needs it.
 - **First-run setup page** ([#64](https://github.com/declankenny/northstar/issues/64)): creates the first admin and can set the system currency and locale. It is a standalone v0.3 feature.
 - **System Alerts** ([#133](https://github.com/declankenny/northstar/issues/133)): a backlog feature with no milestone. Currency does not depend on it.
-- **Crypto**, **exchange-rate CSV import** and **exchange-rate effects in reporting** (v0.5): not in v0.3.
+- **Crypto**, **exchange-rate CSV import** and **exchange-rate effects in reporting** (v0.6): not in v0.3.
 
 ## Lifecycle
 
