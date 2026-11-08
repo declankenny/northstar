@@ -13,7 +13,7 @@ Related issues: [#120](https://github.com/declankenny/northstar/issues/120) (the
 
 ## Where it slots in
 
-Decided: its own release, v0.4, after v0.3 (multi-currency). Household reporting moved to v0.5 and data history and recovery to v0.6. It is not in v0.2, which is feature-complete.
+Decided: its own release, v0.5, after v0.4 (OIDC sign-in). Household reporting moved to v0.6 and data history and recovery to v0.7. It is not in v0.2, which is feature-complete.
 
 - **After v0.3.** Money columns, money filters and the CSV money format change meaning once an amount has a currency. Building lists first means reworking them.
 - **Before reporting and history.** Reports and history screens are lists. Building the shared list first means they use it, rather than being migrated onto it later.

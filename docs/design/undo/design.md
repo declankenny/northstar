@@ -98,12 +98,12 @@ This is the design that was written for v0.2 and then deferred, moved here from 
 
 | Topic | Decision | Why |
 | --- | --- | --- |
-| Undo | Ships in v0.2 for balance changes only. It runs through the normal write functions, so their rules apply. An undo operation cannot itself be undone. An operation is undone at most once, and the skipped list says what to fix by hand. Account changes are recorded, and restore is v0.6. | The scope valve is not used. Undo and restore are different features on different timelines. |
+| Undo | Ships in v0.2 for balance changes only. It runs through the normal write functions, so their rules apply. An undo operation cannot itself be undone. An operation is undone at most once, and the skipped list says what to fix by hand. Account changes are recorded, and restore is v0.7. | The scope valve is not used. Undo and restore are different features on different timelines. |
 | Undo is atomic per record | Each inverse, with its data and change-log writes, runs inside a savepoint. An expected failure (a failed precondition or a business rule) rolls back to the savepoint and records a skip. An unexpected database or programming failure aborts the whole undo. | A caught exception in the middle of a multi-write inverse could otherwise leave part of it committed. |
 | Undo outcome | The `undo` header is created inside the write transaction, outside the per-record savepoints, before the first inverse. If no row was reverted, the transaction rolls back, nothing persists and the attempt does not count, so the user can fix the cause and retry. If at least one row was reverted, the undo commits and is final. The detail JSON holds the reverted count and the skipped record ids with stable reason codes. | A header with no effect would use up the only undo for nothing. A partial undo is final, so the preview shows what would be skipped before the user confirms. |
 | Undo preview | Preview and commit use one evaluator that processes the inverses in reverse order, each evaluated against the state left by the preceding successful inverse. Preview runs the real inverse logic in a write transaction and always rolls it back, so it leaves no rows, header or marker, and the transaction is not held open while the user decides. | A preview that checked each row against the starting state would wrongly skip the replaced balance in a date move, whose old date is only free after the moving balance goes back. |
 | Undo confirmation | The confirmation is bound to the target operation and a server-derived plan: record identities, versions or absence, account eligibility and the predicted reverted and skipped sets. The commit recomputes the plan inside `BEGIN IMMEDIATE` and rejects any difference, whether more or fewer rows became eligible, and asks for a fresh confirmation. A partial undo commits only if the user confirmed that partial plan. | Rechecking each inverse protects later work, but could turn a previewed full undo into a final partial one the user never confirmed. |
-| Closed and deleted accounts | The balance functions reject every change on a closed account, so undo skips every inverse on a closed or deleted account. Reason codes differ, and the preview tells the user to reopen a closed account before confirming. | Preserves today's rule. Restoring a deleted account is v0.6. |
+| Closed and deleted accounts | The balance functions reject every change on a closed account, so undo skips every inverse on a closed or deleted account. Reason codes differ, and the preview tells the user to reopen a closed account before confirming. | Preserves today's rule. Restoring a deleted account is v0.7. |
 
 ### Undo of a balance operation
 
@@ -121,7 +121,7 @@ Undo runs through the normal write functions, so their rules apply. An inverse i
 
 Outcome. If no row was reverted, the transaction rolls back, nothing persists and the attempt does not count: the user is told why and can fix the cause (for example, reopen a closed account) and retry. If at least one row was reverted, the undo commits with its detail JSON and is final: an operation is undone at most once, skipped rows cannot be retried, and an `undo` operation cannot itself be undone, so redoing means entering the data again.
 
-Reversing the order matters for a date move: the moving balance goes back first, which empties the new date, and then the replaced balance is reinserted. v0.2 undoes balance changes only. If an operation holds both account and balance changes, the balance rows are undone and the account rows are listed as not reverted. Account changes are recorded, and restore is v0.6.
+Reversing the order matters for a date move: the moving balance goes back first, which empties the new date, and then the replaced balance is reinserted. v0.2 undoes balance changes only. If an operation holds both account and balance changes, the balance rows are undone and the account rows are listed as not reverted. Account changes are recorded, and restore is v0.7.
 
 ### Tests the design required
 
@@ -134,5 +134,5 @@ Reversing the order matters for a date move: the moving balance goes back first,
 
 ### Decisions to record with the code
 
-- Undo is atomic per record, an undo that reverts nothing does not count, a partial undo is final, an undo cannot be undone, and v0.2 undoes balance changes only. Restore is v0.6.
+- Undo is atomic per record, an undo that reverts nothing does not count, a partial undo is final, an undo cannot be undone, and v0.2 undoes balance changes only. Restore is v0.7.
 - Undo preview and commit use one evaluator, and the undo confirmation is bound to the previewed plan.

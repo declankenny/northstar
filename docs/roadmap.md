@@ -57,9 +57,10 @@ Two things have to be settled before 1.0 because they shape the promise:
 | --- | --- |
 | v0.2 | Balance CSV import and export |
 | v0.3 | Multi-currency and locale-aware formatting |
-| v0.4 | Managing lists |
-| v0.5 | Household reporting |
-| v0.6 | Data history and recovery |
+| v0.4 | OIDC sign-in |
+| v0.5 | Managing lists |
+| v0.6 | Household reporting |
+| v0.7 | Data history and recovery |
 | **v1.0** | Stabilization |
 | v1.1 | Transactions, transaction CSV and statement reconciliation |
 | v1.2 | SimpleFIN automation |
