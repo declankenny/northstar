@@ -159,6 +159,29 @@ describe("the System properties page", () => {
     expect(saveProperty).toHaveBeenCalledWith("currency.rate.fetch_time", "16:45");
   });
 
+  it("edits a Boolean as a Yes or No choice and sends true or false", async () => {
+    const flags = { properties: [row({ name: "oidc.user.allow_creation", type: "Boolean", value: "false" })], currencies: [], locales: [] };
+    vi.mocked(fetchProperties).mockResolvedValue(flags);
+    vi.mocked(saveProperty).mockResolvedValue(flags);
+    render(<SystemProperties />);
+    const box = (await screen.findByLabelText("oidc.user.allow_creation")) as HTMLSelectElement;
+    expect(box.tagName).toBe("SELECT");
+    expect([...box.options].map((o) => o.textContent)).toEqual(["Yes", "No"]);
+    expect(box.value).toBe("false");
+    expect(box.selectedOptions[0].textContent).toBe("No");
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    fireEvent.change(box, { target: { value: "true" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Saved");
+    expect(saveProperty).toHaveBeenCalledWith("oidc.user.allow_creation", "true");
+  });
+
+  it("names the OIDC group with its initials", async () => {
+    vi.mocked(fetchProperties).mockResolvedValue({ properties: [row({ name: "oidc.provider", value: null, allow_null: true })], currencies: [], locales: [] });
+    render(<SystemProperties />);
+    expect((await screen.findByRole("tab", { name: /OIDC/ })).textContent).toContain("OIDC");
+  });
+
   it("sends blank text to unset an optional property", async () => {
     vi.mocked(fetchProperties).mockResolvedValue({ properties: [row({ name: "system.contact_email", value: "a@example.com", allow_null: true })], currencies: [], locales: [] });
     render(<SystemProperties />);

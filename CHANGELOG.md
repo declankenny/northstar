@@ -6,13 +6,24 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+OIDC sign-in, step 1 of v0.4: the settings and their guards. There is no sign-in through a provider yet.
+
+### Added
+
+- The settings of OIDC sign-in (#166), under System properties: `oidc.enabled`, `oidc.provider`, `oidc.issuer`, `oidc.client_id`, `oidc.user.allow_creation`, `oidc.session.lifetime_hours` and `system.auth.local.enabled`. They change nothing yet, because there is no sign-in through a provider, and they refuse a configuration that could leave nobody able to sign in. Password sign-in can't be switched off yet.
+- A Boolean kind of system property, shown as a Yes or No dropdown.
+- `NORTHSTAR_PUBLIC_URL`, `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` and `NORTHSTAR_OIDC_CLIENT_SECRET`, all optional. Setting both forms of the secret stops Northstar starting.
+- `python -m northstar.signin enable-local`, which turns password sign-in back on from the host, with no provider and no session.
+
 ### Security
 
 - The image upgrades `zlib1g` to Debian's patched version (CVE-2026-76844, CVE-2026-85091) until the base image is rebuilt with it.
 
 ### Breaking
 
-Nothing. Pull the new image.
+- Migration: `0017_oidc_settings` adds the Boolean data type and the seven system properties above, with defaults that change nothing (password sign-in on, OIDC off). A checked backup is made first.
+- Environment variables: `NORTHSTAR_PUBLIC_URL`, `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` and `NORTHSTAR_OIDC_CLIENT_SECRET` are new and optional. An installation that sets none of them is unaffected.
+- Backup format: nothing.
 
 ## [0.3.0] - 2026-11-07
 

@@ -123,6 +123,9 @@ Everything is set in `.env` beside the compose file, and every setting has a def
 | `NORTHSTAR_COOKIE_SECURE` | `1` in the compose files | Marks the sign-in cookie `Secure`. The value must be exactly `1`: anything else counts as off, and the app logs a warning at startup. Without the compose file the app's own default is off. |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | The reverse proxy whose forwarded addresses are believed, as an address or a network. Leave it alone when there is no proxy. |
 | `NORTHSTAR_DB` | `/data/northstar.db` in the image | Where the database file is. The image sets it, and you should not need to. |
+| `NORTHSTAR_PUBLIC_URL` | unset | The address people use to reach Northstar, such as `https://northstar.example.com`, for OIDC sign-in. HTTPS, with no path. Plain `http://` is accepted only for `localhost`, `127.0.0.1` and `[::1]`. It is never worked out from request headers. Not in the compose file: add it to the service's `environment:`. OIDC sign-in cannot be turned on without it. |
+| `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` | unset | The path of a file inside the container that holds the OIDC client secret, for example a Docker secret under `/run/secrets/`. Set this or `NORTHSTAR_OIDC_CLIENT_SECRET`, not both: Northstar will not start if both are set. The secret is never shown, logged or kept in the database. |
+| `NORTHSTAR_OIDC_CLIENT_SECRET` | unset | The OIDC client secret itself, as an alternative to the file. Prefer the file, because an environment variable shows in `docker inspect`. |
 
 ## Upgrading
 
@@ -233,6 +236,14 @@ docker compose exec northstar python -m northstar.users set-password name@exampl
 ```
 
 `set-password` asks for the new password and signs that user out everywhere. There is no command that creates a user: use the Users page.
+
+If password sign-in has been switched off (the system property `system.auth.local.enabled`) and the identity provider is down or misconfigured, this turns it back on. It needs only the database, so it works with no provider and no signed-in session:
+
+```
+docker compose exec northstar python -m northstar.signin enable-local
+```
+
+Then sign in with a password. If an admin has none, give them one with `set-password`.
 
 **If no active admin remains at all** (every admin was deleted), there is no command to make one, and the setup page stays closed on purpose, because it counts deleted admins so that deleting one can never open it to a stranger. The way back is to restore a backup taken while an admin existed (see "Restoring"). Anything entered after that backup is lost, which is the reason to keep recent backups. A command that recovers without a restore is planned ([issue 158](https://github.com/declankenny/northstar/issues/158)).
 

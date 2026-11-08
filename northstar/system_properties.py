@@ -16,8 +16,9 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import date
+from urllib.parse import urlsplit
 
-from northstar import clock, db, writer
+from northstar import clock, config, db, writer
 from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
@@ -34,15 +35,20 @@ _DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 _TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d", re.ASCII)      # HH:MM on a 24-hour clock
 SYSTEM_CURRENCY = "system.currency"     # saving it also enables that currency (see set_property)
 SYSTEM_TIMEZONE = "system.timezone"     # saving it also sets the clock's zone (see set_property)
+OIDC_ENABLED = "oidc.enabled"
+OIDC_ISSUER = "oidc.issuer"
+OIDC_CLIENT_ID = "oidc.client_id"
+LOCAL_SIGNIN = "system.auth.local.enabled"
+SESSION_HOURS_MAX = 24 * 365    # a year: a larger number would only overflow the expiry date
 
 
 @dataclass(frozen=True)
 class Context:
-    """What a validator is told. `current` and `proposed` are typed (an int for an Integer, else text) and None when
+    """What a validator is told. `current` and `proposed` are typed (an int for an Integer, a bool for a Boolean, else text) and None when
     unset. `conn` may be read, never written."""
     name: str
-    current: str | int | None
-    proposed: str | int | None
+    current: str | int | bool | None
+    proposed: str | int | bool | None
     actor_id: int | None
     conn: sqlite3.Connection
 
@@ -83,16 +89,114 @@ def iana_timezone(ctx: Context) -> str:
     return ACCEPT
 
 
+def _linked_admin_exists(conn: sqlite3.Connection, issuer: str) -> bool:
+    """Whether an active administrator has signed in through (is linked to) this issuer. Nobody can be linked until the
+    identity storage exists (step 2 of docs/design/oidc, #167), which replaces this with the real query. Until then it
+    refuses, which is the safe answer: password sign-in cannot be switched off."""
+    return False
+
+
+def _oidc_missing(conn: sqlite3.Connection) -> list[str]:
+    """What OIDC sign-in still needs before it can be on, in words for an admin. Empty when it is complete."""
+    missing = []
+    if get_value(conn, OIDC_ISSUER) is None:
+        missing.append("the issuer (oidc.issuer)")
+    if get_value(conn, OIDC_CLIENT_ID) is None:
+        missing.append("the client ID (oidc.client_id)")
+    try:
+        if config.oidc_client_secret() is None:
+            missing.append("the client secret (NORTHSTAR_OIDC_CLIENT_SECRET or NORTHSTAR_OIDC_CLIENT_SECRET_FILE, then restart)")
+        url = config.public_url()
+    except config.ConfigurationError as err:
+        raise ValidationError(f"{err} Fix it and restart Northstar.") from None
+    if url is None:
+        missing.append("the public address (NORTHSTAR_PUBLIC_URL, then restart)")
+    elif url.startswith("https://") and not config.cookie_secure():
+        missing.append("NORTHSTAR_COOKIE_SECURE=1, because Northstar is served over HTTPS")
+    return missing
+
+
+def oidc_enabled(ctx: Context) -> str:
+    """OIDC sign-in can be turned on only when it is fully set up, and off only while password sign-in is on, so that one of
+    the two ways in always works."""
+    if ctx.proposed is True:
+        missing = _oidc_missing(ctx.conn)
+        if missing:
+            raise ValidationError("OIDC sign-in can't be turned on yet. Still needed: " + "; ".join(missing) + ".")
+    elif get_value(ctx.conn, LOCAL_SIGNIN) is False:
+        raise ValidationError("Turn password sign-in on first. With both off, nobody could sign in.")
+    return ACCEPT
+
+
+def local_signin(ctx: Context) -> str:
+    """Password sign-in can be turned off only when OIDC works and an admin has already signed in through it, because
+    otherwise a mistake in the provider's setup would lock everyone out. Turning it on is always allowed."""
+    if ctx.proposed is True:
+        return ACCEPT
+    if get_value(ctx.conn, OIDC_ENABLED) is not True or _oidc_missing(ctx.conn):
+        raise ValidationError("Password sign-in can't be turned off until OIDC sign-in is on and fully set up.")
+    if not _linked_admin_exists(ctx.conn, get_value(ctx.conn, OIDC_ISSUER)):
+        raise ValidationError(
+            "Password sign-in can't be turned off until an admin has signed in through OIDC. Sign in that way once "
+            "first, so you know it works.")
+    return ACCEPT
+
+
+def oidc_issuer(ctx: Context) -> str:
+    """The issuer is an exact address: HTTPS (plain HTTP only for localhost), with no query or fragment. It can't be cleared
+    while OIDC is on, and can't change while password sign-in is off, because the admins' links belong to the old one."""
+    if ctx.proposed is None:
+        if get_value(ctx.conn, OIDC_ENABLED) is True:
+            raise ValidationError("Turn OIDC sign-in off before clearing the issuer.")
+        return ACCEPT
+    try:
+        parts = urlsplit(ctx.proposed)
+        host, _ = parts.hostname, parts.port
+    except ValueError:
+        parts, host = None, None
+    local = host in ("localhost", "127.0.0.1", "::1")
+    if host is None or (parts.scheme != "https" and not (parts.scheme == "http" and local)) \
+            or parts.username is not None or "?" in ctx.proposed or "#" in ctx.proposed:
+        raise ValidationError("Enter the issuer as an https:// address with no query or fragment, such as https://id.example.com.")
+    if get_value(ctx.conn, LOCAL_SIGNIN) is False:
+        raise ValidationError("Turn password sign-in on before changing the issuer. The admins signed in through the old one.")
+    return ACCEPT
+
+
+def oidc_client_id(ctx: Context) -> str:
+    """The client ID can't be cleared while OIDC sign-in is on."""
+    if ctx.proposed is None and get_value(ctx.conn, OIDC_ENABLED) is True:
+        raise ValidationError("Turn OIDC sign-in off before clearing the client ID.")
+    return ACCEPT
+
+
+def oidc_session_hours(ctx: Context) -> str:
+    if ctx.proposed is None or not 1 <= ctx.proposed <= SESSION_HOURS_MAX:
+        raise ValidationError(f"Enter a whole number of hours from 1 to {SESSION_HOURS_MAX}.")
+    return ACCEPT
+
+
 VALIDATORS = {
     "positive_integer": positive_integer,
     "catalog_currency": catalog_currency,
     "catalog_locale": catalog_locale,
     "iana_timezone": iana_timezone,
+    "oidc_enabled": oidc_enabled,
+    "local_signin": local_signin,
+    "oidc_issuer": oidc_issuer,
+    "oidc_client_id": oidc_client_id,
+    "oidc_session_hours": oidc_session_hours,
 }
 
 
-def _typed(data_type: str, value: str | None) -> str | int | None:
-    return int(value) if data_type == "Integer" and value is not None else value
+def _typed(data_type: str, value: str | None) -> str | int | bool | None:
+    if value is None:
+        return None
+    if data_type == "Integer":
+        return int(value)
+    if data_type == "Boolean":
+        return value == "true"
+    return value
 
 
 def _row(conn: sqlite3.Connection, name: str) -> sqlite3.Row:
@@ -105,8 +209,8 @@ def _row(conn: sqlite3.Connection, name: str) -> sqlite3.Row:
     return row
 
 
-def get_value(conn: sqlite3.Connection, name: str) -> str | int | None:
-    """The value of a property as its type: an int for an Integer, else text, and None when it is unset. The one way the
+def get_value(conn: sqlite3.Connection, name: str) -> str | int | bool | None:
+    """The value of a property as its type: an int for an Integer, a bool for a Boolean, else text, and None when it is unset. The one way the
     rest of the application reads a setting."""
     row = _row(conn, name)
     return _typed(row["data_type"], row["value"])
@@ -138,6 +242,10 @@ def _checked(conn: sqlite3.Connection, row: sqlite3.Row, text: str) -> str:
         if not _INTEGER.fullmatch(text) or abs(int(text)) > INTEGER_MAX:
             raise ValidationError("Enter a whole number.")
         return str(int(text))
+    if data_type == "Boolean":
+        if text not in ("true", "false"):
+            raise ValidationError("Choose Yes or No.")
+        return text
     if data_type == "Date":
         try:
             if not _DATE.fullmatch(text):

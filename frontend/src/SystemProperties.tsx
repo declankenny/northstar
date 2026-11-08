@@ -4,7 +4,7 @@ import { useRequest } from "./useRequest";
 
 const groupOf = (p: PropertyRow) => p.name.split(".")[0];
 /** A group's heading is its name with a capital, except the ones that are initials. */
-const INITIALS = new Set(["ui"]);
+const INITIALS = new Set(["ui", "oidc"]);
 const title = (group: string) => (INITIALS.has(group) ? group.toUpperCase() : group.charAt(0).toUpperCase() + group.slice(1));
 const stored = (p: PropertyRow) => p.value ?? "";
 const SYSTEM_CURRENCY = "system.currency";
@@ -136,7 +136,12 @@ export function SystemProperties({ onCurrencyChange }: { onCurrencyChange?: () =
                     </div>
                   </div>
                   {shown[p.name] && <p className="sp-hint">{p.hint}</p>}
-                  {p.type === "Lookup" ? (
+                  {p.type === "Boolean" ? (
+                    <select aria-label={p.name} value={text} disabled={p.read_only} onChange={(e) => edit(p, e.target.value)}>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  ) : p.type === "Lookup" ? (
                     <select aria-label={p.name} value={text} disabled={p.read_only} onChange={(e) => edit(p, e.target.value)}>
                       {p.allow_null && <option value="">Not set</option>}
                       {p.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

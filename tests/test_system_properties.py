@@ -42,7 +42,7 @@ def headers(conn):
 # -- the schema --
 
 def test_the_data_types_are_seeded(conn):
-    assert {row[0] for row in conn.execute("SELECT name FROM ref_property_data_types")} == {"String", "Integer", "Lookup", "Date", "Time"}
+    assert {row[0] for row in conn.execute("SELECT name FROM ref_property_data_types")} == {"String", "Integer", "Lookup", "Date", "Time", "Boolean"}
 
 
 def test_the_first_properties_are_seeded_by_the_system_user(conn):
@@ -53,7 +53,10 @@ def test_the_first_properties_are_seeded_by_the_system_user(conn):
         "ui.theme.default": ("Lookup", "dark"), "system.balance.stale_days": ("Integer", "35"),
         "system.currency": ("String", "USD"), "ui.locale.default": ("String", "en-US"),
         "currency.rate.stale_days": ("Integer", "14"), "currency.rate.start.default": ("Date", "2000-01-01"),
-        "system.timezone": ("String", None), "currency.rate.fetch_time": ("Time", "18:00")}
+        "system.timezone": ("String", None), "currency.rate.fetch_time": ("Time", "18:00"),
+        "oidc.enabled": ("Boolean", "false"), "oidc.provider": ("String", None), "oidc.issuer": ("String", None),
+        "oidc.client_id": ("String", None), "oidc.user.allow_creation": ("Boolean", "false"),
+        "oidc.session.lifetime_hours": ("Integer", "12"), "system.auth.local.enabled": ("Boolean", "true")}
     system_user = conn.execute("SELECT id FROM users WHERE is_system = 1").fetchone()[0]
     assert {row["created_by"] for row in rows.values()} == {system_user}
 
