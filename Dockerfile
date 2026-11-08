@@ -17,6 +17,13 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     NORTHSTAR_DB=/data/northstar.db
 
+# Temporary: the pinned base image still ships zlib1g 1.3.1-1+b1, which has two HIGH CVEs (CVE-2026-76844 and
+# CVE-2026-85091) that Debian fixed in 1.3.1-1+deb13u1. Take only that package from Debian's security repository.
+# Remove this step when the digest above is moved to an image that already has the fix.
+RUN apt-get update \
+    && apt-get install --only-upgrade --no-install-recommends --yes zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install from a throwaway copy so the app runs from site-packages, the way it would
 # anywhere else. A missing package-data entry then fails here instead of hiding.
 COPY pyproject.toml /build/pyproject.toml
