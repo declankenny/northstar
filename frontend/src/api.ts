@@ -396,10 +396,10 @@ export async function deleteType(id: number): Promise<TypeList> {
 }
 
 /** One system property. The first segment of its name is the group the page lists it under. `value` is always text, null when unset.
- *  `options` are the allowed values of a Lookup, else empty. */
+ *  `options` are the allowed values of a Lookup, else empty. A Boolean's value is the text `true` or `false`. */
 export type PropertyOption = { value: string; label: string };
 export type PropertyRow = {
-  name: string; type: "String" | "Integer" | "Lookup" | "Date" | "Time"; value: string | null; allow_null: boolean; hint: string;
+  name: string; type: "String" | "Integer" | "Lookup" | "Date" | "Time" | "Boolean"; value: string | null; allow_null: boolean; hint: string;
   read_only: boolean; options: PropertyOption[];
 };
 /** The catalogs feed the search boxes of the system currency and of the default number and date format. */
