@@ -409,3 +409,7 @@ The administrator and the properties are one `write_transaction`. The administra
 An email that belongs to any user, a deleted one included, is refused, because `add_user` would reactivate that person and setup must never promote anyone. Setup does not sign the administrator in: the person types the password they just chose, which keeps one way to start a session and proves it was saved. The page leaves the email in the browser's session storage for the sign-in page to fill in, never in the address, and never a password.
 
 `users create` is removed and `set-password` and `list` stay, so there is no second way to make an administrator that skips the guard. The plan called the kept command `reset-password`, which was never its name.
+
+### The image takes the patched zlib from Debian until the base image is rebuilt
+
+CI fails a pull request on a HIGH or CRITICAL finding that has a fix, and the scan found two in `zlib1g` (CVE-2026-76844 and CVE-2026-85091) in the pinned `python:3.15-slim` digest. Debian's security repository already had the fixed package, but the newest published base image did not. The final stage now upgrades only `zlib1g` and clears the apt lists. The alternatives were an ignore file, which silences the scan for a vulnerability that has a fix, and waiting, which blocks every pull request for an unknown time. The step is temporary: it is removed when the base image digest moves to one that already has the fix, and until then a build is not byte-for-byte reproducible from the digest alone.
