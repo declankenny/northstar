@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from northstar import clock, config, db, locales, sessions, system_properties, throttle, users
+from northstar import clock, config, db, identities, locales, oidc, sessions, system_properties, throttle, users
 from northstar.writer import Operation
 
 router = APIRouter(prefix="/api/auth")
@@ -79,6 +79,21 @@ class SignIn(BaseModel):
     email: str = ""
     password: str = ""
     next: str = "/"
+
+
+@router.get("/methods")
+def methods(request: Request):
+    """Which ways of signing in are on, for the sign-in page. Public, and it carries no secret: only whether password sign-in
+    is on, whether OIDC is on and fully set up, and the name for the button."""
+    with closing(db.connect(request.app.state.db_path)) as conn:
+        local = system_properties.get_value(conn, system_properties.LOCAL_SIGNIN) is not False
+        try:
+            oidc.settings(conn)
+            usable = True
+        except identities.Refused:
+            usable = False
+        provider = system_properties.get_value(conn, "oidc.provider") if usable else None
+    return JSONResponse({"local": local, "oidc": usable, "provider": provider or None}, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/login")

@@ -35,6 +35,7 @@ export type Theme = "light" | "dark";
 /** The signed-in user. The email and is_admin are read-only here. */
 export type Me = {
   id: number; email: string; display_name: string; is_admin: boolean; theme: Theme;
+  has_password: boolean; // false for someone who signs in only through the identity provider
   currency: Currency | null; // the system currency every amount is in; null until an admin sets it
   locale: Locale; // how this person's numbers and dates are shown and typed
 };
@@ -59,6 +60,15 @@ function signIn() {
 
 /** Sign in. Resolves to the address to go to next, which the server has checked; a refusal (wrong email or password, or too
  *  many attempts) is an Error whose message is fit to show. */
+/** Which ways of signing in are on, and the name for the provider's button (null when none was set). Public. */
+export type SignInMethods = { local: boolean; oidc: boolean; provider: string | null };
+
+export async function fetchSignInMethods(signal?: AbortSignal): Promise<SignInMethods> {
+  const response = await fetch("/api/auth/methods", { signal });
+  if (!response.ok) throw new Error(`The server answered ${response.status}`);
+  return response.json();
+}
+
 export async function requestSignIn(email: string, password: string, next: string): Promise<string> {
   return (await send<{ next: string }>("POST", "/api/auth/login", { email, password, next }))!.next;
 }
@@ -193,6 +203,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
  * email belonged to a deleted user, who is now restored. */
 export type UserRow = {
   id: number; email: string; display_name: string; is_admin: boolean; created_at: string; reactivated?: boolean;
+  sign_in: "local" | "oidc" | "both" | "none"; // a password, the identity provider, or both
 };
 
 export async function fetchUsers(signal?: AbortSignal): Promise<UserRow[]> {

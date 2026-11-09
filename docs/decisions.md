@@ -444,3 +444,14 @@ A login is a row of hashes (state and browser binding) and the values only the s
 Throttling counts only what looks like abuse: a bad state, a wrong binding or an invalid token. A provider outage, or a person who is not allowed in, does not use up the household's allowance. The counts are kept under their own kind, so no email a visitor types can be the same key as an OIDC count. A change of issuer or client ID ends OIDC sessions without a revocation hook: the session records the settings fingerprint it was made under, and the check on each request compares it.
 
 Local sign-in being off is enforced at the password endpoint (403 before the throttle or the password check), not only hidden on the page, because a hidden button does not stop a request. That belongs to step 4's page work only in part: the enforcement is here because the flow is not safe to switch on without it.
+
+
+### The sign-in page asks which ways are on, shows nothing to sign in with until it knows, and starts OIDC by navigating (#169)
+
+The page cannot know whether password sign-in is off, so it asks a small public endpoint, `/api/auth/methods`, whose answer holds only three facts and nothing a stranger could use (not the issuer, client ID or secret). Until it answers, the page shows its heading and no form: with password sign-in off, a form that flashed up and went away would invite typing a password into a page that will refuse it. If the question cannot be answered the page shows the password form, not the provider button, because the server is the one that refuses what is not allowed and a failure to ask must not lock out the one way that works everywhere.
+
+The provider button navigates to Northstar's own `/api/auth/oidc/login`, with the address asked for, and the server redirects on to the provider. It is not a form post: the content security policy allows `form-action 'self'`, and a form whose redirect leaves the site would be refused in browsers that check redirects.
+
+A failure comes back as a code and the page chooses the words, so nothing the provider sent, or anyone put in an address, is ever shown. The three agreed sentences are used as they are. The wording of the other codes was written with the screens and is for review.
+
+A user's Sign-in is derived, not stored: a usable password means local, a binding to any issuer means OIDC. The list asks for the stored hash only to test it with the same function sign-in uses and never sends it. A person with no password does not get the change-password form, because it asks for a current password that does not exist, and the server refuses that request in any case.

@@ -38,6 +38,7 @@ class Me(BaseModel):
     display_name: str
     is_admin: bool
     theme: Literal["light", "dark"]
+    has_password: bool                     # false for someone who signs in only through the identity provider
     currency: CurrencyOut | None = None    # the system currency every amount is shown in; null until an admin sets it
     locale: LocaleOut                      # how this person's numbers and dates are shown and typed
 
@@ -67,7 +68,7 @@ class PasswordChange(BaseModel):
 def _me(conn, user_id: int) -> dict:
     row = users.get_user(conn, user_id)
     return {**{key: row[key] for key in ("id", "email", "display_name", "theme")}, "is_admin": bool(row["is_admin"]),
-            "currency": currencies.system_currency_dict(conn), "locale": locales.get(conn, row["locale"]).as_dict()}
+            "has_password": users.has_password(conn, user_id), "currency": currencies.system_currency_dict(conn), "locale": locales.get(conn, row["locale"]).as_dict()}
 
 
 @router.get("", response_model=Me)

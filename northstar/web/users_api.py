@@ -4,6 +4,8 @@ Like the other routes, these call the plain functions in users.py and add no rul
 A broken rule is a 422, an unknown user a 404. A user's own profile is in profile_api.py.
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
@@ -19,6 +21,7 @@ class UserOut(BaseModel):
     display_name: str
     is_admin: bool
     created_at: str      # UTC
+    sign_in: Literal["local", "oidc", "both", "none"]    # how they can sign in: a password, the identity provider, or both
     reactivated: bool = False     # only on a response to adding a user: the email belonged to a deleted user, now restored
 
 
@@ -43,7 +46,7 @@ class NewPassword(BaseModel):
 
 def _out(row) -> dict:
     return {**{key: row[key] for key in ("id", "email", "display_name", "created_at")},
-            "is_admin": bool(row["is_admin"])}
+            "is_admin": bool(row["is_admin"]), "sign_in": users.sign_in_methods(row)}
 
 
 def _listed(conn, user_id: int) -> dict:
