@@ -153,7 +153,8 @@ def reference_net_worth(conn, day: date) -> tuple[int, int, int]:
     """
     assets = liabilities = 0
     for account in conn.execute(
-            "SELECT a.id, c.name AS class_name FROM accounts a JOIN account_classes c ON c.id = a.class_id"):
+            "SELECT a.id, c.name AS class_name FROM accounts a JOIN account_types t ON t.id = a.type_id "
+            "JOIN account_classes c ON c.id = t.class_id"):
         eligible = [(r["as_of_date"], r["amount_cents"]) for r in conn.execute(
             "SELECT as_of_date, amount_cents FROM balances WHERE account_id = ?", (account["id"],))
             if r["as_of_date"] <= day.isoformat()]

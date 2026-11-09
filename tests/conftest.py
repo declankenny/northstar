@@ -64,9 +64,12 @@ def type_id(conn, name):
 
 
 def add_account(conn, name, class_id, type_name):
+    """Insert an account straight into the table. The class is the type's, so `class_id` is only checked: a test that names a
+    type from the other class has set up something that cannot exist."""
+    assert conn.execute("SELECT class_id FROM account_types WHERE name = ?", (type_name,)).fetchone()["class_id"] == class_id
     cur = conn.execute(
-        "INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES (?, ?, ?, (SELECT id FROM currencies WHERE code = 'USD'), (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",
-        (name, class_id, type_id(conn, type_name)),
+        "INSERT INTO accounts (name, type_id, currency_id, created_by, updated_by) VALUES (?, ?, (SELECT id FROM currencies WHERE code = 'USD'), (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",
+        (name, type_id(conn, type_name)),
     )
     return cur.lastrowid
 

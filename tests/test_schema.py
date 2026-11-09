@@ -32,7 +32,7 @@ def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn
     assert [r["version"] for r in conn.execute("SELECT version FROM sys_schema_migrations ORDER BY version")] == [
         "0001_initial", "0002_login_attempts", "0003_unique_account_names", "0004_audit_columns_and_system_user",
         "0005_sys_table_names", "0006_user_soft_delete", "0007_account_soft_delete", "0008_change_log",
-        "0009_system_properties", "0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities"]
+        "0009_system_properties", "0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type"]
     assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sys_login_attempts'").fetchone()[0] == 1
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     assert {"email", "password_hash", "is_admin", "theme"} <= columns
@@ -49,30 +49,24 @@ def test_a_database_that_recorded_the_old_split_migrations_still_opens(conn):
     assert conn.execute("SELECT COUNT(*) FROM users WHERE is_system = 0").fetchone()[0] == 0
 
 
-def test_account_with_type_from_the_other_class_is_rejected(conn):
-    with pytest.raises(sqlite3.IntegrityError):
-        add_account(conn, "Test mortgage", ASSET, "Mortgage")
+def class_of(conn, account):
+    """The class of an account, the way every read gets it: through its type."""
+    return conn.execute("SELECT t.class_id FROM accounts a JOIN account_types t ON t.id = a.type_id WHERE a.id = ?",
+                        (account,)).fetchone()[0]
 
 
-def test_changing_class_and_type_together_works(conn):
+def test_an_account_has_no_class_of_its_own_so_it_cannot_disagree_with_its_type(conn):
+    assert "class_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(accounts)")}
     acct = add_account(conn, "Test account", ASSET, "Checking")
-    conn.execute(
-        "UPDATE accounts SET class_id = ?, type_id = ? WHERE id = ?",
-        (LIABILITY, type_id(conn, "Loan"), acct),
-    )
+    assert class_of(conn, acct) == ASSET
 
 
-def test_changing_class_alone_is_rejected(conn):
-    acct = add_account(conn, "Test account", ASSET, "Checking")
-    with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("UPDATE accounts SET class_id = ? WHERE id = ?", (LIABILITY, acct))
-
-
-def test_changing_type_within_class_works_and_across_class_is_rejected(conn):
+def test_changing_the_type_changes_the_class_with_it(conn):
     acct = add_account(conn, "Test account", ASSET, "Checking")
     conn.execute("UPDATE accounts SET type_id = ? WHERE id = ?", (type_id(conn, "Savings"), acct))
-    with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("UPDATE accounts SET type_id = ? WHERE id = ?", (type_id(conn, "Loan"), acct))
+    assert class_of(conn, acct) == ASSET
+    conn.execute("UPDATE accounts SET type_id = ? WHERE id = ?", (type_id(conn, "Loan"), acct))
+    assert class_of(conn, acct) == LIABILITY
 
 
 def test_type_in_use_cannot_be_deleted_but_unused_can(conn):
@@ -84,10 +78,29 @@ def test_type_in_use_cannot_be_deleted_but_unused_can(conn):
 
 def test_type_class_cannot_change_while_in_use(conn):
     add_account(conn, "Test account", ASSET, "Checking")
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(sqlite3.IntegrityError, match="class of a type that accounts use"):
         conn.execute("UPDATE account_types SET class_id = ? WHERE name = 'Checking'", (LIABILITY,))
     # An unused type can change class.
     conn.execute("UPDATE account_types SET class_id = ? WHERE name = 'Savings'", (LIABILITY,))
+
+
+@pytest.mark.parametrize("state", ["open", "closed", "deleted"])
+def test_type_class_cannot_change_whatever_state_the_account_using_it_is_in(conn, state):
+    """A closed account keeps its balances in net worth, and a deleted one keeps its type so that it can be restored."""
+    acct = add_account(conn, "Test account", ASSET, "Savings")
+    if state == "closed":
+        conn.execute("UPDATE accounts SET is_open = 0 WHERE id = ?", (acct,))
+    if state == "deleted":
+        conn.execute("UPDATE accounts SET deleted = 1 WHERE id = ?", (acct,))
+    with pytest.raises(sqlite3.IntegrityError, match="class of a type that accounts use"):
+        conn.execute("UPDATE account_types SET class_id = ? WHERE name = 'Savings'", (LIABILITY,))
+    assert class_of(conn, acct) == ASSET
+    conn.execute("UPDATE account_types SET name = 'Savings 2' WHERE name = 'Savings'")      # the rest of a type can still change
+
+
+def test_saving_a_type_without_changing_its_class_is_allowed_while_in_use(conn):
+    add_account(conn, "Test account", ASSET, "Savings")
+    conn.execute("UPDATE account_types SET class_id = ?, stale_after_days = 40 WHERE name = 'Savings'", (ASSET,))
 
 
 def test_stale_after_days_must_be_at_least_one(conn):

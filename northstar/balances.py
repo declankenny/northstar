@@ -297,11 +297,11 @@ def update_rows(conn: sqlite3.Connection, as_of: date, today: date) -> list[dict
         "  (SELECT b.version FROM live_balances b WHERE b.account_id = a.id "
         "     AND b.as_of_date = ?) AS existing_version "
         "FROM live_accounts a "
-        "JOIN account_classes c ON c.id = a.class_id "
         "JOIN account_types t ON t.id = a.type_id "
+        "JOIN account_classes c ON c.id = t.class_id "
         "JOIN currencies cu ON cu.id = a.currency_id "
         "WHERE a.is_open = 1 "
-        "ORDER BY a.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
+        "ORDER BY t.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
         (as_of.isoformat(), as_of.isoformat()),
     ).fetchall()
     result = []

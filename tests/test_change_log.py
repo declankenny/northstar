@@ -169,7 +169,7 @@ def test_adding_an_account_logs_one_insert_with_every_logged_field(conn, admin):
     assert (header["kind"], header["user_id"], header["detail"], header["undoes_operation_id"]) == ("ui_edit", admin, None, None)
     assert (change["tablename"], change["record_id"], change["change"], change["old"]) == ("accounts", account, "INSERT", None)
     row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account,)).fetchone()
-    assert change["new"] == {"name": "Test savings", "class_id": ASSET, "type_id": type_id(conn, "Savings"), "is_open": 1,
+    assert change["new"] == {"name": "Test savings", "type_id": type_id(conn, "Savings"), "is_open": 1,
                              "notes": "a note", "deleted": 0,
                              "currency_id": conn.execute("SELECT id FROM currencies WHERE code = 'USD'").fetchone()[0], "created_at": row["created_at"], "created_by": admin}
     assert (row["created_by"], row["updated_by"]) == (admin, admin)             # the audit columns agree with the log
@@ -216,8 +216,7 @@ def test_closing_reopening_and_changing_class_are_each_one_logged_update(conn, c
     first, second, third = changes(conn)
     assert (first["old"], first["new"]) == ({"is_open": 1}, {"is_open": 0})
     assert (second["old"], second["new"]) == ({"is_open": 0}, {"is_open": 1})
-    assert (third["old"], third["new"]) == ({"class_id": ASSET, "type_id": type_id(conn, "Checking")},
-                                             {"class_id": LIABILITY, "type_id": type_id(conn, "Loan")})
+    assert (third["old"], third["new"]) == ({"type_id": type_id(conn, "Checking")}, {"type_id": type_id(conn, "Loan")})
     assert len(headers(conn)) == 3
 
 
