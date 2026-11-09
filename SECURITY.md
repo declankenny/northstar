@@ -41,7 +41,7 @@ These are **by design** and are not vulnerabilities:
 
 - **Every signed-in user sees all household data.** There is no per-user data. Admins add and remove users, so only create accounts for people you trust with all of it.
 - **There is no multi-factor authentication of its own.** Northstar can sign people in through one OpenID Connect identity provider (Authentik, Pocket ID and the like), and then the provider's own checks, including multi-factor, apply. Otherwise put Northstar behind a proxy that provides them or keep it on a private network or VPN.
-- **An OIDC provider is trusted completely for who a person is.** Whoever controls the provider, or can make it sign a token for your client, can sign in as anyone whose verified email is a household user's. Northstar checks every token, but it cannot tell a provider that lies from one that does not.
+- **An OIDC provider is trusted completely for who a person is.** Whoever controls the provider, or can make it sign a token for your client, can sign in as anyone whose verified email is a household user's, **administrators included**. Linking an existing user by email needs no password. Northstar checks every token, but it cannot tell a provider that lies from one that does not.
 - **The app serves plain HTTP.** HTTPS is the operator's job, through a reverse proxy.
 - **Someone with access to the server, the container or the database file** can read everything in it. A backup holds real data, password hashes and sessions: keep it somewhere private.
 
