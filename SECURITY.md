@@ -40,7 +40,8 @@ Northstar is built for **one household that trusts its own members**. Within tha
 These are **by design** and are not vulnerabilities:
 
 - **Every signed-in user sees all household data.** There is no per-user data. Admins add and remove users, so only create accounts for people you trust with all of it.
-- **There is no multi-factor authentication and no single sign-on yet.** If you need them, put Northstar behind a proxy that provides them (an SSO-aware reverse proxy) or keep it on a private network or VPN. OIDC sign-in is on the roadmap.
+- **There is no multi-factor authentication of its own.** Northstar can sign people in through one OpenID Connect identity provider (Authentik, Pocket ID and the like), and then the provider's own checks, including multi-factor, apply. Otherwise put Northstar behind a proxy that provides them or keep it on a private network or VPN.
+- **An OIDC provider is trusted completely for who a person is.** Whoever controls the provider, or can make it sign a token for your client, can sign in as anyone whose verified email is a household user's. Northstar checks every token, but it cannot tell a provider that lies from one that does not.
 - **The app serves plain HTTP.** HTTPS is the operator's job, through a reverse proxy.
 - **Someone with access to the server, the container or the database file** can read everything in it. A backup holds real data, password hashes and sessions: keep it somewhere private.
 
@@ -50,7 +51,8 @@ The details and the reasons are in [`docs/spec.md`](docs/spec.md) ("Security") a
 
 - Every page and every API endpoint needs a signed-in user. There is no default user or password.
 - Passwords are hashed with scrypt (128 MiB and about half a second per hash), and stored hashes are upgraded when the cost is raised.
-- Failed sign-ins and wrong guesses of the current password are limited per email and per address.
+- Failed sign-ins and wrong guesses of the current password are limited per email and per address, and so are starts and returns of sign-in through a provider.
+- Sign-in through a provider uses the authorization code flow with PKCE, a state, a nonce and a browser binding, accepts only the exact issuer and client ID, signed with an asymmetric algorithm, from a verified email, and shows the browser only a fixed error code.
 - Sessions are random tokens in an `HttpOnly`, `SameSite=Lax` cookie. Only a hash of the token is stored, and they last 30 days.
 - A strict content security policy, with no inline script or style, and changes made from another site are refused.
 - Dependencies, base images and CI actions are pinned. Dependabot proposes every update, and CI fails on a known vulnerability in the Python and frontend dependencies and in the built image.
@@ -64,6 +66,7 @@ The details and the reasons are in [`docs/spec.md`](docs/spec.md) ("Security") a
 - **Use long, unique passwords.** The minimum is 12 characters. A password manager is the easy way.
 - **Keep it up to date.** Fixes arrive as patch releases. Once the published image exists, updating is `docker compose pull && docker compose up -d`.
 - **Back up the database** with `python -m northstar.backup create FILE`, and keep backups private.
-- **Know what leaves the machine.** Northstar makes one outbound request, once a day, to `api.frankfurter.dev` over HTTPS for exchange rates. It carries only currency codes and dates, never an amount, account or name, and no credential is involved. If the host must not call out, clear the system property `currency.rate.fetch_time`.
+- **Know what leaves the machine.** Northstar makes one outbound request, once a day, to `api.frankfurter.dev` over HTTPS for exchange rates. It carries only currency codes and dates, never an amount, account or name, and no credential is involved. If the host must not call out, clear the system property `currency.rate.fetch_time`. With OIDC on it also calls your identity provider (discovery, keys and token endpoint), and only that.
+- **Keep the OIDC client secret out of the image and the repository.** Give it as a Docker secret file with `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` (or `NORTHSTAR_OIDC_CLIENT_SECRET`), and set `NORTHSTAR_PUBLIC_URL` to the HTTPS address people use. If you turn password sign-in off and the provider is lost, `python -m northstar.signin enable-local` on the host turns it back on.
 - **Keep the container log private until first-run setup is finished.** A new installation prints a one-time setup token in it, and whoever has the token and can reach `/setup` can create the first administrator. The token is gone once setup is finished or the app restarts.
 - **If an admin forgets their password**, the command line is the way back in: `python -m northstar.users set-password EMAIL`. Recovery when no active admin remains is not built yet.

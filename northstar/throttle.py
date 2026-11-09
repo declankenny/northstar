@@ -62,13 +62,16 @@ def _wait(conn: sqlite3.Connection, where: str, params: tuple, limit: int, windo
     return max(1, math.ceil((frees_a_slot - now).total_seconds()))
 
 
-def begin(conn: sqlite3.Connection, email: str, address: str | None, now: datetime) -> tuple[int | None, int | None]:
-    """Take a slot for one sign-in attempt. Returns (attempt id, None), or (None, seconds to wait).
+def begin(conn: sqlite3.Connection, email: str, address: str | None, now: datetime,
+          counted: str = "email") -> tuple[int | None, int | None]:
+    """Take a slot for one sign-in attempt. Returns (attempt id, None), or (None, seconds to wait). `counted` names what is being
+    counted: an email by default, and OIDC sign-in counts its own steps under another name, so what a visitor types as an email
+    can never be the key of those, and the two cannot use up each other's allowance.
 
     A returned id means the attempt may go ahead and its slot is recorded as a failure until the caller
     clears it after a success. With a wait, nothing was recorded.
     """
-    email_hash = hash_value("email", email.strip().lower())
+    email_hash = hash_value(counted, email.strip().lower())
     address_hash = hash_value("address", address) if address else None
     with db.write_transaction(conn):
         writer.sys_delete(conn, "sys_login_attempts", [("attempted_at", "<=", _stamp(now - KEEP))])
@@ -85,10 +88,10 @@ def begin(conn: sqlite3.Connection, email: str, address: str | None, now: dateti
             "email_hash": email_hash, "address_hash": address_hash, "attempted_at": _stamp(now)}), None
 
 
-def clear(conn: sqlite3.Connection, email: str, address: str | None) -> None:
+def clear(conn: sqlite3.Connection, email: str, address: str | None, counted: str = "email") -> None:
     """After a success: forget this email's attempts from this address, and nobody else's."""
     writer.sys_delete(conn, "sys_login_attempts", [
-        ("email_hash", "=", hash_value("email", email.strip().lower())),
+        ("email_hash", "=", hash_value(counted, email.strip().lower())),
         ("address_hash", "IS", hash_value("address", address) if address else None)])
 
 

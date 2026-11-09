@@ -11,8 +11,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from northstar import config, db, scheduler, sessions, setup, system_properties, throttle, users
-from northstar.web import (account_api, api_routes, auth_routes, currencies_api, errors, import_api, imports_api, profile_api, security_headers,
+from northstar import config, db, identities, scheduler, sessions, setup, system_properties, throttle, users
+from northstar.web import (account_api, api_routes, auth_routes, currencies_api, errors, import_api, imports_api, oidc_routes, profile_api, security_headers,
                            setup_api, system_properties_api, types_api, update_api, users_api, version_api)
 
 WEB_DIR = Path(__file__).parent
@@ -22,7 +22,7 @@ SERVER_PATHS = ("api", "login", "setup", "static")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 # What a signed-out visitor may fetch: the sign-in page, its endpoint, the first-run setup page and its endpoints (which
 # refuse everything once an administrator exists, see setup.py), and the files the page is made of.
-PUBLIC_PATHS = ("/login", "/api/auth/login", "/setup", "/api/setup")
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/oidc/login", "/api/auth/oidc/callback", "/setup", "/api/setup")
 PUBLIC_PREFIXES = ("/static/", "/assets/", "/api/setup/")
 
 
@@ -48,7 +48,15 @@ async def require_login(request: Request, call_next):
     request.state.user for auth_routes.current_user().
     """
     with closing(db.connect(request.app.state.db_path)) as conn:
-        request.state.user = sessions.user_for_token(conn, request.cookies.get(auth_routes.COOKIE))
+        token = request.cookies.get(auth_routes.COOKIE)
+        user = sessions.user_for_token(conn, token)
+        if user is not None and user["auth_method"] == sessions.OIDC \
+                and user["config_fingerprint"] != identities.current_fingerprint(conn):
+            # The provider or the client was changed, or OIDC was turned off, since this session began: it no longer counts,
+            # and it is removed so that turning the same settings back on does not bring it back.
+            sessions.end_session(conn, token)
+            user = None
+        request.state.user = user
     path = request.url.path
     if request.state.user or path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
         return await call_next(request)
@@ -100,6 +108,7 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     app.state.spa_index = SPA_DIR / "index.html"      # the sign-in page is that page (see auth_routes.sign_in_page)
     app.include_router(auth_routes.pages)
     app.include_router(auth_routes.router)
+    app.include_router(oidc_routes.router)
     app.include_router(setup_api.pages)
     app.include_router(setup_api.router)
     app.include_router(types_api.router)
