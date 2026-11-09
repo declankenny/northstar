@@ -6,7 +6,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-OIDC sign-in, steps 1 to 3 of v0.4: the settings, their guards, the storage and rules under sign-in, and now the sign-in flow itself as two routes. The sign-in page does not offer it yet (step 4), so it can be tried only by going to `/api/auth/oidc/login`.
+OIDC sign-in, steps 1 to 4 of v0.4: the settings, their guards, the storage and rules under sign-in, the sign-in flow itself, and now the screens for it.
 
 ### Added
 
@@ -15,6 +15,9 @@ OIDC sign-in, steps 1 to 3 of v0.4: the settings, their guards, the storage and 
 - Password sign-in is switched off only once an admin has signed in through OIDC, which is now checked against the stored bindings.
 - Sign-in through an OpenID Connect provider (#168): `GET /api/auth/oidc/login` and `/api/auth/oidc/callback`, using the authorization code flow with PKCE, a state, a nonce and a browser binding. Every failure returns to `/login?oidc_error=CODE` with a fixed code. Starts and returns are limited per address. A session made by OIDC ends at its next request if the issuer or client ID has changed.
 - Password sign-in refuses with 403 when `system.auth.local.enabled` is off.
+- The sign-in page offers "Continue with" the provider when OIDC is on, above the password form, and the button alone when password sign-in is off. It words each failure that comes back from the provider, and never shows text from the provider (#169).
+- `GET /api/auth/methods`, a public answer to which ways of signing in are on and the name for the provider's button. It carries no issuer, client ID or secret.
+- Users has a Sign-in column (Local, OIDC, or Local and OIDC). The reset-password dialog says when someone has no password today, and the Profile of someone who signs in only through the provider explains that instead of showing a form that could not succeed.
 - A Boolean kind of system property, shown as a Yes or No dropdown.
 - `NORTHSTAR_PUBLIC_URL`, `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` and `NORTHSTAR_OIDC_CLIENT_SECRET`, all optional. Setting both forms of the secret stops Northstar starting.
 - `python -m northstar.signin enable-local`, which turns password sign-in back on from the host, with no provider and no session.

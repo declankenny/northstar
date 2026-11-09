@@ -22,7 +22,7 @@ SERVER_PATHS = ("api", "login", "setup", "static")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 # What a signed-out visitor may fetch: the sign-in page, its endpoint, the first-run setup page and its endpoints (which
 # refuse everything once an administrator exists, see setup.py), and the files the page is made of.
-PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/oidc/login", "/api/auth/oidc/callback", "/setup", "/api/setup")
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/methods", "/api/auth/oidc/login", "/api/auth/oidc/callback", "/setup", "/api/setup")
 PUBLIC_PREFIXES = ("/static/", "/assets/", "/api/setup/")
 
 

@@ -33,7 +33,7 @@ const CHOICES = {
 };
 
 const me = (over: Partial<Me> = {}): Me => ({
-  id: 1, email: "test@example.com", display_name: "Test Admin", is_admin: true, theme: "dark", currency: null,
+  id: 1, email: "test@example.com", display_name: "Test Admin", is_admin: true, theme: "dark", has_password: true, currency: null,
   locale: { ...US_ENGLISH }, ...over,
 });
 
@@ -139,7 +139,7 @@ describe("the profile's number and date format", () => {
 // -- the admin's new-user form --
 
 describe("the new-user form's number and date format", () => {
-  const added = { id: 9, email: "new@example.com", display_name: "Test New", is_admin: false, created_at: "2026-11-05", reactivated: false };
+  const added = { id: 9, email: "new@example.com", display_name: "Test New", is_admin: false, created_at: "2026-11-05", reactivated: false, sign_in: "local" as const };
   const fill = () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
     fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Test New" } });

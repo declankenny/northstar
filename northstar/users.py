@@ -334,10 +334,25 @@ def delete_user(op: Operation, user_id: int, acting_user_id: int) -> None:
 
 
 def list_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """The live users, with how each can sign in: `has_password` and `has_identity` (bound to an OIDC provider)."""
     return conn.execute(
-        "SELECT id, email, display_name, is_admin, created_at FROM users WHERE is_system = 0 AND deleted = 0 "
-        "ORDER BY email COLLATE NOCASE"
+        "SELECT id, email, display_name, is_admin, created_at, password_hash, "
+        "EXISTS (SELECT 1 FROM user_identities WHERE user_id = users.id) AS has_identity "
+        "FROM users WHERE is_system = 0 AND deleted = 0 ORDER BY email COLLATE NOCASE"
     ).fetchall()
+
+
+def sign_in_methods(row: sqlite3.Row) -> str:
+    """How a row of `list_users` can sign in: `local`, `oidc`, `both`, or `none` (no password and no binding, which only a
+    user who was never given either can be)."""
+    local, oidc = has_usable_password(row["password_hash"]), bool(row["has_identity"])
+    return "both" if local and oidc else "local" if local else "oidc" if oidc else "none"
+
+
+def has_password(conn: sqlite3.Connection, user_id: int) -> bool:
+    """Whether the user has a password that can sign them in. False for someone who only signs in through a provider."""
+    row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row is not None and has_usable_password(row["password_hash"])
 
 
 def _ask_password() -> str:

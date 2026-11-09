@@ -10,7 +10,7 @@ def test_me_returns_the_signed_in_user_with_dark_by_default(client):
     body = client.get("/api/me").json()
     assert body["email"] == "test@example.com" and body["display_name"] == "Test User"
     assert body["is_admin"] is True and body["theme"] == "dark"
-    assert "password" not in str(body)
+    assert "hash" not in str(body) and "scrypt" not in str(body) and body["has_password"] is True      # a flag, never the hash
 
 
 def test_me_needs_a_login(anon_client):

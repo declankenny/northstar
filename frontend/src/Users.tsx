@@ -6,6 +6,9 @@ import { useRequest } from "./useRequest";
 
 type Notice = { ok: boolean; text: string } | null;
 
+/** How each user can sign in, in the Sign-in column: the word OIDC, not the provider's name. */
+const SIGN_IN_LABELS: Record<UserRow["sign_in"], string> = { local: "Local", oidc: "OIDC", both: "Local and OIDC", none: "None" };
+
 function AddUserForm({ onAdded }: { onAdded: (user: UserRow) => void }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -65,6 +68,10 @@ function AddUserForm({ onAdded }: { onAdded: (user: UserRow) => void }) {
   );
 }
 
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
 /** An admin sets another user's password. The user is signed out everywhere. */
 function ResetPasswordDialog(props: { user: UserRow; onDone: () => void; onClose: () => void }) {
   const [password, setPassword] = useState("");
@@ -82,10 +89,13 @@ function ResetPasswordDialog(props: { user: UserRow; onDone: () => void; onClose
         <label>New password
           <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
         </label>
-        <div className="hint">They are signed out everywhere and use this to sign in again.</div>
+        <div className="hint">
+          They are signed out everywhere and use this to sign in again.
+          {props.user.sign_in === "oidc" && ` ${firstName(props.user.display_name)} signs in through the identity provider and has no password today, so this also lets them use password sign-in while it is turned on.`}
+        </div>
         {error && <p className="notice bad" role="alert">{error}</p>}
         <div className="foot">
-          <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button type="button" className="btn" onClick={props.onClose}>Cancel</button>
           <button className="btn" disabled={busy}>Set password</button>
         </div>
       </form>
@@ -162,7 +172,7 @@ export function Users({ me, onMe }: { me: Me; onMe: (me: Me) => void }) {
         <div className="panel tablepanel">
           <table>
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th /></tr>
+              <tr><th>Name</th><th>Email</th><th>Role</th><th>Sign-in</th><th>Added</th><th /></tr>
             </thead>
             <tbody>
               {users.map((user) => (
@@ -170,6 +180,7 @@ export function Users({ me, onMe }: { me: Me; onMe: (me: Me) => void }) {
                   <td>{user.display_name}{user.id === me.id && <span className="badge you">You</span>}</td>
                   <td>{user.email}</td>
                   <td>{user.is_admin ? <span className="badge admin">Admin</span> : "User"}</td>
+                  <td>{SIGN_IN_LABELS[user.sign_in]}</td>
                   <td className="num">{user.created_at.slice(0, 10)}</td>
                   <td className="k">
                     {/* Your own row has only Edit: you change your password on your Profile and can't delete yourself. */}

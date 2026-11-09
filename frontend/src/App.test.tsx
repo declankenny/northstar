@@ -10,7 +10,7 @@ vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api"
 import { fetchMe, fetchVersion } from "./api";
 
 const me = (over: Partial<Me> = {}): Me => ({
-  id: 1, email: "test@example.com", display_name: "Test Admin", is_admin: true, theme: "dark",
+  id: 1, email: "test@example.com", display_name: "Test Admin", is_admin: true, theme: "dark", has_password: true,
   currency: { code: "USD", name: "US Dollar", minor_units: 2 },
   locale: { tag: "en-US", label: "English (United States)", decimal_mark: ".", group_mark: ",",
     date_template: "{month_short} {day}, {year}", currency_position: "prefix", currency_code_spacing: "\u00a0" },

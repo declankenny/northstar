@@ -334,6 +334,7 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .signin h1 + .help { margin: -8px 0 16px; }
 .signin .help { margin: 0; font-size: 13px; color: var(--muted); }
 .signin .help.centered { text-align: center; }
+.signin form.provider { margin-bottom: 14px; }
 .signin .warning { margin: 0; font-size: 13px; color: var(--warn); }
 .signin .field { display: flex; flex-direction: column; gap: 6px; }
 .signin .field > label { font-size: 13px; color: var(--muted); }

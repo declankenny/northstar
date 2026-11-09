@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { changePassword, fetchLocales, type Me, type Theme, updateMe } from "./api";
+import { changePassword, fetchLocales, fetchSignInMethods, type Me, type Theme, updateMe } from "./api";
 import { useRequest } from "./useRequest";
 
 type Notice = { ok: boolean; text: string } | null;
@@ -79,6 +79,18 @@ function ThemeForm({ me, onTheme, onChange }: { me: Me; onTheme: (theme: Theme) 
   );
 }
 
+/** For someone who signs in only through the identity provider: Northstar holds no password for them, so there is nothing to change. */
+function NoPassword() {
+  const { data: methods } = useRequest(fetchSignInMethods, []);
+  const name = methods?.provider ?? "your identity provider";
+  return (
+    <div className="panel">
+      <h2>Password</h2>
+      <div className="hint">You sign in with {name}, so Northstar has no password for you. Change your password or manage your account there.</div>
+    </div>
+  );
+}
+
 function PasswordForm() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -135,7 +147,7 @@ export function Profile(props: { me: Me; onChange: (me: Me) => void; onTheme: (t
           <ThemeForm me={props.me} onTheme={props.onTheme} onChange={props.onChange} />
         </div>
         <div className="col">
-          <PasswordForm />
+          {props.me.has_password ? <PasswordForm /> : <NoPassword />}
         </div>
       </div>
     </div>
