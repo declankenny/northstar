@@ -19,7 +19,7 @@ Its own release, v0.5, after v0.4 (OIDC sign-in), before household reporting (v0
 - **Before reporting and history.** Reports and history screens are lists, so a shared list built once means they use it.
 - **A release of its own.** The epic is large enough that sharing a release would delay both.
 
-Which existing pages move onto the framework is decided after the design, list by list.
+The framework is built before any list, so that a list is only data, and Balances is the first list. Which existing pages move onto the framework beyond that is decided after the design, list by list.
 
 ## Lifecycle
 
