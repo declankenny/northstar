@@ -73,10 +73,14 @@ def test_a_cross_site_request_is_refused(client, household):
 
 def test_the_answer_has_the_columns_the_rows_and_the_counts(client, household):
     body = ask(client, "balances_api_test", {"page_size": 10}).json()
+    assert all(c["scale"] is None for c in body["columns"])                  # no column here is a decimal stored as a whole number
     assert [(c["key"], c["label"], c["kind"]) for c in body["columns"]] == [
         ("as_of_date", "Date", "date"), ("account", "Account", "text"), ("amount_cents", "Value", "amount"),
         ("reporting_value", "Reporting value", "amount"), ("note", "Note", "text")]
     assert (body["total"], body["pages"], body["page"], body["page_size"], body["group"]) == (12, 2, 1, 10, None)
+    assert body["sort"] == {"field": "as_of_date", "direction": "desc"}                  # the list's own, since the request named none
+    named = ask(client, "balances_api_test", {"sort": {"field": "note", "direction": "asc"}}).json()
+    assert named["sort"] == {"field": "note", "direction": "asc"}
     assert len(body["rows"]) == 10
     first = body["rows"][0]
     assert first["as_of_date"] == "2026-04-12" and first["amount_cents"]["unit"] in ("USD", "EUR")      # newest first

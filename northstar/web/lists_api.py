@@ -26,7 +26,13 @@ class ColumnOut(BaseModel):
     label: str            # the last part: "Account type"
     path_label: str       # the whole path: "Account › Account type"
     kind: str             # text, integer, number, decimal, date, timestamp, yes_no, choice or amount
+    scale: int | None     # for a decimal stored as a whole number: its decimal places (2 for hundredths); otherwise none
     linked: bool          # does this column open a page for this person?
+
+
+class SortOut(BaseModel):
+    field: str
+    direction: str        # "asc" or "desc"
 
 
 class ListPage(BaseModel):
@@ -37,6 +43,7 @@ class ListPage(BaseModel):
     pages: int
     page_size: int
     group: str | None
+    sort: SortOut         # the sort applied: the request's, or the list's own when it named none, so a page can show it
 
 
 class PageSize(BaseModel):
@@ -68,7 +75,7 @@ def query_list(key: str, request: Request, body: dict = Body(default_factory=dic
         result = run_list(conn, catalog, definition, parsed, _roles(user))
         return {"columns": describe(catalog, definition, parsed.columns, _roles(user)), "rows": result.rows,
                 "total": result.total, "page": result.page, "pages": result.pages, "page_size": result.page_size,
-                "group": result.group}
+                "group": result.group, "sort": {"field": result.sort[0], "direction": result.sort[1]}}
 
     return run(request, action)
 

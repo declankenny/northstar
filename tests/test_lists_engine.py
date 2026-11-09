@@ -458,6 +458,7 @@ def test_the_columns_are_described_for_a_page(conn, cat):
     assert [described[k]["kind"] for k in ("score_x100", "passed", "status", "opened_on", "closed_at", "weight", "items")] == [
         "decimal", "yes_no", "choice", "date", "timestamp", "number", "integer"]
     assert describe(cat, TICKETS, ["assignee"])[0]["linked"] is False       # the same column for a viewer without the role
+    assert {k: d["scale"] for k, d in described.items() if d["scale"] is not None} == {"score_x100": 2}     # only a stored decimal has one
 
 
 # -- the loader --

@@ -63,15 +63,28 @@ export function goBack(fallback: string): boolean {
   return true;
 }
 
+const subscribe = (listener: () => void) => {
+  changed.add(listener);
+  return () => changed.delete(listener);
+};
+
 /** The current address path, re-read whenever the page changes. */
 export function usePath(): string {
-  return useSyncExternalStore(
-    (listener) => {
-      changed.add(listener);
-      return () => changed.delete(listener);
-    },
-    () => window.location.pathname,
-  );
+  return useSyncExternalStore(subscribe, () => window.location.pathname);
+}
+
+/** The current address's query string (`?page=2`, or an empty string), re-read whenever the page changes. */
+export function useSearch(): string {
+  return useSyncExternalStore(subscribe, () => window.location.search);
+}
+
+/** Change the address without adding a history entry, for a view that changes as someone types, so Back does not step through
+ *  every letter. The page stays the same one. */
+export function replaceAddress(to: string): void {
+  if (to === window.location.pathname + window.location.search) return;
+  window.history.replaceState({ idx: entryIndex() }, "", to);
+  shownPath = window.location.pathname;
+  notify();
 }
 
 /** While `active`, leaving this page (a link, back, forward, closing or reloading the tab) asks first. */
