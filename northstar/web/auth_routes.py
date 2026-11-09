@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from northstar import clock, config, db, locales, sessions, throttle, users
+from northstar import clock, config, db, locales, sessions, system_properties, throttle, users
 from northstar.writer import Operation
 
 router = APIRouter(prefix="/api/auth")
@@ -88,6 +88,10 @@ def login(body: SignIn, request: Request):
     next_path = safe_next(body.next)
     address = throttle.address_of(request)
     with closing(db.connect(request.app.state.db_path)) as conn:
+        if system_properties.get_value(conn, system_properties.LOCAL_SIGNIN) is False:
+            # Turned off by an admin: refused here, not only hidden on the page, and before anything is counted or checked.
+            return JSONResponse({"detail": "Password sign-in is turned off. Use the identity provider to sign in."},
+                                status_code=403)
         # The attempt takes its slot first and is only cleared by a success, so many requests at once
         # cannot all be checked before the first failure is recorded. A blocked attempt does not check
         # the password at all, so a correct guess cannot get through during a block.

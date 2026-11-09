@@ -75,6 +75,7 @@ class Resolved:
 class SignedIn:
     token: str
     resolved: Resolved
+    max_age: int        # how many seconds the session lasts, for the cookie
 
 
 def fingerprint(issuer: str, client_id: str) -> str:
@@ -158,4 +159,4 @@ def sign_in(conn: sqlite3.Connection, claims: Claims, now: datetime | None = Non
         hours = system_properties.get_value(conn, "oidc.session.lifetime_hours")
         token = sessions.create_session(conn, resolved.user_id, now, method=sessions.OIDC,
                                         fingerprint=fingerprint_now, lifetime=timedelta(hours=hours))
-        return SignedIn(token, resolved)
+        return SignedIn(token, resolved, hours * 3600)

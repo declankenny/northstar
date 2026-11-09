@@ -6,6 +6,11 @@ requires-python = ">=3.15"
 dependencies = [
     "fastapi==0.162.0",
     "uvicorn==0.54.0",
+    # Checks the signature and claims of the identity provider's ID token (OpenID Connect sign-in). It is what Authlib
+    # itself uses for this now, and it is maintained: Authlib's own authlib.jose is deprecated in favour of it.
+    "joserfc==1.8.0",
+    # The cryptography joserfc runs on. It is pinned here so that Dependabot and pip-audit watch it, because it checks a signature.
+    "cryptography==50.0.2",
 ]
 
 [project.optional-dependencies]
