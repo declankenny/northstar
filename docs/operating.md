@@ -267,6 +267,8 @@ A person who gets the password wrong is limited: 5 attempts in 15 minutes per em
 
 Northstar can sign people in through one OIDC provider (version 0.4 and later). Password sign-in keeps working beside it unless you switch it off. Everything here is optional.
 
+**What has been checked.** Version 0.4 was set up and tried on a real Pocket ID instance: linking an existing user, creating a new one, the refusal when creation is off, switching password sign-in off and back on from the host. **Authentik was not tried.** It speaks the same standard, so it should work, but the provider-specific notes below for Authentik are what to look at first if it does not. Report what you find.
+
 **Read this first.** Everyone who signs in to Northstar sees all the household's financial data. Two things follow:
 
 - **Linking trusts the provider.** When someone signs in through the provider, Northstar matches the provider's **verified** email address to an existing Northstar user and signs them in as that user, with no password check. That includes administrators. So whoever can make your provider say "this address is verified" can sign in as that person. Use a provider you control, and keep its own administrators to people you would trust with Northstar's data.
@@ -285,9 +287,10 @@ Make a **confidential** OIDC client (an "application" or "client", depending on 
 - **Redirect (callback) address**: your public address plus `/api/auth/oidc/callback`, for example `https://northstar.example.com/api/auth/oidc/callback`. It must match exactly.
 - **Scopes**: `openid`, `profile` and `email`. Northstar uses only the ID token and asks for no other data.
 - **Authorization code flow with PKCE (S256)**. Northstar sends PKCE and a nonce on every sign-in.
-- **ID tokens signed with an asymmetric algorithm** (RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512 or EdDSA) that the provider lists in its discovery document. Northstar refuses tokens signed with a shared secret (HS256 and the like) and refuses `none`. **Some providers sign with the client secret unless you choose a signing key**, so pick one explicitly. TODO: confirm for Authentik and Pocket ID in the manual runs, and write the exact setting here.
+- **ID tokens signed with an asymmetric algorithm** (RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512 or EdDSA) that the provider lists in its discovery document. Northstar refuses tokens signed with a shared secret (HS256 and the like) and refuses `none`. Pocket ID signs ID tokens with RS256 only, so there is nothing to choose there. **Some providers sign with the client secret unless you choose a signing key** (Authentik is the one to watch), so pick one explicitly. Not checked for Authentik.
 - **A client secret** that the provider accepts at its token endpoint by HTTP Basic or in the request body. Northstar uses whichever the provider lists.
-- **Access**: restrict the application to the people who should be able to use Northstar (a group, a policy, or "assigned users", depending on the provider). The provider decides who may reach Northstar's client, so this is the real access control when creating users is on. TODO: the exact steps for Authentik and Pocket ID.
+- **Access**: restrict the application to the people who should be able to use Northstar (a group, a policy, or "assigned users", depending on the provider). The provider decides who may reach Northstar's client, so this is the real access control when creating users is on. In Pocket ID that is the user groups allowed on the client. TODO: the equivalent steps for Authentik, which was not checked.
+- **Launch address** (Pocket ID's My Apps page asks for one): your Northstar front page, such as `https://northstar.example.com/`. It sends a signed-out person to the sign-in page, where the provider's button is one click. It does not affect the callback address, which must still match exactly.
 
 ### Give Northstar the secret
 
@@ -321,6 +324,7 @@ Under Admin, System properties, in the OIDC group:
 How people get an account:
 
 - **An existing user** signs in through the provider and is linked by their **verified** email address, keeping their name and role. Create or check each person's Northstar user first, with the same email the provider has for them.
+- **Someone already linked** is recognised by the provider's stable subject, not by their email. After the first sign-in, changing their email at the provider, even marking it unverified, does not stop them. What stops someone is deleting their Northstar user, or, for new sign-ins, removing their access at the provider.
 - **Someone who has no Northstar user** can come in only if `oidc.user.allow_creation` is Yes. They become a regular user (never an admin), with no password, named from the provider's name for them (or their email).
 - **Administrators stay managed in Northstar.** The provider's role information is ignored. Make someone an admin on the Users page.
 - Someone whose email the provider has not verified, who was deleted from Northstar, or who has no user while creation is off, is refused, and the page does not say which. Deleted users are never brought back by signing in.

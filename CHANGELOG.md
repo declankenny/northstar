@@ -6,9 +6,9 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-## [0.4.0] - TODO release date
+## [0.4.0] - 2026-11-09
 
-Sign-in through one OpenID Connect identity provider, such as Authentik or Pocket ID (#67). It is off until an admin sets it up, and password sign-in keeps working beside it unless an admin switches it off. A person is linked to their Northstar user by the provider's verified email, new users are created only when an admin allows it, and an OIDC user has no password. The operator guide has a section on setting it up, including what linking by email trusts the provider with.
+Sign-in through one OpenID Connect identity provider, such as Authentik or Pocket ID (#67). It is off until an admin sets it up, and password sign-in keeps working beside it unless an admin switches it off. A person is linked to their Northstar user by the provider's verified email, new users are created only when an admin allows it, and an OIDC user has no password. The operator guide has a section on setting it up, including what linking by email trusts the provider with. It was set up and tried on a real Pocket ID instance (linking, creating, the refusal when creation is off, and switching password sign-in off and back on from the host). Authentik was not tried.
 ### Added
 
 - The settings of OIDC sign-in (#166), under System properties: `oidc.enabled`, `oidc.provider`, `oidc.issuer`, `oidc.client_id`, `oidc.user.allow_creation`, `oidc.session.lifetime_hours` and `system.auth.local.enabled`. They refuse a configuration that could leave nobody able to sign in.
@@ -24,6 +24,7 @@ Sign-in through one OpenID Connect identity provider, such as Authentik or Pocke
 - `python -m northstar.signin enable-local`, which turns password sign-in back on from the host, with no provider and no session.
 
 - A section of the operator guide on signing in through an identity provider, and an upgrade note for 0.4 (#170).
+- The OIDC design notes under `docs/design/oidc/` now describe what was built.
 
 ### Dependencies
 
