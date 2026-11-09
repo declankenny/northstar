@@ -13,8 +13,9 @@ from pydantic import BaseModel, StrictInt
 
 from northstar import list_prefs
 from northstar.lists import loader
-from northstar.lists.query import describe, run as run_list
+from northstar.lists.query import choices as filter_choices, describe, run as run_list
 from northstar.lists.request import parse_request
+from northstar.lists.tree import field_tree
 from northstar.listdefs import catalog as household_catalog
 from northstar.web.auth_routes import current_user, operation, run
 
@@ -78,6 +79,22 @@ def query_list(key: str, request: Request, body: dict = Body(default_factory=dic
                 "group": result.group, "sort": {"field": result.sort[0], "direction": result.sort[1]}}
 
     return run(request, action)
+
+
+@router.get("/{key}/fields")
+def list_fields(key: str, request: Request) -> dict[str, Any]:
+    """Every column the list can show, sort or filter by, as a tree: the list's own columns, and under each relation the columns of the
+    record it points at. A relation is a column too (it shows the record's display value) and has `children` when there is more."""
+    definition = _definition(key, current_user(request))
+    return run(request, lambda conn: field_tree(household_catalog(conn), definition))
+
+
+@router.get("/{key}/choices/{field}")
+def list_choices(key: str, field: str, request: Request) -> dict[str, Any]:
+    """What a person can pick from when filtering by one column: the declared values of a choice, or the records of a relation that
+    the list's own rows point at (at most 500, with `more` when there were others)."""
+    definition = _definition(key, current_user(request))
+    return run(request, lambda conn: filter_choices(conn, household_catalog(conn), definition, field))
 
 
 @router.put("/{key}/page-size", response_model=PageSize)

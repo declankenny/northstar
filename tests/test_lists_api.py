@@ -193,3 +193,71 @@ def test_the_module_refuses_a_size_it_does_not_offer_and_defaults_to_the_lists_o
         assert list_prefs.page_size(conn, 1, "anything", 25) == 25
         with pytest.raises(ValidationError, match="rows per page"):
             list_prefs.set_page_size(op(conn, 1), "anything", 3)
+
+
+# -- the tree of columns and the choices for a filter --
+
+def get(client, path):
+    return client.get(f"/api/lists/{path}")
+
+
+def all_keys(node):
+    found = [f["key"] for f in node["fields"]]
+    for relation in node["relations"]:
+        found.append(relation["key"])
+        if relation["children"]:
+            found += all_keys(relation["children"])
+    return found
+
+
+def test_the_fields_and_the_choices_are_for_people_who_are_signed_in(anon_client):
+    assert get(anon_client, "balances_api_test/fields").status_code == 401
+    assert get(anon_client, "balances_api_test/choices/account").status_code == 401
+
+
+def test_an_unknown_list_has_no_fields_or_choices_and_an_admin_list_is_for_admins(client, member_client, household):
+    assert get(client, "no_such_list/fields").status_code == 404
+    assert get(client, "no_such_list/choices/account").status_code == 404
+    assert get(member_client, "currencies_api_test/fields").status_code == 403
+    assert get(member_client, "currencies_api_test/choices/code").status_code == 403
+    assert get(client, "currencies_api_test/fields").status_code == 200
+
+
+def test_a_lists_fields_are_a_tree_of_its_own_columns_and_those_of_the_records_it_points_at(client, household):
+    tree = get(client, "balances_api_test/fields").json()
+    assert {f["key"] for f in tree["fields"]} == {"as_of_date", "amount_cents", "reporting_value", "note", "source", "created_at", "updated_at"}
+    relations = {r["key"]: r for r in tree["relations"]}
+    assert set(relations) == {"account", "created_by", "updated_by"}
+    assert relations["created_by"]["children"] is None                                  # a person is shown by name, not entered
+    account = relations["account"]
+    assert {r["key"] for r in account["children"]["relations"]} == {"account.type", "account.currency", "account.created_by", "account.updated_by"}
+    assert "account.type.class" in all_keys(tree) and "account.currency.minor_units" in all_keys(tree)
+    assert not [k for k in all_keys(tree) if "email" in k or "password" in k or "deleted" in k or k.endswith("version")]
+    value = next(f for f in tree["fields"] if f["key"] == "amount_cents")
+    assert (value["label"], value["kind"], [o["name"] for o in value["operators"]]) == ("Value", "amount", ["equals", "at_least", "at_most", "between", "is_empty"])
+
+
+def test_a_relation_offers_the_records_the_list_actually_has_and_never_a_deleted_accounts(client, household):
+    with with_db(client) as conn:
+        gone = add_account(conn, "Test deleted", 1, "Savings")
+        add_balance(conn, gone, "2026-04-20", 5_000)
+        conn.commit()
+        from northstar import accounts
+        accounts.delete_account(op(conn), gone)
+    body = get(client, "balances_api_test/choices/account").json()
+    assert body["kind"] == "records" and body["more"] is False
+    assert [o["value"] for o in body["options"]] == ["Test card", "Test dollars", "Test euros"]
+    assert {o["id"] for o in body["options"]} == {household["card"], household["usd"], household["eur"]}
+
+
+def test_a_column_on_a_related_record_offers_its_own_choices_and_a_status_its_declared_values(client, household):
+    currencies_offered = get(client, "balances_api_test/choices/account.currency").json()
+    assert [o["value"] for o in currencies_offered["options"]] == ["EUR", "USD"]
+    assert [o["value"] for o in get(client, "balances_api_test/choices/account.type").json()["options"]] == ["Credit card", "Savings"]
+
+
+def test_a_column_with_nothing_to_pick_from_or_that_is_not_one_is_a_422(client, household):
+    assert get(client, "balances_api_test/choices/note").status_code == 422
+    assert get(client, "balances_api_test/choices/amount_cents").status_code == 422
+    assert get(client, "balances_api_test/choices/no_such_column").status_code == 422
+    assert get(client, "balances_api_test/choices/account.created_by.email").status_code == 422

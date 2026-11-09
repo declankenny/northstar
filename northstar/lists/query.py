@@ -16,7 +16,8 @@ import sqlite3
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from northstar.lists.kinds import Reference, Scaled, Text, escape_like
+from northstar.errors import ValidationError
+from northstar.lists.kinds import Category, Reference, Scaled, Text, escape_like
 from northstar.lists.listdef import ListDef
 from northstar.lists.registry import Catalog, Resolved
 from northstar.lists.request import ListRequest
@@ -213,3 +214,33 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
             row["_group"], row["_group_count"] = record["_g"], record["_gn"]
         rows.append(row)
     return ListResult(rows, total, page, request.page_size, pages, request.columns, request.group, (request.sort_key, request.direction))
+
+
+CHOICE_LIMIT = 500
+
+
+def choices(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, key: str) -> dict:
+    """What a person can pick from when filtering by a column. A choice of declared values (a status) is those values. A relation
+    is the records the list's own rows point at, so a filter offers what is actually there: never a record the list leaves out
+    (a deleted account has no balances in a list of balances), and not every record the target table holds. Each has its id, the
+    display value, and the table's tell-apart detail where it declares one, so two people with one name can be told apart.
+    At most CHOICE_LIMIT are returned, with `more` saying there were others."""
+    base = definition.table
+    resolved = catalog.resolve(base, key)
+    if resolved.relation is None:
+        if isinstance(resolved.kind, Category):
+            return {"kind": "values", "values": list(resolved.kind.values), "options": [], "more": False}
+        raise ValidationError("That column has no list of choices.")
+
+    request = ListRequest((), (), "", definition.sort[0], "asc", None, 1, 10)
+    view = _View(catalog, definition, request)
+    identity, display = view.identity(resolved), view.plain(resolved)
+    target = catalog.tables[resolved.relation.target]
+    detail = f'{view.joins.alias(resolved.path)}."{target.tell_apart}"' if target.tell_apart else "NULL"
+    collate = " COLLATE NOCASE" if resolved.kind.sorts_without_case else ""
+    where = f"{identity} IS NOT NULL" + (f" AND ({definition.scope})" if definition.scope else "")
+    sql = (f'SELECT DISTINCT {identity} AS id, {display} AS value, {detail} AS detail FROM "{definition.source or base}" AS b '
+           f'{" ".join(view.joins.sql)} WHERE {where} ORDER BY value{collate}, id LIMIT ?')
+    rows = conn.execute(sql, (CHOICE_LIMIT + 1,)).fetchall()
+    return {"kind": "records", "values": [], "more": len(rows) > CHOICE_LIMIT,
+            "options": [{"id": r["id"], "value": r["value"], "detail": r["detail"]} for r in rows[:CHOICE_LIMIT]]}
