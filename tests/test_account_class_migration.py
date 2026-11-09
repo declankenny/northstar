@@ -19,7 +19,7 @@ def before(tmp_path):
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith(("0019", "0020")):
+        if not file.name.startswith(("0019", "0020", "0021")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -49,7 +49,7 @@ def before(tmp_path):
 
 def test_the_upgrade_drops_the_class_and_keeps_every_account_in_its_class(before):
     path, held, days_before, _ = before
-    assert db.upgrade(path) == ["0019_account_class_from_type", "0020_live_balance_values"]
+    assert db.upgrade(path) == ["0019_account_class_from_type", "0020_live_balance_values", "0021_user_list_prefs"]
     conn = db.connect(path)
     assert "class_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(accounts)")}
     after = {r["id"]: tuple(r)[1:] for r in conn.execute(

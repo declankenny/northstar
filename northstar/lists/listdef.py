@@ -19,6 +19,7 @@ class ListDef:
     source: str | None = None                       # a view over the table that applies the hard exclusions
     scope: str | None = None                        # a fixed condition on the table (alias `b`), written in code
     page_size: int = 25
+    admin_only: bool = False                        # only a viewer with the role "admin" may see the list
 
 
 def check(catalog: Catalog, definition: ListDef) -> None:

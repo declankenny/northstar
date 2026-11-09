@@ -14,6 +14,7 @@ database's own work like any other.
 import math
 import sqlite3
 from dataclasses import dataclass
+from urllib.parse import quote
 
 from northstar.lists.kinds import Reference, Text, escape_like
 from northstar.lists.listdef import ListDef
@@ -115,9 +116,43 @@ class _View:
         return f"({expression} IS NULL), {expression}{collate}"
 
 
-def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request: ListRequest) -> ListResult:
+def link_pattern(catalog: Catalog, base: str, resolved: Resolved, viewer) -> str | None:
+    """The route pattern a column opens, if it opens one this viewer may use. A relation opens the record page of the table it
+    points at, and the display column of the list's own table opens that table's page. `viewer` is the set of roles the person
+    has, and a page that is for a role only opens for one who has it."""
+    if resolved.relation is not None:
+        table = catalog.tables[resolved.relation.target]
+    elif not resolved.path and resolved.column == catalog.tables[base].display:
+        table = catalog.tables[base]
+    else:
+        return None
+    if not table.record_page or (table.record_page_for and table.record_page_for not in viewer):
+        return None
+    return table.record_page
+
+
+def describe(catalog: Catalog, definition: ListDef, keys, viewer=frozenset()) -> list[dict]:
+    """What a page needs to draw the columns: the key, a label (and the full path of labels), the kind's code and whether the
+    column opens a record page for this viewer."""
+    described = []
+    for key in keys:
+        resolved = catalog.resolve(definition.table, key)
+        described.append({"key": key, "label": resolved.labels[-1], "path_label": resolved.label, "kind": resolved.kind.code,
+                          "linked": link_pattern(catalog, definition.table, resolved, viewer) is not None})
+    return described
+
+
+def _href(pattern: str, record_id, value) -> str | None:
+    if ("{id}" in pattern and record_id is None) or ("{value}" in pattern and value is None):
+        return None                                     # nothing to open: the relation is empty
+    return pattern.replace("{id}", str(record_id)).replace("{value}", quote(str(value), safe=""))
+
+
+def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request: ListRequest,
+        viewer=frozenset()) -> ListResult:
     """The page of rows the request asks for, with the count of every matching row. Rows are dicts by key, with the record's
-    id as `_id`, and (when grouped) `_group` and `_group_count`, the group's size across all pages."""
+    id as `_id`, `_links` (the route each linked column opens, for this viewer) and, when grouped, `_group` and `_group_count`,
+    the group's size across all pages."""
     base = definition.table
     pk = catalog.primary_key[base]
     source = definition.source or base
@@ -129,11 +164,19 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
 
     selected = [f'b."{pk}" AS _id']
     shaped = []                                         # (key, kind, first position, how many) of each column in `selected`
+    linked = []                                         # (key, pattern, position of the id selected for it, or None for the row's own)
     for key in request.columns:
         resolved = catalog.resolve(base, key)
         expressions = resolved.kind.select(view, resolved)
         shaped.append((key, resolved.kind, len(selected) - 1, len(expressions)))
         selected += [f"{expression} AS c{len(selected) - 1 + n}" for n, expression in enumerate(expressions)]
+        pattern = link_pattern(catalog, base, resolved, viewer)
+        if pattern is not None:
+            if resolved.relation is not None:
+                linked.append((key, pattern, len(selected)))
+                selected.append(f"{view.identity(resolved)} AS l{len(selected)}")
+            else:
+                linked.append((key, pattern, None))
     order = []
     if request.group is not None:
         group = catalog.resolve(base, request.group)
@@ -159,6 +202,11 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
     for record in fetched:
         row = {key: kind.shape([record[f"c{start + n}"] for n in range(count)]) for key, kind, start, count in shaped}
         row["_id"] = record["_id"]
+        row["_links"] = {}
+        for key, pattern, position in linked:
+            href = _href(pattern, record["_id"] if position is None else record[f"l{position}"], row[key])
+            if href is not None:
+                row["_links"][key] = href
         if request.group is not None:
             row["_group"], row["_group_count"] = record["_g"], record["_gn"]
         rows.append(row)

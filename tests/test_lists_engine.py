@@ -404,6 +404,62 @@ def test_a_group_with_no_value_comes_last(conn, cat):
     assert sum(1 for r in rows if r["_group"] is None) == rows[-1]["_group_count"]
 
 
+# -- links and descriptions --
+
+def linked(conn, cat, columns, viewer=()):
+    parsed = parse_request(cat, TICKETS, {"columns": columns, "page_size": 100})
+    return run(conn, cat, TICKETS, parsed, frozenset(viewer)).rows
+
+
+def test_a_relation_opens_the_page_of_the_record_it_points_at_and_the_display_column_opens_the_rows_own(conn, cat):
+    rows = linked(conn, cat, ["code", "site", "kind", "title"])
+    by_id = {t["id"]: t for t in live_tickets(conn)}
+    kinds = {r["id"]: r["name"] for r in conn.execute("SELECT id, name FROM kind")}
+    for row in rows:
+        ticket = by_id[row["_id"]]
+        assert row["_links"] == {"code": f"/tickets/{row['_id']}", "site": f"/sites/{ticket['site_id']}",
+                                 "kind": f"/kinds/{kinds[ticket['kind_id']]}"}        # nothing for a plain column such as title
+
+
+def test_a_relation_with_nothing_in_it_has_no_link(conn, cat):
+    rows = linked(conn, cat, ["code", "assignee"], viewer={"staff"})
+    by_id = {t["id"]: t for t in live_tickets(conn)}
+    assert any(by_id[r["_id"]]["assignee_id"] is None for r in rows) and any(by_id[r["_id"]]["assignee_id"] for r in rows)
+    for row in rows:
+        assignee = by_id[row["_id"]]["assignee_id"]
+        assert row["_links"].get("assignee") == (None if assignee is None else f"/people/{assignee}")
+
+
+def test_a_page_that_is_for_a_role_opens_only_for_a_viewer_who_has_it(conn, cat):
+    assert all("assignee" not in r["_links"] for r in linked(conn, cat, ["code", "assignee"]))
+    assert all("assignee" not in r["_links"] for r in linked(conn, cat, ["code", "assignee"], viewer={"admin"}))
+    assert any("assignee" in r["_links"] for r in linked(conn, cat, ["code", "assignee"], viewer={"staff"}))
+    assert all(r["_links"]["site"].startswith("/sites/") for r in linked(conn, cat, ["site"]))     # for everyone
+
+
+def test_a_value_in_an_address_is_quoted_so_it_cannot_change_the_path():
+    big = build(tickets=5)
+    big.execute("UPDATE kind SET name = '../a b/c?d#e' WHERE id = 1")
+    cat_big = catalog(big)
+    rows = run(big, cat_big, TICKETS, parse_request(cat_big, TICKETS, {"columns": ["kind"], "page_size": 10}))
+    hrefs = {r["_links"]["kind"] for r in rows.rows}
+    assert "/kinds/..%2Fa%20b%2Fc%3Fd%23e" in hrefs
+    assert all("/kinds/" in h and h.count("/") == 2 for h in hrefs)
+
+
+def test_the_columns_are_described_for_a_page(conn, cat):
+    from northstar.lists.query import describe
+    keys = ["code", "assignee", "site.area", "score_x100", "passed", "status", "opened_on", "closed_at", "weight", "items"]
+    described = {d["key"]: d for d in describe(cat, TICKETS, keys, frozenset({"staff"}))}
+    assert (described["code"]["label"], described["code"]["kind"], described["code"]["linked"]) == ("Code", "text", True)
+    assert (described["assignee"]["label"], described["assignee"]["linked"]) == ("Assigned to", True)
+    assert described["site.area"]["path_label"] == "Site › Area" and described["site.area"]["label"] == "Area"
+    assert described["site.area"]["linked"] is False                       # an area has no page of its own
+    assert [described[k]["kind"] for k in ("score_x100", "passed", "status", "opened_on", "closed_at", "weight", "items")] == [
+        "decimal", "yes_no", "choice", "date", "timestamp", "number", "integer"]
+    assert describe(cat, TICKETS, ["assignee"])[0]["linked"] is False       # the same column for a viewer without the role
+
+
 # -- the loader --
 
 def test_a_list_is_found_through_the_loader_and_an_unknown_one_is_not_found():

@@ -359,7 +359,7 @@ def v02_database(tmp_path, v02_migrations, accounts_to_add=1, delete_all=False):
 
 def test_an_upgrade_with_accounts_makes_them_dollars_and_locks_the_system_currency(tmp_path, v02_migrations):
     path = v02_database(tmp_path, v02_migrations, accounts_to_add=2)
-    assert db.upgrade(path) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values"]
+    assert db.upgrade(path) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values", "0021_user_list_prefs"]
     conn = db.connect(path)
     assert [r[0] for r in conn.execute("SELECT c.code FROM accounts a JOIN currencies c ON c.id = a.currency_id")] == ["USD", "USD"]
     assert [r[0] for r in conn.execute("SELECT amount_cents FROM live_balances")] == [123456, 123456]     # no amount changed
@@ -411,7 +411,7 @@ def test_a_backup_is_made_before_the_upgrade_and_restores_to_the_old_version(tmp
     assert "currencies" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert conn.execute("SELECT amount_cents FROM balances").fetchone()[0] == 123456
     conn.close()
-    assert db.upgrade(restored) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values"]               # and the old version upgrades again
+    assert db.upgrade(restored) == ["0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values", "0021_user_list_prefs"]               # and the old version upgrades again
 
 
 def test_a_backup_of_the_new_version_restores_with_its_currencies(tmp_path, v02_migrations):
@@ -419,7 +419,7 @@ def test_a_backup_of_the_new_version_restores_with_its_currencies(tmp_path, v02_
     db.upgrade(path)
     copy = tmp_path / "copy.db"
     backup.create_backup(path, copy)
-    assert backup.check_database(copy)["migrations"] == len(V02) + 11
+    assert backup.check_database(copy)["migrations"] == len(V02) + 12
     restored = tmp_path / "again" / "northstar.db"
     backup.restore_backup(copy, restored)
     conn = db.connect(restored)

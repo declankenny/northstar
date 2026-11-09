@@ -37,6 +37,7 @@ class Kind:
     """Base of every kind. A subclass sets `operators` and implements `read` and `where`."""
 
     name = ""
+    code = ""                           # what the page chooses how to draw and align a column by
     operators: tuple[str, ...] = ()
     sorts_without_case = False          # text sorts and compares ignoring ASCII case, as everywhere in Northstar
     uses_date_part = False              # compares the first ten characters (a UTC timestamp's date)
@@ -73,6 +74,7 @@ class Kind:
 
 class Text(Kind):
     name = "text"
+    code = "text"
     operators = ("contains", "equals", "is_empty", "is_not_empty")
     sorts_without_case = True
 
@@ -128,6 +130,7 @@ class _Number(Kind):
 
 class Integer(_Number):
     name = "whole number"
+    code = "integer"
 
     def number(self, text):
         if isinstance(text, bool) or not isinstance(text, (int, str)):
@@ -142,6 +145,7 @@ class Number(_Number):
     """A number stored as a float (a measurement). Compared as the float it is."""
 
     name = "number"
+    code = "number"
 
     def number(self, text):
         if isinstance(text, bool) or not isinstance(text, (int, float, str)):
@@ -162,6 +166,7 @@ class Scaled(_Number):
 
     scale: int
     name = "decimal"
+    code = "decimal"
 
     def number(self, text):
         if isinstance(text, bool) or not isinstance(text, (int, str)):
@@ -180,6 +185,7 @@ class Scaled(_Number):
 
 class Date(Kind):
     name = "date"
+    code = "date"
     operators = ("before", "after", "between", "is_empty")
 
     def day(self, text) -> str:
@@ -216,6 +222,7 @@ class Timestamp(Date):
     """A UTC instant (`2026-01-31T09:30:00Z`), shown and filtered as its UTC date."""
 
     name = "timestamp"
+    code = "timestamp"
     uses_date_part = True
 
 
@@ -225,6 +232,7 @@ class YesNo(Kind):
 
     nullable: bool = False
     name = "Yes or No"
+    code = "yes_no"
 
     @property
     def operators(self):                                            # type: ignore[override]
@@ -245,6 +253,7 @@ class Category(Kind):
 
     values: tuple[str, ...]
     name = "choice"
+    code = "choice"
     operators = ("is_any_of",)
 
     def read(self, operator, value):
@@ -264,6 +273,7 @@ class Reference(Kind):
     """The id of the record a relation points at. Filtered with “is any of”, by id, though shown by display value."""
 
     name = "choice"
+    code = "choice"
     operators = ("is_any_of",)
 
     def read(self, operator, value):
@@ -293,6 +303,7 @@ class Quantity(Kind):
     with more places than its own scale."""
 
     name = "amount"
+    code = "amount"
     operators = ("equals", "at_least", "at_most", "between", "is_empty")
 
     def number(self, text) -> int:

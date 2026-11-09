@@ -32,7 +32,7 @@ def test_there_is_one_initial_migration_that_includes_users_and_their_theme(conn
     assert [r["version"] for r in conn.execute("SELECT version FROM sys_schema_migrations ORDER BY version")] == [
         "0001_initial", "0002_login_attempts", "0003_unique_account_names", "0004_audit_columns_and_system_user",
         "0005_sys_table_names", "0006_user_soft_delete", "0007_account_soft_delete", "0008_change_log",
-        "0009_system_properties", "0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values"]
+        "0009_system_properties", "0010_currencies", "0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values", "0021_user_list_prefs"]
     assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'sys_login_attempts'").fetchone()[0] == 1
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     assert {"email", "password_hash", "is_admin", "theme"} <= columns
