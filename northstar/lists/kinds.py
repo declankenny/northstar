@@ -1,7 +1,7 @@
 """Field kinds: what a column of a list can be, and so how it is sorted, filtered and grouped.
 
 A kind knows its operators, how to read a value a person (or a saved filter) supplied, and the SQL that tests a column
-against it. It never builds SQL from the value: the value is always a parameter. Display (locale, currency) is the page's
+against it. It never builds SQL from the value: the value is always a parameter. Display (locale, units) is the page's
 job, so a kind deals only in stored values: integers, text, ISO dates and UTC timestamps.
 """
 
@@ -18,6 +18,16 @@ OPERATOR_NAMES = {
 }
 
 
+LARGEST = 2 ** 62                   # a stored integer must fit SQLite's 64 bits, with room to normalise
+
+
+def fits(number: int) -> int:
+    """The number, or a ValidationError if it is too large to be a stored value."""
+    if abs(number) > LARGEST:
+        raise ValidationError("That number is too large.")
+    return number
+
+
 def escape_like(text: str) -> str:
     """The text with LIKE's wildcards made literal (used with ESCAPE '\\')."""
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -30,6 +40,21 @@ class Kind:
     operators: tuple[str, ...] = ()
     sorts_without_case = False          # text sorts and compares ignoring ASCII case, as everywhere in Northstar
     uses_date_part = False              # compares the first ten characters (a UTC timestamp's date)
+    virtual = False                     # true for a column that is worked out, not stored
+
+    # How the engine reads and shows a column of this kind. The defaults read the column itself.
+
+    def select(self, view, resolved) -> list[str]:
+        """The SQL expressions a row of this column is made from. The first is the value."""
+        return [view.plain(resolved)]
+
+    def shape(self, values: list):
+        """The value a row shows, made from what `select` produced."""
+        return values[0]
+
+    def compare(self, view, resolved) -> str:
+        """The SQL expression that is sorted, grouped and filtered."""
+        return view.plain(resolved)
 
     def read(self, operator: str, value):
         """The value as the SQL needs it, or a ValidationError that says what is wrong."""
@@ -109,7 +134,7 @@ class Integer(_Number):
         if isinstance(text, bool) or not isinstance(text, (int, str)):
             raise ValidationError("Type a whole number.")
         try:
-            return int(str(text).strip())
+            return fits(int(str(text).strip()))
         except ValueError:
             raise ValidationError("Type a whole number.") from None
 
@@ -151,7 +176,7 @@ class Scaled(_Number):
         stored = exact * (10 ** self.scale)
         if stored != stored.to_integral_value():
             raise ValidationError(f"Use at most {self.scale} decimal places.")
-        return int(stored)
+        return fits(int(stored))
 
 
 class Date(Kind):
@@ -255,3 +280,107 @@ class Reference(Kind):
 
     def where(self, expression, operator, value):
         return f"{expression} IN ({', '.join('?' * len(value))})", list(value)
+
+
+# -- amounts whose scale is not the column's own --
+
+COMMON_SCALE = 3                    # amounts are compared in thousandths of a unit: exact, and enough for any scale used
+
+
+class Quantity(Kind):
+    """An exact amount held as an integer with a scale that can differ from row to row (hundredths in one row, whole units in
+    the next). It is sorted and compared by the number a person sees, normalised to thousandths, so a value of 10 with scale 2
+    and a value of 10 with scale 0 are equal. A typed amount may have at most three decimal places, and no row can equal one
+    with more places than its own scale."""
+
+    name = "amount"
+    operators = ("equals", "at_least", "at_most", "between", "is_empty")
+
+    def number(self, text) -> int:
+        if isinstance(text, bool) or not isinstance(text, (int, str)):
+            raise ValidationError("Type an amount.")
+        try:
+            exact = Decimal(str(text).strip())
+        except InvalidOperation:
+            raise ValidationError("Type an amount.") from None
+        if not exact.is_finite():
+            raise ValidationError("Type an amount.")
+        scaled = exact * (10 ** COMMON_SCALE)
+        if scaled != scaled.to_integral_value():
+            raise ValidationError(f"Use at most {COMMON_SCALE} decimal places.")
+        return fits(int(scaled))
+
+    read = _Number.read
+    where = _Number.where
+
+
+def normalise(value: int | None, scale: int) -> int | None:
+    """An amount with `scale` decimal places, as thousandths."""
+    if value is None:
+        return None
+    if not 0 <= scale <= COMMON_SCALE:
+        raise ValueError(f"A scale of {scale} is not supported: amounts are compared to {COMMON_SCALE} places.")
+    return value * 10 ** (COMMON_SCALE - scale)
+
+
+@dataclass(frozen=True)
+class ScaledBy(Quantity):
+    """An amount whose scale is a column of a record it points at. `scale_from` and `unit_from` are paths of relation names from the
+    column's own table, ending in a column (`("account", "currency", "minor_units")`). Nothing here says what the scale or the
+    unit mean: a row shows its value, its scale and its unit, and the page decides how to write them."""
+
+    scale_from: tuple[str, ...] = ()
+    unit_from: tuple[str, ...] | None = None
+
+    def _scale_sql(self, view, resolved) -> str:
+        alias = view.alias_via(resolved, self.scale_from[:-1])
+        return f'{alias}."{self.scale_from[-1]}"'
+
+    def select(self, view, resolved):
+        amount = view.plain(resolved)
+        unit = "NULL"
+        if self.unit_from:
+            unit = f'{view.alias_via(resolved, self.unit_from[:-1])}."{self.unit_from[-1]}"'
+        return [amount, self._scale_sql(view, resolved), unit]
+
+    def shape(self, values):
+        value, scale, unit = values
+        return None if value is None else {"value": value, "scale": scale, "unit": unit}
+
+    def compare(self, view, resolved):
+        amount, scale = view.plain(resolved), self._scale_sql(view, resolved)
+        steps = " ".join(f"WHEN {n} THEN {10 ** (COMMON_SCALE - n)}" for n in range(COMMON_SCALE + 1))
+        return f"({amount} * CASE {scale} {steps} END)"
+
+
+@dataclass(frozen=True)
+class Answer:
+    """What a computed column works out for one row. `value` is an integer with `scale` decimal places, or None when it cannot
+    be worked out, and `note` then says why. `unit` is carried for the page to show."""
+
+    value: int | None
+    scale: int = 0
+    unit: str | None = None
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class Computed(Quantity):
+    """A column whose values come from a function the definition supplies, not from the database. It names the columns it
+    needs (`inputs`, keys like any other) and `compute(conn, context, rows)` returns one Answer for each row, in order, where
+    a row is a dict of those inputs. The engine works out the values for every row the list could show only when a request
+    sorts, groups or filters by the column, and otherwise only for the rows of the page."""
+
+    inputs: tuple[str, ...] = ()
+    compute: object = None
+    virtual = True
+
+    def select(self, view, resolved):
+        return view.computed_columns(resolved)
+
+    def shape(self, values):
+        value, scale, unit, note = values
+        return {"value": value, "scale": scale, "unit": unit, "note": note} if (value is not None or note) else None
+
+    def compare(self, view, resolved):
+        return view.computed_compare(resolved)

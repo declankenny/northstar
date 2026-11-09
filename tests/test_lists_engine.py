@@ -1,6 +1,7 @@
 """The list engine, on a schema that is not Northstar's (see lists_schema.py)."""
 
 import sqlite3
+from datetime import date
 
 import pytest
 
@@ -8,10 +9,13 @@ from lists_schema import STATUSES, TABLES, TICKETS, build, catalog
 from northstar.errors import NotFoundError, ValidationError
 from northstar.lists import loader, registry
 from northstar.lists.listdef import ListDef, check
-from northstar.lists.query import run
+from northstar.lists.query import ListContext, run
 from northstar.lists.registry import Catalog, FieldDef, RegistryError, TableDef
 from northstar.lists.kinds import Text
 from northstar.lists.request import parse_request
+
+
+CONTEXT = ListContext(today=date(2026, 6, 15))
 
 
 @pytest.fixture(scope="module")
@@ -25,7 +29,7 @@ def cat(conn):
 
 
 def view(conn, cat, data=None, definition=TICKETS):
-    return run(conn, cat, definition, parse_request(cat, definition, data))
+    return run(conn, cat, definition, parse_request(cat, definition, data), CONTEXT)
 
 
 def everything(conn, cat, data=None, definition=TICKETS):
@@ -291,6 +295,15 @@ def test_a_scaled_integer_is_typed_as_a_decimal_and_refused_when_it_has_too_many
         parse_request(cat, TICKETS, {"filters": [{"field": "score_x100", "operator": "equals", "value": "0.001"}]})
     with pytest.raises(ValidationError, match="Type a number"):
         parse_request(cat, TICKETS, {"filters": [{"field": "score_x100", "operator": "equals", "value": "1e400x"}]})
+
+
+def test_a_number_too_large_to_store_is_refused_not_passed_to_the_database(cat):
+    huge = "9" * 30
+    for field, operator in (("items", "equals"), ("score_x100", "at_least")):         # a float can hold it, so it is not refused
+        with pytest.raises(ValidationError):
+            parse_request(cat, TICKETS, {"filters": [{"field": field, "operator": operator, "value": huge}]})
+    with pytest.raises(ValidationError):
+        parse_request(cat, TICKETS, {"filters": [{"field": "items", "operator": "between", "value": ["0", huge]}]})
 
 
 def test_a_range_includes_both_ends_and_before_and_after_exclude_the_day(conn, cat):

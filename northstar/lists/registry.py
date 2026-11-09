@@ -59,7 +59,8 @@ class Resolved:
 
     key: str
     path: tuple[Relation, ...]                      # the relations walked to reach the value
-    column: str                                     # the column read, on the last table of the path
+    table: str                                      # the table the column is on (the last table of the path)
+    column: str                                     # the column read
     kind: Kind
     relation: Relation | None                       # set when the key is a relation: its display value
     labels: tuple[str, ...]
@@ -77,9 +78,13 @@ def humanize(name: str) -> str:
 class Catalog:
     """The registry read against a database: tables with their primary keys and relations."""
 
-    def __init__(self, conn, tables: Mapping[str, TableDef]):
+    def __init__(self, conn, tables: Mapping[str, TableDef], excluded=()):
+        """`excluded` names tables that are deliberately not offered: a foreign key to one is not a relation a person can follow.
+        A foreign key to any other table without an entry is a mistake, found here."""
         self.tables = dict(tables)
+        self.excluded = frozenset(excluded)
         self.primary_key: dict[str, str] = {}
+        self.columns: dict[str, set[str]] = {}
         self._relations: dict[str, dict[str, Relation]] = {}
         problems: list[str] = []
         columns_of: dict[str, dict] = {}
@@ -97,19 +102,56 @@ class Catalog:
                 continue
             self.primary_key[name] = keys[0]
             columns_of[name] = {c["name"]: c for c in columns}
-            problems += self._check_table(table, set(columns_of[name]))
+            self.columns[name] = set(columns_of[name])
+            problems += self._check_table(table, self.columns[name])
         for name, columns in columns_of.items():                   # once every primary key is known
             self._relations[name] = self._read_relations(conn, name, columns)
         for name, relations in self._relations.items():
             for relation in relations.values():
                 if relation.target not in self.tables:
                     problems.append(f"{name}.{relation.column} points at {relation.target}, which has no entry")
+        for name in columns_of:
+            problems += self._check_kinds(self.tables[name])
         if problems:
             raise RegistryError("; ".join(problems))
+
+    def _check_kinds(self, table: TableDef) -> list[str]:
+        """The paths and inputs a kind names must lead somewhere."""
+        problems = []
+        for name, definition in table.fields.items():
+            kind = definition.kind
+            for path in (getattr(kind, "scale_from", None), getattr(kind, "unit_from", None)):
+                if path:
+                    try:
+                        end = self.follow(table.name, path[:-1])
+                        last = end[-1].target if end else table.name
+                        if path[-1] not in self.columns.get(last, ()):
+                            problems.append(f"{table.name}.{name}: {last} has no column {path[-1]}")
+                    except ValidationError as error:
+                        problems.append(f"{table.name}.{name}: {error}")
+            for key in getattr(kind, "inputs", ()):
+                try:
+                    self.resolve(table.name, key)
+                except ValidationError as error:
+                    problems.append(f"{table.name}.{name}: input {error}")
+        return problems
+
+    def follow(self, table: str, keys) -> tuple[Relation, ...]:
+        """The relations a path of names leads through, from `table`. Not limited by depth: a kind's own paths are code."""
+        path, current = [], table
+        for key in keys:
+            relation = self.relations(current).get(key)
+            if relation is None:
+                raise ValidationError(f"{current} has no relation {key}.")
+            path.append(relation)
+            current = relation.target
+        return tuple(path)
 
     def _check_table(self, table: TableDef, names: set[str]) -> list[str]:
         problems = []
         for column in (*table.fields, *table.denied):
+            if column in table.fields and table.fields[column].kind.virtual:
+                continue                            # worked out, so there is no column to find
             if not _IDENTIFIER.match(column) or column not in names:
                 problems.append(f"{table.name}.{column}: there is no such column")
         for column in table.denied & set(table.fields):
@@ -132,6 +174,8 @@ class Catalog:
             row = parts[0]
             column, target = row["from"], row["table"]
             if column in self.tables[table].denied or not _IDENTIFIER.match(column) or not _IDENTIFIER.match(target):
+                continue
+            if target in self.excluded:
                 continue
             if target in self.primary_key and (row["to"] or self.primary_key[target]) != self.primary_key[target]:
                 continue                            # only a key to the primary key is sure to give one row, not several
@@ -166,12 +210,14 @@ class Catalog:
         if relation is not None:                    # the display value of the record the relation points at
             self._step(current, relation, key, seen, len(path) + 1, walking=False)
             target = self.tables[relation.target]
-            return Resolved(key, (*path, relation), target.display, target.fields[target.display].kind, relation,
-                            (*labels, self._label(current, relation)))
+            return Resolved(key, (*path, relation), relation.target, target.display, target.fields[target.display].kind,
+                            relation, (*labels, self._label(current, relation)))
         definition = self.tables[current].fields.get(last)
         if definition is None:
             raise ValidationError(f"“{key}” is not a column of this list.")
-        return Resolved(key, tuple(path), last, definition.kind, None,
+        if definition.kind.virtual and path:
+            raise ValidationError(f"“{key}” is worked out for a list of its own table only.")
+        return Resolved(key, tuple(path), current, last, definition.kind, None,
                         (*labels, definition.label or humanize(last)))
 
     def _step(self, current: str, relation: Relation, key: str, seen: set, depth: int, *, walking: bool) -> None:
