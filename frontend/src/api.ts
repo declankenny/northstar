@@ -647,16 +647,24 @@ export type ListColumn = {
 /** One row: its values by column key, `_id`, and the route each linked column opens. An amount is {value, scale, unit}, or null. */
 export type ListRow = { _id: number; _links: Record<string, string>; [key: string]: unknown };
 
+/** One condition of a filter: a column by key, an operator, and a value whose shape the operator decides (none, text, a number or
+ *  date as text, a pair for "between", a list of choices). Conditions are data; the server checks every one. */
+export type Condition = { field: string; operator: string; value?: unknown };
+
 export type ListPage = {
   columns: ListColumn[]; rows: ListRow[];
   total: number; page: number; pages: number; page_size: number; // total counts every matching row, not this page
   group: string | null;
   sort: { field: string; direction: "asc" | "desc" }; // the sort applied: the one asked for, or the list's own
+  filters: Condition[];                               // the conditions applied: the request's, or the default filter's when it named none
+  skipped: { field: string | null; reason: string }[]; // conditions of the default filter that no longer fit the list and were left out
+  default_filter_id: number | null;                   // the saved filter the list opened with, when the request named no filters
 };
 
 /** What a view of a list asks for. Anything left out is the list's own default. */
 export type ListRequest = {
   columns?: string[]; search?: string; page?: number; page_size?: number; group?: string | null;
+  filters?: Condition[]; // none at all means the person's default filter; an empty list means no filter
   sort?: { field: string; direction: "asc" | "desc" } | null;
 };
 
@@ -670,3 +678,59 @@ export async function saveListPageSize(key: string, pageSize: number): Promise<n
   return (await send<{ page_size: number }>("PUT", `/api/lists/${encodeURIComponent(key)}/page-size`, { page_size: pageSize }))!.page_size;
 }
 
+// -- filters: what a column can be filtered by, what to choose from, and the saved filters of a list --
+
+/** One column of the tree a list offers: its kind, the operators that suit it, and where its choices come from. A relation is a
+ *  column too (it filters by a choice of the records it points at) and has `children` when its table has more to offer. */
+export type FieldNode = {
+  key: string; label: string; path_label: string; kind: ListColumn["kind"]; scale: number | null;
+  operators: { name: string; label: string }[];
+  choices: "records" | "values" | null; values?: string[];
+  children?: FieldTree | null;
+};
+export type FieldTree = { fields: FieldNode[]; relations: FieldNode[] };
+
+export async function fetchListFields(key: string, signal?: AbortSignal): Promise<FieldTree> {
+  return (await send<FieldTree>("GET", `/api/lists/${encodeURIComponent(key)}/fields`, undefined, signal))!;
+}
+
+export type Choices = {
+  kind: "values" | "records"; values: string[]; more: boolean; // `more`: there were others than the ones listed
+  options: { id: number; value: string; detail: string | null }[];
+};
+
+export async function fetchListChoices(key: string, field: string, signal?: AbortSignal): Promise<Choices> {
+  return (await send<Choices>("GET", `/api/lists/${encodeURIComponent(key)}/choices/${encodeURIComponent(field)}`, undefined, signal))!;
+}
+
+export type SavedFilter = {
+  id: number; name: string;
+  shared: boolean;       // for everyone who can see the list; only an admin changes it
+  is_default: boolean;   // the list opens with it: this person's own default, or the shared one
+  can_edit: boolean;
+  conditions: Condition[];
+  problems: { field: string | null; reason: string }[]; // conditions that no longer fit the list: skipped when it is applied
+};
+export type SavedFilters = { filters: SavedFilter[]; default_id: number | null };
+
+const filtersUrl = (key: string, id?: number) => `/api/lists/${encodeURIComponent(key)}/filters${id === undefined ? "" : `/${id}`}`;
+
+export async function fetchSavedFilters(key: string, signal?: AbortSignal): Promise<SavedFilters> {
+  return (await send<SavedFilters>("GET", filtersUrl(key), undefined, signal))!;
+}
+
+/** Each of these answers with the saved filters as they now are. A refusal (a name already taken, a condition the list does not
+ *  accept) is an Error whose message is fit to show. */
+export async function saveSavedFilter(key: string, filter: { name: string; conditions: Condition[]; shared: boolean }): Promise<SavedFilters> {
+  return (await send<SavedFilters>("POST", filtersUrl(key), filter))!;
+}
+
+export async function changeSavedFilter(
+  key: string, id: number, change: { name?: string; conditions?: Condition[]; is_default?: boolean },
+): Promise<SavedFilters> {
+  return (await send<SavedFilters>("PUT", filtersUrl(key, id), change))!;
+}
+
+export async function deleteSavedFilter(key: string, id: number): Promise<SavedFilters> {
+  return (await send<SavedFilters>("DELETE", filtersUrl(key, id), undefined))!;
+}

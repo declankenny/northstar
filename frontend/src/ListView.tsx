@@ -2,10 +2,14 @@ import {
   createColumnHelper, rowPaginationFeature, rowSortingFeature, tableFeatures, useTable,
   type PaginationState, type SortingState,
 } from "@tanstack/react-table";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { fetchList, type ListColumn, type ListPage, type ListRow, saveListPageSize } from "./api";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type Choices, type Condition, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListPageSize,
+} from "./api";
+import { FilterDrawer } from "./FilterDrawer";
+import { describe, flatten } from "./listFilters";
 import { formatCell, isNumeric } from "./listFormat";
-import { listAddress, listRequest, parseListView, sortedBy, withPage, withSearch } from "./listState";
+import { listAddress, listRequest, parseListView, sortedBy, withFilters, withPage, withSearch } from "./listState";
 import { formatInteger } from "./locale";
 import { RowMenu, type MenuItem } from "./RowMenu";
 import { Link, navigate, replaceAddress, usePath, useSearch } from "./router";
@@ -18,11 +22,14 @@ export type ListConfig = {
   cell?: Record<string, (row: ListRow, page: ListPage) => ReactNode>;     // a column drawn its own way, by key
   actions?: (row: ListRow) => MenuItem[];                                  // a row's menu; an item can be disabled, with its reason
   rowLabel?: (row: ListRow) => string;                                     // what the row's menu button is called
+  title?: string;                                                          // what the list is called in its filter drawer
+  isAdmin?: boolean;                                                       // admins can save a filter for everyone
 };
 
 const features = tableFeatures({ rowSortingFeature, rowPaginationFeature });
 const helper = createColumnHelper<typeof features, ListRow>();
 const NO_ROWS: ListRow[] = [];
+const NO_CONDITIONS: Condition[] = [];
 const PAGE_SIZES = [10, 25, 50, 100];
 const SEARCH_DELAY = 300; // milliseconds after the last key before the server is asked
 
@@ -71,6 +78,10 @@ function cellContent(column: ListColumn, row: ListRow, page: ListPage, config: L
 
 /** One list, any list: the server does the sorting, searching and paging, and the address says which view this is. */
 export function ListView({ listKey, config = {} }: { listKey: string; config?: ListConfig }) {
+  const [drawer, setDrawer] = useState(false);
+  const opener = useRef<HTMLButtonElement>(null);
+  const [named, setNamed] = useState<Map<string, Choices>>(new Map()); // what a relation's records are called, for chips and the drawer
+  const asked = useRef(new Set<string>());
   const path = usePath();
   const address = useSearch();
   const view = useMemo(() => parseListView(address), [address]);
@@ -81,10 +92,26 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
 
   const { data: page, error, loading, reload } = useRequest(
     (signal) => fetchList(listKey, listRequest(view, size), signal),
-    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, size],
+    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, size, JSON.stringify(view.filters)],
   );
 
   const go = (next: typeof view) => { navigate(listAddress(path, next)); };
+
+  // The columns that can be filtered by: needed to say a filter in words and to build one.
+  const { data: tree, error: treeError } = useRequest((signal) => fetchListFields(listKey, signal), [listKey]);
+  const nodes = useMemo(() => new Map(flatten(tree).map((n) => [n.key, n])), [tree]);
+  const ensureChoices = useCallback((field: string) => {
+    const id = `${listKey}/${field}`;
+    if (asked.current.has(id)) return;
+    asked.current.add(id);
+    fetchListChoices(listKey, field).then(
+      (choices) => setNamed((before) => new Map(before).set(field, choices)),
+      () => asked.current.delete(id),
+    );
+  }, [listKey]);
+  useEffect(() => { asked.current = new Set(); setNamed(new Map()); }, [listKey]);
+  const applied: Condition[] = page?.filters ?? NO_CONDITIONS;
+  useEffect(() => { applied.forEach((c) => { if (nodes.get(c.field)?.choices === "records") ensureChoices(c.field); }); }, [applied, nodes, ensureChoices]);
 
   // The search box follows the address (Back, a link), and the address follows the box once typing pauses, without a history
   // entry for every letter. A change this page made itself is not copied back, which would undo what was typed in the meantime.
@@ -140,10 +167,30 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
       <div className="lf-bar">
         <input className="lf-search" aria-label="Search" placeholder="Search" value={text} maxLength={100}
           onChange={(e) => setText(e.target.value)} />
+        <button className="btn ghost small" ref={opener} disabled={!tree} aria-haspopup="dialog" onClick={() => setDrawer(true)}>
+          Filters{applied.length > 0 ? ` (${applied.length})` : ""}</button>
         <span className="grow" />
         {page && <span className="m lf-count">{formatInteger(page.total)} matching</span>}
       </div>
 
+      {applied.length > 0 && (
+        <div className="lf-chips" role="list" aria-label="Filters applied">
+          {applied.map((condition, i) => (
+            <span className="lf-chip" role="listitem" key={condition.field}>
+              {describe(nodes.get(condition.field), condition, named.get(condition.field))}
+              <button aria-label={`Remove the filter: ${describe(nodes.get(condition.field), condition, named.get(condition.field))}`}
+                onClick={() => go(withFilters(view, applied.filter((_, j) => j !== i)))}>✕</button>
+            </span>
+          ))}
+          <button className="link" onClick={() => go(withFilters(view, []))}>Clear filters</button>
+        </div>
+      )}
+      {page && page.skipped.length > 0 && (
+        <p className="notice warn" role="status">
+          {page.skipped.length === 1 ? "1 condition of your default filter was" : `${page.skipped.length} conditions of your default filter were`} left
+          out because the list does not offer {page.skipped.length === 1 ? "that column" : "those columns"} any more.</p>
+      )}
+      {treeError && <p className="notice bad" role="alert">Could not load the columns to filter by. {treeError}</p>}
       {error && (
         <p className="notice bad" role="alert">Could not load the list. {error}{" "}
           <button className="link" onClick={reload}>Try again</button></p>
@@ -153,8 +200,10 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
       {!page ? (
         !error && <p className="empty">Loading…</p>
       ) : page.total === 0 ? (
-        view.search !== "" ? (
-          <p className="empty">No rows match “{view.search}”. <button className="link" onClick={() => go(withSearch(view, ""))}>Clear the search</button></p>
+        view.search !== "" || applied.length > 0 ? (
+          <p className="empty">No rows match{view.search !== "" ? <> “{view.search}”</> : " the filters"}.{" "}
+            {view.search !== "" && <button className="link" onClick={() => go(withSearch(view, ""))}>Clear the search</button>}{" "}
+            {applied.length > 0 && <button className="link" onClick={() => go(withFilters(view, []))}>Clear the filters</button>}</p>
         ) : (
           <p className="empty">{config.emptyText ?? "There is nothing to show yet."}</p>
         )
@@ -219,6 +268,12 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
             </label>
           </div>
         </>
+      )}
+      {drawer && tree && (
+        <FilterDrawer listKey={listKey} title={config.title ?? "List"} tree={tree} applied={applied} openedWith={page?.default_filter_id ?? null}
+          isAdmin={config.isAdmin ?? false} choices={named} ensureChoices={ensureChoices}
+          onApply={(conditions) => { setDrawer(false); go(withFilters(view, conditions)); opener.current?.focus(); }}
+          onClose={() => { setDrawer(false); opener.current?.focus(); }} />
       )}
     </div>
   );
