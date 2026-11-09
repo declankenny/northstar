@@ -517,3 +517,12 @@ What only a list's own page can know is a small `ListConfig` beside the list's k
 
 Not decided here, and still open: whether to strip query strings from the access log, since the address now carries the view and a page load is logged with it.
 
+
+### A list offers a tree of columns made by the rules that check a request, and a filter's choices are what the list has (#186, step 3a)
+
+`GET /api/lists/{key}/fields` answers the tree of everything a person can show, sort or filter by: the list's own columns, and under each relation the columns of the record it points at. A relation is a column in its own right (it shows the display value of what it points at, and is filtered by a choice of those records) and a branch where its table has more to offer. The tree is made through the same `resolve` that checks a request, so it offers a key exactly when a request would accept it: nothing denied, nothing past the depth limit, no table twice in a path, no walking into a table that only shows its name, and the display column of a related record not repeated under the relation. Relations are sorted by label, because the database lists foreign keys in its own order, which a person should not be shown. Each node says its key, its label and the whole path of labels, its kind, its scale if it is a decimal held as a whole number, its operators with their labels (a Yes or No column offers "is empty" only when it can be), and whether it has choices to pick from. The columns drawer of a later step reads the same tree.
+
+`GET /api/lists/{key}/choices/{field}` answers what a filter on one column can pick from: the declared values of a choice, or, for a relation, the records that the list's own rows point at, each with its id, its display value and the table's tell-apart detail where it declares one. They are the list's records, not every record of the target table, so a filter never offers a deleted account (the list leaves its balances out) or an account that has no balance, and the list's own scope applies. They are in order without regard to case and then by id, at most 500, with `more` when there were others. Rejected: every row of the target table, which would offer deleted records and ones the list never shows. A list whose choices run past 500 would need a search as you type; no list does yet. A column that has nothing to pick from is a 422.
+
+Both are for any signed-in person, with the same 404 and 403 as the list itself.
+
