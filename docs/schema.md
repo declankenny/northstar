@@ -22,6 +22,8 @@ erDiagram
     users ||--o{ user_identities : "created_by, updated_by"
     users ||--o{ user_list_prefs : "user_id"
     users ||--o{ user_list_prefs : "created_by, updated_by"
+    users |o--o{ list_filters : "owner_id"
+    users ||--o{ list_filters : "created_by, updated_by"
     ref_property_data_types ||--o{ system_properties : "data_type_id"
     ref_locales ||--o{ users : "locale"
     system_properties ||--o{ ref_property_lookups : "property_id"
@@ -136,6 +138,18 @@ erDiagram
         text currency_position "prefix or suffix"
         text currency_code_spacing "text between a currency code and the number"
         text cldr_version "the CLDR version the row came from"
+    }
+    list_filters {
+        integer id PK
+        integer owner_id FK "the person it is private to, or empty when it is shared"
+        text list_key "which list, at most 100 characters"
+        text name "1 to 80 characters"
+        text conditions "the conditions as a JSON array, never SQL"
+        integer is_default "0 or 1"
+        text created_at "UTC"
+        integer created_by FK "who created it"
+        text updated_at "UTC"
+        integer updated_by FK "who last changed it"
     }
     user_list_prefs {
         integer id PK
@@ -275,6 +289,7 @@ A person checks these against the migrations, because the test cannot read them 
 | `system_properties` | `name` is lowercase dotted segments, at least two, each starting with a letter (a `CHECK`). `value` is null or 1 to 256 characters, and `hint` is 1 to 256. The rows are loaded by migrations: no endpoint adds or deletes one. |
 | `ref_property_lookups` | `UNIQUE (property_id, value)`. At most 20 rows per property, checked by a test. Deleting a property deletes its rows. |
 | `ref_property_validators` | `UNIQUE (property_id, validator)` and `UNIQUE (property_id, position)`. `validator` is a key of `VALIDATORS` in `northstar/system_properties.py`, checked by a test. Deleting a property deletes its rows. |
+| `list_filters` | `conditions` is valid JSON that is an array of at most 20,000 characters, `name` is 1 to 80 characters and `is_default` is 0 or 1 (`CHECK`s). The unique index `list_filters_name_unique` is on the owner (empty counting as 0), the list and the name ignoring ASCII case: a name is unique for one owner and list, and among the shared ones. The unique partial index `list_filters_one_default` is on the owner (empty counting as 0) and the list where `is_default = 1`: a person has at most one default for a list, and a list at most one shared default. Every logged field is logged, including who it belongs to. |
 | `user_list_prefs` | `UNIQUE (user_id, list_key)`: one row for each person and list. `page_size` is one of 10, 25, 50 and 100 (a `CHECK`). Only the row's creation is logged (`user_id`, `list_key` and who created it and when): the page size is not a logged field, so changing it leaves no operation, as for a theme. |
 | `user_identities` | `UNIQUE (issuer, subject)`: one binding per person at a provider. `UNIQUE (user_id, issuer)`: one binding per user per issuer, so a second subject is refused and never replaces the first. `issuer` is 1 to 256 characters and `subject` 1 to 255 (a `CHECK`). Triggers refuse deleting a row and changing `user_id`, `issuer` or `subject`. A user is only marked deleted, so a binding stays after the user is deleted. Logged fields: `user_id`, `issuer`, `subject` and who created it and when, never a token or a claim. |
 | `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. `auth_method` is `local` or `oidc` (a `CHECK`, `local` for every session that existed before 0.4) and `config_fingerprint` is a 64-character hash, set exactly when the method is `oidc` (the trigger `sys_sessions_method_and_fingerprint`, because a table check cannot be added to an existing table). |

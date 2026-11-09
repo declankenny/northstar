@@ -526,3 +526,14 @@ Not decided here, and still open: whether to strip query strings from the access
 
 Both are for any signed-in person, with the same 404 and 403 as the list itself.
 
+
+### Saved filters are one table, private or shared, with the defaults enforced by the database (#186, step 3b)
+
+`list_filters` (migration 0022) holds a name and the conditions of a filter for one list, as JSON that the list engine checks when it is saved and again when it is used. A person's own are private to them (`owner_id` set). A filter with no owner is shared: everyone who can see the list sees it, and only an admin makes, changes or removes it. Another person's private filter is not found, never forbidden, even to an admin, so its existence is not told; a shared one is forbidden (403, a new `NotAllowedError`) to anyone else.
+
+A person has at most one default filter for a list and a list at most one shared default. One partial unique index says both, because a shared filter's owner counts as 0, and so the database refuses a second even if the application is bypassed. Making a filter the default takes the mark from the one that had it in the same transaction, so a person never meets the refusal. A list opens with the person's own default, else the shared default, else no filter. A name is unique for one owner and list ignoring ASCII case, and among the shared ones; a private filter may have a shared filter's name. A person can keep at most 100 for one list. The conditions are never SQL, are at most 20,000 characters, and are stored compactly in the same form however they were sent.
+
+The default is applied by the list's own endpoint, and only when the request names no filters. A request that names filters, even an empty list, gets exactly those, so a person who cleared a filter stays cleared after a refresh and the default does not come back. The answer says which conditions were applied, which saved filter the list opened with, and which of its conditions were skipped. A condition that names a column the list no longer offers is skipped with its reason, never an error, so a list change cannot make a saved filter unusable; the saved filters themselves report these as `problems`, so a page can mark them.
+
+Every change is logged, the default mark included, because a shared filter is configuration that admins change; a private filter is the same table and so logged too. Rejected: a separate table for shared filters (the same columns, and the one-default rule is one index), and ids of saved filters in the page address (a copied link must mean only its conditions; see the list view's decision).
+

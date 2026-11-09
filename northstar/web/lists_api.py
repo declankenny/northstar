@@ -6,12 +6,13 @@ data that should not be in an address, an access log or a proxy's log. It change
 for admins is a 403 for anyone else, and a request that breaks a rule is a 422.
 """
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, StrictInt
 
-from northstar import list_prefs
+from northstar import list_filters, list_prefs
 from northstar.lists import loader
 from northstar.lists.query import choices as filter_choices, describe, run as run_list
 from northstar.lists.request import parse_request
@@ -45,6 +46,41 @@ class ListPage(BaseModel):
     page_size: int
     group: str | None
     sort: SortOut         # the sort applied: the request's, or the list's own when it named none, so a page can show it
+    filters: list[dict[str, Any]]    # the conditions applied: the request's, or the default filter's when it named none
+    skipped: list[SkippedOut]        # conditions of the default filter that no longer fit the list and were left out
+    default_filter_id: int | None    # the saved filter the list opened with, if the request named none
+
+
+class SkippedOut(BaseModel):
+    field: str | None
+    reason: str
+
+
+class SavedFilter(BaseModel):
+    id: int
+    name: str
+    shared: bool                   # for everyone who can see the list; only an admin changes it
+    is_default: bool               # opened with the list: this person's own, or the shared one
+    can_edit: bool                 # may this person rename it, replace it, make it the default or remove it
+    conditions: list[dict[str, Any]]
+    problems: list[SkippedOut]     # conditions that no longer fit the list: they are skipped when it is applied
+
+
+class SavedFilters(BaseModel):
+    filters: list[SavedFilter]     # the shared ones and this person's own, by name
+    default_id: int | None         # the one a list opens with for this person
+
+
+class NewFilter(BaseModel):
+    name: str
+    conditions: list[dict[str, Any]]
+    shared: bool = False
+
+
+class FilterChange(BaseModel):
+    name: str | None = None
+    conditions: list[dict[str, Any]] | None = None
+    is_default: bool | None = None
 
 
 class PageSize(BaseModel):
@@ -72,11 +108,77 @@ def query_list(key: str, request: Request, body: dict = Body(default_factory=dic
         data = dict(body)
         if "page_size" not in data:                 # the person's own choice, else the list's
             data["page_size"] = list_prefs.page_size(conn, user["id"], key, definition.page_size)
+        skipped, opened_with = [], None
+        if "filters" not in data:                   # no filter named: the person's default, else the shared one. An empty list is "none"
+            opened_with = list_filters.default_id(conn, user["id"], key)
+            if opened_with is not None:
+                data["filters"], skipped = list_filters.usable(catalog, definition, list_filters.get(conn, user["id"], key, opened_with)["conditions"])
         parsed = parse_request(catalog, definition, data)
         result = run_list(conn, catalog, definition, parsed, _roles(user))
         return {"columns": describe(catalog, definition, parsed.columns, _roles(user)), "rows": result.rows,
                 "total": result.total, "page": result.page, "pages": result.pages, "page_size": result.page_size,
-                "group": result.group, "sort": {"field": result.sort[0], "direction": result.sort[1]}}
+                "group": result.group, "sort": {"field": result.sort[0], "direction": result.sort[1]},
+                "filters": data.get("filters", []), "skipped": skipped, "default_filter_id": opened_with}
+
+    return run(request, action)
+
+
+def _saved(conn, catalog, definition, user) -> dict:
+    rows = []
+    for row in list_filters.visible(conn, user["id"], definition.key):
+        kept, skipped = list_filters.usable(catalog, definition, row["conditions"])
+        rows.append({"id": row["id"], "name": row["name"], "shared": row["owner_id"] is None, "is_default": bool(row["is_default"]),
+                     "can_edit": row["owner_id"] is not None or bool(user["is_admin"]), "conditions": json.loads(row["conditions"]),
+                     "problems": skipped})
+    return {"filters": rows, "default_id": list_filters.default_id(conn, user["id"], definition.key)}
+
+
+@router.get("/{key}/filters", response_model=SavedFilters)
+def saved_filters(key: str, request: Request):
+    """The saved filters of a list this person can see: the shared ones and their own."""
+    user = current_user(request)
+    definition = _definition(key, user)
+    return run(request, lambda conn: _saved(conn, household_catalog(conn), definition, user))
+
+
+@router.post("/{key}/filters", response_model=SavedFilters, status_code=201)
+def save_filter(key: str, body: NewFilter, request: Request):
+    """Save a filter, private or (for an admin) shared. Answers with the saved filters as they now are."""
+    user = current_user(request)
+    definition = _definition(key, user)
+
+    def action(conn):
+        catalog = household_catalog(conn)
+        list_filters.create(operation(request, conn), catalog, definition, body.name, body.conditions, shared=body.shared,
+                            is_admin=bool(user["is_admin"]))
+        return _saved(conn, catalog, definition, user)
+
+    return run(request, action)
+
+
+@router.put("/{key}/filters/{filter_id}", response_model=SavedFilters)
+def change_filter(key: str, filter_id: int, body: FilterChange, request: Request):
+    """Rename a filter, replace its conditions, or make it the default (only what the request names changes)."""
+    user = current_user(request)
+    definition = _definition(key, user)
+    given = body.model_dump(exclude_unset=True)
+
+    def action(conn):
+        catalog = household_catalog(conn)
+        list_filters.update(operation(request, conn), catalog, definition, filter_id, is_admin=bool(user["is_admin"]), **given)
+        return _saved(conn, catalog, definition, user)
+
+    return run(request, action)
+
+
+@router.delete("/{key}/filters/{filter_id}", response_model=SavedFilters)
+def remove_filter(key: str, filter_id: int, request: Request):
+    user = current_user(request)
+    definition = _definition(key, user)
+
+    def action(conn):
+        list_filters.delete(operation(request, conn), definition, filter_id, is_admin=bool(user["is_admin"]))
+        return _saved(conn, household_catalog(conn), definition, user)
 
     return run(request, action)
 

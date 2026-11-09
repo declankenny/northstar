@@ -261,3 +261,140 @@ def test_a_column_with_nothing_to_pick_from_or_that_is_not_one_is_a_422(client, 
     assert get(client, "balances_api_test/choices/amount_cents").status_code == 422
     assert get(client, "balances_api_test/choices/no_such_column").status_code == 422
     assert get(client, "balances_api_test/choices/account.created_by.email").status_code == 422
+
+
+# -- saved filters --
+
+TYPES = [{"field": "account.type", "operator": "is_any_of", "value": [1]}]
+SAVINGS = [{"field": "account", "operator": "is_any_of", "value": [1]}]
+
+
+def post_filter(client, key, name, conditions=TYPES, shared=False):
+    return client.post(f"/api/lists/{key}/filters", json={"name": name, "conditions": conditions, "shared": shared})
+
+
+def names(body):
+    return [f["name"] for f in body["filters"]]
+
+
+def savings_types(client):
+    """The condition "account type is Savings", with the id this database gave that type."""
+    with with_db(client) as conn:
+        savings = conn.execute("SELECT id FROM account_types WHERE name = 'Savings'").fetchone()[0]
+    return [{"field": "account.type", "operator": "is_any_of", "value": [savings]}]
+
+
+def test_saved_filters_follow_the_lists_access(anon_client, client, member_client, household):
+    assert anon_client.get("/api/lists/balances_api_test/filters").status_code == 401
+    assert anon_client.post("/api/lists/balances_api_test/filters", json={"name": "x", "conditions": []}).status_code == 401
+    assert client.get("/api/lists/no_such_list/filters").status_code == 404
+    assert member_client.get("/api/lists/currencies_api_test/filters").status_code == 403
+    assert post_filter(member_client, "currencies_api_test", "x", []).status_code == 403
+    assert client.get("/api/lists/balances_api_test/filters").json() == {"filters": [], "default_id": None}
+
+
+def test_a_person_saves_a_private_filter_and_only_they_see_it(client, member_client, household):
+    response = post_filter(member_client, "balances_api_test", "Savings")
+    assert response.status_code == 201
+    saved = response.json()["filters"][0]
+    assert (saved["name"], saved["shared"], saved["is_default"], saved["can_edit"], saved["conditions"], saved["problems"]) == (
+        "Savings", False, False, True, TYPES, [])
+    assert names(member_client.get("/api/lists/balances_api_test/filters").json()) == ["Savings"]
+    assert client.get("/api/lists/balances_api_test/filters").json()["filters"] == []             # not even an admin's
+
+
+def test_only_an_admin_saves_a_shared_filter_and_everyone_sees_it_but_cannot_change_it(client, member_client, household):
+    assert post_filter(member_client, "balances_api_test", "For all", shared=True).status_code == 403
+    assert post_filter(client, "balances_api_test", "For all", shared=True).status_code == 201
+    seen = member_client.get("/api/lists/balances_api_test/filters").json()["filters"]
+    assert [(f["name"], f["shared"], f["can_edit"]) for f in seen] == [("For all", True, False)]
+    filter_id = seen[0]["id"]
+    assert member_client.put(f"/api/lists/balances_api_test/filters/{filter_id}", json={"name": "Mine"}).status_code == 403
+    assert member_client.delete(f"/api/lists/balances_api_test/filters/{filter_id}").status_code == 403
+    assert client.get("/api/lists/balances_api_test/filters").json()["filters"][0]["can_edit"] is True
+
+
+def test_a_filter_is_renamed_replaced_defaulted_and_removed_and_each_answer_is_the_whole_set(client, household):
+    filter_id = post_filter(client, "balances_api_test", "First").json()["filters"][0]["id"]
+    url = f"/api/lists/balances_api_test/filters/{filter_id}"
+    assert names(client.put(url, json={"name": "Renamed"}).json()) == ["Renamed"]
+    assert client.put(url, json={"conditions": SAVINGS}).json()["filters"][0]["conditions"] == SAVINGS
+    body = client.put(url, json={"is_default": True}).json()
+    assert (body["default_id"], body["filters"][0]["is_default"], body["filters"][0]["name"]) == (filter_id, True, "Renamed")   # only what was named changed
+    body = client.put(url, json={"is_default": False}).json()
+    assert body["default_id"] is None
+    assert client.delete(url).json() == {"filters": [], "default_id": None}
+    assert client.delete(url).status_code == 404                                                  # already gone
+
+
+def test_someone_elses_private_filter_is_not_found(client, member_client, household):
+    filter_id = post_filter(member_client, "balances_api_test", "Hers").json()["filters"][0]["id"]
+    url = f"/api/lists/balances_api_test/filters/{filter_id}"
+    assert client.put(url, json={"name": "x"}).status_code == 404
+    assert client.delete(url).status_code == 404
+    assert member_client.put(f"/api/lists/accounts_api_test/filters/{filter_id}", json={"name": "x"}).status_code == 404   # nor in another list
+
+
+@pytest.mark.parametrize("body, message", [
+    ({"name": "", "conditions": TYPES}, "Give the filter a name"),
+    ({"name": "x", "conditions": [{"field": "nope", "operator": "equals", "value": 1}]}, "not a column"),
+    ({"name": "x", "conditions": "nope"}, None),
+    ({"name": "x"}, None),
+    ({"name": "x", "conditions": TYPES, "shared": "maybe"}, None),
+])
+def test_a_filter_that_breaks_a_rule_is_a_422(client, household, body, message):
+    response = client.post("/api/lists/balances_api_test/filters", json=body)
+    assert response.status_code == 422
+    if message:
+        assert message in response.json()["detail"]
+
+
+def test_a_name_already_taken_is_a_422_that_says_so(client, household):
+    post_filter(client, "balances_api_test", "Savings")
+    response = post_filter(client, "balances_api_test", "savings")
+    assert response.status_code == 422 and "already a filter called" in response.json()["detail"]
+
+
+def test_a_list_opens_with_the_default_filter_and_says_which(client, household):
+    plain = ask(client, "balances_api_test", {"page_size": 100}).json()
+    assert (plain["total"], plain["filters"], plain["skipped"], plain["default_filter_id"]) == (12, [], [], None)
+    types = savings_types(client)
+    saved = post_filter(client, "balances_api_test", "Savings", types).json()["filters"][0]
+    client.put(f"/api/lists/balances_api_test/filters/{saved['id']}", json={"is_default": True})
+    opened = ask(client, "balances_api_test", {"page_size": 100}).json()
+    assert (opened["total"], opened["filters"], opened["default_filter_id"]) == (8, types, saved["id"])      # savings accounts only
+    assert {r["account"] for r in opened["rows"]} == {"Test dollars", "Test euros"}
+
+
+def test_a_request_that_names_filters_even_none_gets_no_default(client, household):
+    saved = post_filter(client, "balances_api_test", "Savings", TYPES).json()["filters"][0]
+    client.put(f"/api/lists/balances_api_test/filters/{saved['id']}", json={"is_default": True})
+    cleared = ask(client, "balances_api_test", {"filters": [], "page_size": 100}).json()
+    assert (cleared["total"], cleared["filters"], cleared["default_filter_id"]) == (12, [], None)             # cleared stays cleared
+    other = ask(client, "balances_api_test", {"filters": [{"field": "account", "operator": "is_any_of", "value": [household["card"]]}]}).json()
+    assert other["total"] == 4 and other["default_filter_id"] is None
+
+
+def test_the_persons_own_default_wins_over_the_shared_one_and_the_shared_one_reaches_everyone(client, member_client, household):
+    shared = post_filter(client, "balances_api_test", "Everyone's", TYPES, shared=True).json()["filters"][0]["id"]
+    client.put(f"/api/lists/balances_api_test/filters/{shared}", json={"is_default": True})
+    assert ask(member_client, "balances_api_test").json()["default_filter_id"] == shared
+    own = post_filter(member_client, "balances_api_test", "Mine", SAVINGS).json()["filters"][0]["id"]
+    member_client.put(f"/api/lists/balances_api_test/filters/{own}", json={"is_default": True})
+    assert ask(member_client, "balances_api_test").json()["default_filter_id"] == own
+    assert ask(client, "balances_api_test").json()["default_filter_id"] == shared                  # the admin has no default of their own
+    assert member_client.get("/api/lists/balances_api_test/filters").json()["default_id"] == own
+
+
+def test_a_default_with_a_condition_the_list_no_longer_fits_is_applied_without_it_and_says_so(client, household):
+    import json
+    types = savings_types(client)
+    saved = post_filter(client, "balances_api_test", "Savings", types).json()["filters"][0]["id"]
+    with with_db(client) as conn:
+        stale = types + [{"field": "a_column_since_removed", "operator": "equals", "value": 1}]
+        conn.execute("UPDATE list_filters SET conditions = ?, is_default = 1 WHERE id = ?", (json.dumps(stale), saved))
+    opened = ask(client, "balances_api_test", {"page_size": 100}).json()
+    assert opened["filters"] == types and opened["total"] == 8
+    assert [s["field"] for s in opened["skipped"]] == ["a_column_since_removed"] and "not a column" in opened["skipped"][0]["reason"]
+    listed = client.get("/api/lists/balances_api_test/filters").json()["filters"][0]
+    assert [p["field"] for p in listed["problems"]] == ["a_column_since_removed"]                  # the picker can mark it

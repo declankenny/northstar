@@ -58,4 +58,5 @@ NOT_LISTABLE = {
     "system_properties": "the System properties page is a settings editor, not a list",
     "user_identities": "bindings to an identity provider are never shown as a list",
     "user_list_prefs": "a person's own choices for the lists are theirs alone and are never listed",
+    "list_filters": "saved filters are made and managed in a list's own filter drawer, never listed",
 }
