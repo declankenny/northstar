@@ -1,5 +1,5 @@
-"""Northstar's side of the list framework: its tables, and the conversion of an amount into the system currency. The lists named
-here exist only in these tests. Synthetic data only; the figures are worked out by hand."""
+"""Northstar's side of the list framework: its tables, and a balance's value in the system currency, which is a column of a view
+(live_balance_values). The lists named here exist only in these tests. Synthetic data only; the figures are worked out by hand."""
 
 from datetime import date
 
@@ -10,20 +10,18 @@ from northstar import accounts, currencies, rates, users
 from northstar.errors import ValidationError
 from northstar.lists.kinds import normalise
 from northstar.lists.listdef import ListDef, check
-from northstar.lists.query import ListContext, run
+from northstar.lists.query import run
 from northstar.lists.registry import Catalog, RegistryError
 from northstar.lists.request import parse_request
 from northstar.listdefs import catalog as northstar_catalog
-from northstar.listdefs import conversion
 from northstar.listdefs.tables import NOT_LISTABLE, TABLES
 
 TODAY = date(2026, 6, 3)
-CONTEXT = ListContext(today=TODAY)
 ASSET, LIABILITY = 1, 2
 
-BALANCES = ListDef("balances_for_tests", "balances",
+BALANCES = ListDef("balances_for_tests", "live_balance_values",
                    ("as_of_date", "account", "account.type", "amount_cents", "account.currency", "reporting_value", "note"),
-                   ("as_of_date", "desc"), source="live_balances")
+                   ("as_of_date", "desc"))
 ACCOUNTS = ListDef("accounts_for_tests", "accounts", ("name", "type", "type.class", "currency", "is_open"),
                    ("name", "asc"), source="live_accounts")
 USERS = ListDef("users_for_tests", "users", ("display_name", "email", "is_admin"), ("display_name", "asc"),
@@ -75,9 +73,9 @@ def household(conn):
     return ids
 
 
-def view(conn, data=None, definition=BALANCES, context=CONTEXT):
+def view(conn, data=None, definition=BALANCES):
     cat = northstar_catalog(conn)
-    return run(conn, cat, definition, parse_request(cat, definition, data), context)
+    return run(conn, cat, definition, parse_request(cat, definition, data))
 
 
 def everything(conn, data=None, definition=BALANCES):
@@ -95,8 +93,10 @@ def everything(conn, data=None, definition=BALANCES):
 def test_every_household_table_has_an_entry_or_says_why_it_is_not_listable(conn):
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")}
     household_tables = {t for t in tables if not t.startswith(("sys_", "ref_"))}
-    assert household_tables == set(TABLES) | set(NOT_LISTABLE), "a table was added or removed: decide whether it is a list"
-    assert not set(TABLES) & set(NOT_LISTABLE)
+    own = {name for name, table in TABLES.items() if table.based_on is None}
+    based_on = {table.based_on for table in TABLES.values() if table.based_on}           # a table covered by a view of it
+    assert household_tables == own | based_on | set(NOT_LISTABLE), "a table was added or removed: decide whether it is a list"
+    assert not (own | based_on) & set(NOT_LISTABLE)
     assert all(reason.strip() for reason in NOT_LISTABLE.values())
 
 
@@ -104,7 +104,7 @@ def test_the_registry_agrees_with_the_migrated_database_and_the_test_lists_are_v
     cat = northstar_catalog(conn)
     for definition in (BALANCES, ACCOUNTS, USERS):
         check(cat, definition)
-    assert set(cat.relations("balances")) == {"account", "created_by", "updated_by"}
+    assert set(cat.relations("live_balance_values")) == {"account", "created_by", "updated_by"}
     assert set(cat.relations("accounts")) == {"type", "currency", "created_by", "updated_by"}
     assert "class" not in cat.relations("accounts")                      # an account has no class of its own (#181)
     assert set(cat.relations("account_types")) == {"class", "created_by", "updated_by"}
@@ -117,9 +117,10 @@ def test_a_registry_that_forgets_a_table_a_foreign_key_points_at_is_refused(conn
 
 
 @pytest.mark.parametrize("table, key", [
-    ("balances", "version"), ("balances", "deleted"), ("accounts", "deleted"), ("users", "password_hash"), ("users", "is_system"),
-    ("balances", "created_by.password_hash"), ("balances", "created_by.email"), ("balances", "account.created_by.email"),
-    ("accounts", "id"), ("balances", "account_id"), ("balances", "account.currency_id"),
+    ("live_balance_values", "version"), ("live_balance_values", "deleted"), ("accounts", "deleted"), ("users", "password_hash"),
+    ("users", "is_system"), ("live_balance_values", "created_by.password_hash"), ("live_balance_values", "created_by.email"),
+    ("live_balance_values", "account.created_by.email"), ("accounts", "id"), ("live_balance_values", "account_id"),
+    ("live_balance_values", "account.currency_id"),
 ])
 def test_what_is_denied_or_not_offered_is_not_a_column_by_any_path(conn, table, key):
     with pytest.raises(ValidationError, match="not a column|only shows its name"):      # a person's other columns are not offered either
@@ -128,9 +129,9 @@ def test_what_is_denied_or_not_offered_is_not_a_column_by_any_path(conn, table, 
 
 def test_a_person_can_be_shown_by_name_but_not_entered_and_a_table_never_leads_back_to_itself(conn):
     cat = northstar_catalog(conn)
-    assert cat.resolve("balances", "created_by").column == "display_name"
+    assert cat.resolve("live_balance_values", "created_by").column == "display_name"
     with pytest.raises(ValidationError, match="only shows its name"):
-        cat.resolve("balances", "created_by.email")
+        cat.resolve("live_balance_values", "created_by.email")
     with pytest.raises(ValidationError, match="comes back to a table"):
         cat.resolve("users", "created_by")                                # who created a user, in the list of users
 
@@ -142,7 +143,7 @@ def test_every_offered_column_can_be_asked_for_from_the_table_that_has_it(conn, 
             assert cat.resolve(name, field)
 
 
-# -- Balances, as a list over live_balances --
+# -- Balances, as a list over the view live_balance_values --
 
 def test_every_balance_of_a_live_account_appears_once_and_a_deleted_accounts_does_not(conn, household):
     rows = everything(conn)
@@ -177,25 +178,40 @@ def test_a_balance_is_converted_with_the_latest_rate_on_or_before_its_own_date(c
         ("Test yen", "2026-02-28"): (7, "USD"),                   # 10 JPY x 0.0067 = 0.067 -> 7 cents
     }
     for (name, day), (cents, unit) in answers.items():
-        assert reporting(rows, name, day) == {"value": cents, "scale": 2, "unit": unit, "note": None}, (name, day)
+        assert reporting(rows, name, day) == {"value": cents, "scale": 2, "unit": unit}, (name, day)
 
 
-def test_a_balance_with_no_rate_on_or_before_its_date_has_no_value_and_says_which_currency(conn, household):
-    shown = reporting(everything(conn), "Test euros", "2026-02-15")
-    assert shown == {"value": None, "scale": 2, "unit": "USD", "note": "No EUR rate"}
+def test_a_balance_with_no_rate_on_or_before_its_date_has_no_value_not_zero_and_its_value_still_names_the_currency(conn, household):
+    row = next(r for r in everything(conn) if (r["account"], r["as_of_date"]) == ("Test euros", "2026-02-15"))
+    assert row["reporting_value"] is None                                  # empty, so it sorts last and an empty filter finds it
+    assert row["amount_cents"] == {"value": 50_000, "scale": 2, "unit": "EUR"}      # the page can write "No EUR rate" from this
 
 
-def test_the_conversion_is_the_one_in_networth(conn, household):
+def test_the_conversion_and_the_rate_are_the_ones_net_worth_uses(conn, household):
+    """account_days is net worth's own lookup of a balance and the rate on a day. On a balance's own date it holds that balance,
+    so converting it with networth.convert must give the view's figure, for every balance, rate or not."""
     from northstar import networth
-    row = next(r for r in everything(conn) if (r["account"], r["as_of_date"]) == ("Test euros", "2026-05-10"))
-    assert row["reporting_value"]["value"] == networth.convert(123_456, 2, "1.10", 2)
+    checked = 0
+    for row in conn.execute("SELECT id, account_id, as_of_date, amount_cents, reporting_value FROM live_balance_values"):
+        day = conn.execute("SELECT amount, rate, converts, minor_units FROM account_days WHERE account_id = ? AND day = ?",
+                           (row["account_id"], row["as_of_date"])).fetchone()
+        assert day["amount"] == row["amount_cents"]
+        if not day["converts"]:
+            expected = row["amount_cents"]
+        elif day["rate"] is None:
+            expected = None
+        else:
+            expected = networth.convert(day["amount"], day["minor_units"], day["rate"], 2)
+        assert row["reporting_value"] == expected, row["id"]
+        checked += 1
+    assert checked == 11
 
 
 def test_sorting_filtering_and_grouping_by_reporting_value_use_the_converted_figures(conn, household):
     rows = everything(conn, {"columns": ["account", "reporting_value"], "sort": {"field": "reporting_value", "direction": "desc"}})
     values = [r["reporting_value"]["value"] if r["reporting_value"] else None for r in rows]
     present = [v for v in values if v is not None]
-    assert present == sorted(present, reverse=True) and values[len(present):] == [None]            # the unconvertible one is last
+    assert present == sorted(present, reverse=True) and values[len(present):] == [None]            # the one with no rate is last
     value = lambda r: r["reporting_value"]["value"] if r["reporting_value"] else None
     big = everything(conn, {"columns": ["account"], "filters": [{"field": "reporting_value", "operator": "at_least", "value": "1000"}]})
     assert {r["_id"] for r in big} == {r["_id"] for r in rows if value(r) is not None and value(r) >= 100_000} and big
@@ -245,22 +261,23 @@ def test_grouping_balances_by_account_type_counts_each_group(conn, household):
     assert all(r["_group_count"] == sizes[r["_group"]] for r in rows) and set(sizes) == {"Checking", "Credit card", "Savings"}
 
 
-def test_nothing_is_converted_while_the_system_currency_is_not_set_and_the_note_says_so(conn, household):
+def test_nothing_is_converted_while_the_system_currency_is_not_set(conn, household):
     conn.execute("UPDATE system_properties SET value = NULL, read_only = 0 WHERE name = 'system.currency'")
-    rows = everything(conn, {"columns": ["account", "reporting_value"]})
-    assert {r["reporting_value"]["note"] for r in rows} == {"The system currency is not set"}
+    rows = everything(conn, {"columns": ["account", "amount_cents", "reporting_value"]})
+    assert rows and {r["reporting_value"] for r in rows} == {None}
+    assert all(r["amount_cents"] is not None for r in rows)
 
 
-def test_converting_on_today_uses_the_latest_rate_as_of_the_day_the_page_was_asked(conn, household):
-    compute = conversion.reporting_value(None)
-    row = {"amount_cents": 100_000, "account.currency.minor_units": 2, "account.currency": "EUR", "as_of_date": "ignored"}
-    [answer] = compute(conn, ListContext(today=date(2026, 6, 3)), [row])
-    assert answer.value == 110_000                                                       # 1,000.00 x 1.10
-    rate(conn, "EUR", "2026-06-01", "1.20")
-    [later] = compute(conn, ListContext(today=date(2026, 6, 3)), [row])
-    assert later.value == 120_000
-    [earlier] = compute(conn, ListContext(today=date(2026, 5, 20)), [row])
-    assert earlier.value == 110_000                                                      # a later rate is never used
+def test_a_rate_added_later_changes_the_figure_only_for_the_days_it_applies_to(conn, household):
+    add_balance(conn, household["eur"], "2026-05-13", 10_000)
+    conn.commit()
+    before = {(r["account"], r["as_of_date"]): r["reporting_value"] for r in everything(conn)}
+    assert before[("Test euros", "2026-05-13")]["value"] == 11_000                       # 100.00 x 1.10
+    rate(conn, "EUR", "2026-05-12", "1.20")
+    after = {(r["account"], r["as_of_date"]): r["reporting_value"] for r in everything(conn)}
+    assert {key for key in before if before[key] != after[key]} == {("Test euros", "2026-05-13")}
+    assert after[("Test euros", "2026-05-13")]["value"] == 12_000                        # the new rate, from its own day on
+    assert after[("Test euros", "2026-05-10")] == before[("Test euros", "2026-05-10")]    # a later rate is never used for an earlier day
 
 
 # -- Accounts and Users --

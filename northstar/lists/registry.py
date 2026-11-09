@@ -41,6 +41,7 @@ class TableDef:
     denied: frozenset[str] = frozenset()            # never offered, searched, filtered or exported
     labels: Mapping[str, str] = field(default_factory=dict)      # relation name -> label, where the default is wrong
     record_page: str | None = None                  # the route of the table's own page, if it has one
+    based_on: str | None = None                     # for a view: the table it has one row for each row of
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,7 @@ class Catalog:
         self.excluded = frozenset(excluded)
         self.primary_key: dict[str, str] = {}
         self.columns: dict[str, set[str]] = {}
+        self.owners: dict[str, str] = {}              # the table whose keys an entry uses: itself, or the one a view is based on
         self._relations: dict[str, dict[str, Relation]] = {}
         problems: list[str] = []
         columns_of: dict[str, dict] = {}
@@ -94,13 +96,21 @@ class Catalog:
                 continue
             columns = conn.execute(f'PRAGMA table_info("{name}")').fetchall()
             if not columns:
-                problems.append(f"{name}: there is no such table")
+                problems.append(f"{name}: there is no such table or view")
                 continue
-            keys = [c["name"] for c in columns if c["pk"]]
+            owner = table.based_on or name          # a view takes its key and its relations from the table it is based on
+            if table.based_on is not None and not _IDENTIFIER.match(owner):
+                problems.append(f"{name}: not a plain table name")
+                continue
+            keys = [c["name"] for c in conn.execute(f'PRAGMA table_info("{owner}")').fetchall() if c["pk"]]
             if len(keys) != 1:
-                problems.append(f"{name}: needs a single-column primary key")
+                problems.append(f"{owner}: needs a single-column primary key")
+                continue
+            if table.based_on is not None and keys[0] not in {c["name"] for c in columns}:
+                problems.append(f"{name}: the view does not have {owner}'s key {keys[0]}")
                 continue
             self.primary_key[name] = keys[0]
+            self.owners[name] = owner
             columns_of[name] = {c["name"]: c for c in columns}
             self.columns[name] = set(columns_of[name])
             problems += self._check_table(table, self.columns[name])
@@ -129,11 +139,6 @@ class Catalog:
                             problems.append(f"{table.name}.{name}: {last} has no column {path[-1]}")
                     except ValidationError as error:
                         problems.append(f"{table.name}.{name}: {error}")
-            for key in getattr(kind, "inputs", ()):
-                try:
-                    self.resolve(table.name, key)
-                except ValidationError as error:
-                    problems.append(f"{table.name}.{name}: input {error}")
         return problems
 
     def follow(self, table: str, keys) -> tuple[Relation, ...]:
@@ -150,8 +155,6 @@ class Catalog:
     def _check_table(self, table: TableDef, names: set[str]) -> list[str]:
         problems = []
         for column in (*table.fields, *table.denied):
-            if column in table.fields and table.fields[column].kind.virtual:
-                continue                            # worked out, so there is no column to find
             if not _IDENTIFIER.match(column) or column not in names:
                 problems.append(f"{table.name}.{column}: there is no such column")
         for column in table.denied & set(table.fields):
@@ -163,7 +166,9 @@ class Catalog:
         return problems
 
     def _read_relations(self, conn, table: str, columns: dict) -> dict[str, Relation]:
-        rows = conn.execute(f'PRAGMA foreign_key_list("{table}")').fetchall()
+        owner = self.owners[table]
+        owner_columns = {c["name"]: c for c in conn.execute(f'PRAGMA table_info("{owner}")').fetchall()}
+        rows = conn.execute(f'PRAGMA foreign_key_list("{owner}")').fetchall()
         by_id: dict[int, list] = {}
         for row in rows:
             by_id.setdefault(row["id"], []).append(row)
@@ -173,6 +178,8 @@ class Catalog:
                 continue
             row = parts[0]
             column, target = row["from"], row["table"]
+            if column not in columns:               # a view that leaves a column out leaves its relation out
+                continue
             if column in self.tables[table].denied or not _IDENTIFIER.match(column) or not _IDENTIFIER.match(target):
                 continue
             if target in self.excluded:
@@ -183,7 +190,7 @@ class Catalog:
             if key in self.tables[table].fields or key in relations:
                 raise RegistryError(f"{table}: the relation {key} clashes with another column or relation")
             relations[key] = Relation(key, table, column, target, self.primary_key.get(target, ""),
-                                      not columns[column]["notnull"])
+                                      not owner_columns[column]["notnull"])
         return relations
 
     def relations(self, table: str) -> dict[str, Relation]:
@@ -215,8 +222,6 @@ class Catalog:
         definition = self.tables[current].fields.get(last)
         if definition is None:
             raise ValidationError(f"“{key}” is not a column of this list.")
-        if definition.kind.virtual and path:
-            raise ValidationError(f"“{key}” is worked out for a list of its own table only.")
         return Resolved(key, tuple(path), current, last, definition.kind, None,
                         (*labels, definition.label or humanize(last)))
 

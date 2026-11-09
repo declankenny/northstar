@@ -20,9 +20,9 @@ import calendar
 import json
 import sqlite3
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal, localcontext
 
 from northstar import accounts, currencies, locales
+from northstar.conversion import convert      # the one place the arithmetic is written; net worth calls it by this name
 from northstar.errors import ValidationError
 
 ASSET = "Asset"
@@ -41,16 +41,6 @@ class NoRate(ValidationError):
     @property
     def details(self) -> dict:
         return {"missing_rates": self.codes}
-
-
-def convert(amount: int, minor_units: int, rate: str, system_minor_units: int) -> int:
-    """An amount in the minor units of a currency with `minor_units` decimal places, converted at `rate` (the exact decimal text:
-    1 unit of that currency = `rate` units of the system currency) into minor units of the system currency, rounded half away
-    from zero. Exact decimal arithmetic, never floating point."""
-    with localcontext() as context:
-        context.prec = 80
-        value = Decimal(amount) * Decimal(rate) * Decimal(10) ** (system_minor_units - minor_units)
-        return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
 def _last_day(conn: sqlite3.Connection) -> str | None:

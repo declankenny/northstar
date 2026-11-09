@@ -13,6 +13,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 ### Breaking
 
 - Migration: `0019_account_class_from_type` rebuilds `accounts` without `class_id` and `account_types` without its `UNIQUE (id, class_id)`, recreates the views over them, adds the trigger `account_types_class_fixed_while_used` and keeps both tables' id counters. A checked backup is made first.
+- Migration: `0020_live_balance_values` adds a view of each live balance with its value in the system currency, for the list framework. It calls a SQL function that the application registers on every connection it opens, so the view can only be read through the application: opening the database file in the `sqlite3` shell cannot read that one view, while backups and checks are unaffected.
 - Environment variables: nothing.
 - Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
 

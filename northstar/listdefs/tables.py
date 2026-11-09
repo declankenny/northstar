@@ -7,14 +7,14 @@ are never lists.
 A column that is not offered here is not a column of any list. The deleted flag, the system flag and the password hash are not
 offered, and are also named as denied so that offering one by mistake fails a test.
 
-A list that reads a view that leaves out deleted rows (`live_accounts`, `live_balances`) sets it as its source. A relation to
+A list that reads a view that leaves out deleted rows (`live_accounts`) sets it as its source, and a column that has to be worked out
+is a column of a view that has an entry of its own and is based on the table (`live_balance_values`). A relation to
 `accounts` or `account_types` from another table goes to the table itself, so a list must start from a source that already
 excludes what should not be seen.
 """
 
-from northstar.lists.kinds import Date, Integer, ScaledBy, Text, Timestamp, YesNo, Computed
+from northstar.lists.kinds import Date, Integer, ScaledBy, Text, Timestamp, YesNo
 from northstar.lists.registry import FieldDef, TableDef
-from northstar.listdefs import conversion
 
 
 def _text(searchable=False, label=None):
@@ -33,15 +33,16 @@ TABLES = {
     "accounts": TableDef("accounts", "name", {
         "name": _text(True), "is_open": FieldDef(YesNo(), label="Open"), "notes": _text(True), **_audit()},
         denied=frozenset({"deleted"})),
-    "balances": TableDef("balances", "as_of_date", {
+    # The balances of live accounts, each with its value in the system currency (migration 0020). It is a view of `balances`, so
+    # it has that table's key and relations, and the covering test counts it for that table.
+    "live_balance_values": TableDef("live_balance_values", "as_of_date", {
         "as_of_date": FieldDef(Date(), label="Date"),
         "amount_cents": FieldDef(ScaledBy(scale_from=("account", "currency", "minor_units"),
                                           unit_from=("account", "currency", "code")), label="Value"),
-        "reporting_value": FieldDef(Computed(
-            inputs=("amount_cents", "account.currency.minor_units", "account.currency", "as_of_date"),
-            compute=conversion.reporting_value("as_of_date")), label="Reporting value"),
+        "reporting_value": FieldDef(ScaledBy(scale_from=("reporting_scale",), unit_from=("reporting_unit",)),
+                                    label="Reporting value"),
         "note": _text(True), "source": _text(), **_audit()},
-        denied=frozenset({"version"})),
+        denied=frozenset({"version"}), based_on="balances"),
     "currencies": TableDef("currencies", "code", {
         "code": _text(), "name": _text(True), "minor_units": FieldDef(Integer(), label="Decimal places"),
         "is_enabled": FieldDef(YesNo(), label="Enabled"), "rates_start": FieldDef(Date(), label="Rates start"), **_audit()}),

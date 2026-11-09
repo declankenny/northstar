@@ -15,11 +15,11 @@ USD = "(SELECT id FROM currencies WHERE code = 'USD')"
 
 @pytest.fixture
 def before(tmp_path):
-    """A database with every migration but 0019, and what it holds: (path, accounts as {id: (name, class, type, deleted)})."""
+    """A database with every migration but 0019 and what came after it, and what it holds: (path, accounts as {id: (name, class, type, deleted)})."""
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith("0019"):
+        if not file.name.startswith(("0019", "0020")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -49,7 +49,7 @@ def before(tmp_path):
 
 def test_the_upgrade_drops_the_class_and_keeps_every_account_in_its_class(before):
     path, held, days_before, _ = before
-    assert db.upgrade(path) == ["0019_account_class_from_type"]
+    assert db.upgrade(path) == ["0019_account_class_from_type", "0020_live_balance_values"]
     conn = db.connect(path)
     assert "class_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(accounts)")}
     after = {r["id"]: tuple(r)[1:] for r in conn.execute(
@@ -66,7 +66,7 @@ def test_the_views_and_net_worth_calendar_come_back_the_same(before):
     db.upgrade(path)
     conn = db.connect(path)
     assert {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'view'")} == {
-        "live_accounts", "live_balances", "account_days"}
+        "live_accounts", "live_balances", "account_days", "live_balance_values"}
     assert [tuple(r) for r in conn.execute("SELECT DISTINCT account_id, class_name FROM account_days ORDER BY account_id")] == days_before
     assert conn.execute("SELECT COUNT(*) FROM live_accounts").fetchone()[0] == 3         # the deleted one is still out of sight
     assert conn.execute("SELECT COUNT(*) FROM live_balances").fetchone()[0] == 3

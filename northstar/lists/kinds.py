@@ -40,7 +40,6 @@ class Kind:
     operators: tuple[str, ...] = ()
     sorts_without_case = False          # text sorts and compares ignoring ASCII case, as everywhere in Northstar
     uses_date_part = False              # compares the first ten characters (a UTC timestamp's date)
-    virtual = False                     # true for a column that is worked out, not stored
 
     # How the engine reads and shows a column of this kind. The defaults read the column itself.
 
@@ -351,36 +350,3 @@ class ScaledBy(Quantity):
         amount, scale = view.plain(resolved), self._scale_sql(view, resolved)
         steps = " ".join(f"WHEN {n} THEN {10 ** (COMMON_SCALE - n)}" for n in range(COMMON_SCALE + 1))
         return f"({amount} * CASE {scale} {steps} END)"
-
-
-@dataclass(frozen=True)
-class Answer:
-    """What a computed column works out for one row. `value` is an integer with `scale` decimal places, or None when it cannot
-    be worked out, and `note` then says why. `unit` is carried for the page to show."""
-
-    value: int | None
-    scale: int = 0
-    unit: str | None = None
-    note: str | None = None
-
-
-@dataclass(frozen=True)
-class Computed(Quantity):
-    """A column whose values come from a function the definition supplies, not from the database. It names the columns it
-    needs (`inputs`, keys like any other) and `compute(conn, context, rows)` returns one Answer for each row, in order, where
-    a row is a dict of those inputs. The engine works out the values for every row the list could show only when a request
-    sorts, groups or filters by the column, and otherwise only for the rows of the page."""
-
-    inputs: tuple[str, ...] = ()
-    compute: object = None
-    virtual = True
-
-    def select(self, view, resolved):
-        return view.computed_columns(resolved)
-
-    def shape(self, values):
-        value, scale, unit, note = values
-        return {"value": value, "scale": scale, "unit": unit, "note": note} if (value is not None or note) else None
-
-    def compare(self, view, resolved):
-        return view.computed_compare(resolved)

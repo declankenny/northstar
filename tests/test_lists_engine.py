@@ -1,7 +1,6 @@
 """The list engine, on a schema that is not Northstar's (see lists_schema.py)."""
 
 import sqlite3
-from datetime import date
 
 import pytest
 
@@ -9,13 +8,10 @@ from lists_schema import STATUSES, TABLES, TICKETS, build, catalog
 from northstar.errors import NotFoundError, ValidationError
 from northstar.lists import loader, registry
 from northstar.lists.listdef import ListDef, check
-from northstar.lists.query import ListContext, run
+from northstar.lists.query import run
 from northstar.lists.registry import Catalog, FieldDef, RegistryError, TableDef
 from northstar.lists.kinds import Text
 from northstar.lists.request import parse_request
-
-
-CONTEXT = ListContext(today=date(2026, 6, 15))
 
 
 @pytest.fixture(scope="module")
@@ -29,7 +25,7 @@ def cat(conn):
 
 
 def view(conn, cat, data=None, definition=TICKETS):
-    return run(conn, cat, definition, parse_request(cat, definition, data), CONTEXT)
+    return run(conn, cat, definition, parse_request(cat, definition, data))
 
 
 def everything(conn, cat, data=None, definition=TICKETS):
