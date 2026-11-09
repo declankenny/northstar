@@ -32,7 +32,7 @@ TABLES = {
         "name": _text(True), "stale_after_days": FieldDef(Integer(), label="Stale after (days)"), **_audit()}),
     "accounts": TableDef("accounts", "name", {
         "name": _text(True), "is_open": FieldDef(YesNo(), label="Open"), "notes": _text(True), **_audit()},
-        denied=frozenset({"deleted"})),
+        denied=frozenset({"deleted"}), record_page="/accounts/{id}"),
     # The balances of live accounts, each with its value in the system currency (migration 0020). It is a view of `balances`, so
     # it has that table's key and relations, and the covering test counts it for that table.
     "live_balance_values": TableDef("live_balance_values", "as_of_date", {
@@ -45,7 +45,8 @@ TABLES = {
         denied=frozenset({"version"}), based_on="balances"),
     "currencies": TableDef("currencies", "code", {
         "code": _text(), "name": _text(True), "minor_units": FieldDef(Integer(), label="Decimal places"),
-        "is_enabled": FieldDef(YesNo(), label="Enabled"), "rates_start": FieldDef(Date(), label="Rates start"), **_audit()}),
+        "is_enabled": FieldDef(YesNo(), label="Enabled"), "rates_start": FieldDef(Date(), label="Rates start"), **_audit()},
+        record_page="/currencies/{value}", record_page_for="admin"),      # a currency's page is for admins
     # Users show their name and can be walked into by no other table: a person's email is not offered from a relation.
     "users": TableDef("users", "display_name", {
         "display_name": _text(True, "Name"), "email": _text(True), "is_admin": FieldDef(YesNo(), label="Admin"), **_audit()},
@@ -56,4 +57,5 @@ NOT_LISTABLE = {
     "exchange_rates": "a currency's rates are listed on its own page, which has not moved onto the list framework",
     "system_properties": "the System properties page is a settings editor, not a list",
     "user_identities": "bindings to an identity provider are never shown as a list",
+    "user_list_prefs": "a person's own choices for the lists are theirs alone and are never listed",
 }

@@ -71,12 +71,12 @@ TABLES = {
     "unit": TableDef("unit", "name", {"name": _text()}),
     "team": TableDef("team", "name", {"name": _text()}),
     "person": TableDef("person", "name", {"name": _text(True), "email": _text()}, tell_apart="email",
-                       denied=frozenset({"secret"})),
+                       denied=frozenset({"secret"}), record_page="/people/{id}", record_page_for="staff"),
     "region": TableDef("region", "name", {"name": _text()}),
     "area": TableDef("area", "name", {"name": _text()}),
-    "site": TableDef("site", "name", {"name": _text(True)}),
+    "site": TableDef("site", "name", {"name": _text(True)}, record_page="/sites/{id}"),
     "family": TableDef("family", "name", {"name": _text()}),
-    "kind": TableDef("kind", "name", {"name": _text()}),
+    "kind": TableDef("kind", "name", {"name": _text()}, record_page="/kinds/{value}"),
     "measure": TableDef("measure", "symbol", {"symbol": _text(), "decimals": FieldDef(Integer())}),
     # a view with a column that is worked out: its key and its relations are those of the table it is based on
     "reading_values": TableDef("reading_values", "label", {
@@ -90,7 +90,7 @@ TABLES = {
         "score_x100": FieldDef(Scaled(2), label="Score"), "weight": FieldDef(Number()),
         "items": FieldDef(Integer()), "passed": FieldDef(YesNo(nullable=True)), "flagged": FieldDef(YesNo()),
         "status": FieldDef(Category(STATUSES)),
-    }, denied=frozenset({"deleted_at"}), labels={"assignee": "Assigned to"}),
+    }, denied=frozenset({"deleted_at"}), labels={"assignee": "Assigned to"}, record_page="/tickets/{id}"),
 }
 
 READINGS = ListDef("readings", "reading_values", ("label", "taken_on", "amount", "worked"), ("taken_on", "desc"))

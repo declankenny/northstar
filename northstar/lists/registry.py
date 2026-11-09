@@ -40,7 +40,8 @@ class TableDef:
     walkable: bool = True                           # may a person expand into this table's other columns?
     denied: frozenset[str] = frozenset()            # never offered, searched, filtered or exported
     labels: Mapping[str, str] = field(default_factory=dict)      # relation name -> label, where the default is wrong
-    record_page: str | None = None                  # the route of the table's own page, if it has one
+    record_page: str | None = None                  # the route of the table's own page, if it has one: "/accounts/{id}" or "/currencies/{value}"
+    record_page_for: str | None = None              # who may open it: a role the viewer must have, or None for everyone
     based_on: str | None = None                     # for a view: the table it has one row for each row of
 
 
