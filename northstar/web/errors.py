@@ -1,6 +1,6 @@
 """The one place a broken rule becomes an HTTP response, so a route never catches these errors itself.
 
-The status comes from the error's type, never from its message: 404 for NotFoundError, 409 for StaleImport (what was
+The status comes from the error's type, never from its message: 403 for NotAllowedError, 404 for NotFoundError, 409 for StaleImport (what was
 reviewed has changed, so review again), UndoBlocked (the import cannot be undone as things now are) and
 ConflictingEdit (a balance changed since the person opened it) and LocaleChanged (their number and date format changed since
 the form was opened), 422 for every other ValidationError. The body is {"detail": message} plus whatever the error lists in `details`.
@@ -13,12 +13,12 @@ from northstar.balance_import import StaleImport
 from northstar.balances import ConflictingEdit
 from northstar.import_register import UndoBlocked
 from northstar.locales import LocaleChanged
-from northstar.errors import NotFoundError, ValidationError
+from northstar.errors import NotAllowedError, NotFoundError, ValidationError
 from northstar.setup import SetupClosed, SetupSessionEnded
 
 # The most specific class in the error's type chain wins, and ValidationError is in every chain, so every error has a status.
 # SetupClosed is a 409 (setup is over) and SetupSessionEnded a 401 (the setup page asks for the token again; it is not a sign-in).
-STATUS = {NotFoundError: 404, StaleImport: 409, UndoBlocked: 409, ConflictingEdit: 409, LocaleChanged: 409,
+STATUS = {NotAllowedError: 403, NotFoundError: 404, StaleImport: 409, UndoBlocked: 409, ConflictingEdit: 409, LocaleChanged: 409,
           SetupClosed: 409, SetupSessionEnded: 401, ValidationError: 422}
 
 

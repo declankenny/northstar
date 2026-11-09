@@ -9,3 +9,7 @@ class ValidationError(ValueError):
 
 class NotFoundError(ValidationError):
     """The thing asked for does not exist (or no longer does)."""
+
+
+class NotAllowedError(ValidationError):
+    """The person is signed in but may not do this (a filter for everyone is for admins)."""
