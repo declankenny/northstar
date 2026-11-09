@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The router keeps its state in the module, so each test loads a fresh copy and sets up the browser's history first.
@@ -92,5 +92,38 @@ describe("navigate", () => {
     expect(window.history.state).toEqual({ idx: 1 });
     router.navigate("/c");
     expect(window.history.state).toEqual({ idx: 2 });
+  });
+});
+
+describe("the address's query string", () => {
+  it("useSearch follows the query string through navigate and Back", async () => {
+    const router = await load("/balances");
+    const { result } = renderHook(() => router.useSearch());
+    expect(result.current).toBe("");
+    act(() => { router.navigate("/balances?sort=-account"); });
+    expect(result.current).toBe("?sort=-account");
+    act(() => { router.navigate("/balances?sort=-account&page=2"); });
+    expect(result.current).toBe("?sort=-account&page=2");
+    act(() => { window.history.back(); });
+    await vi.waitFor(() => expect(result.current).toBe("?sort=-account"));
+  });
+
+  it("replaceAddress changes the address without adding a history entry, and says so to the page", async () => {
+    const router = await load("/balances");
+    const { result } = renderHook(() => ({ search: router.useSearch(), path: router.usePath() }));
+    const entry = () => (window.history.state as { idx: number }).idx;
+    const before = entry();
+    act(() => router.replaceAddress("/balances?q=av"));
+    expect(result.current).toEqual({ search: "?q=av", path: "/balances" });
+    act(() => router.replaceAddress("/balances?q=ave"));
+    expect(result.current.search).toBe("?q=ave");
+    expect(entry()).toBe(before);                                                 // still the same entry, so Back leaves the page
+  });
+
+  it("replaceAddress to the address it is already at changes nothing", async () => {
+    const router = await load("/balances?q=av");
+    const replace = vi.spyOn(window.history, "replaceState");
+    router.replaceAddress("/balances?q=av");
+    expect(replace).not.toHaveBeenCalled();
   });
 });

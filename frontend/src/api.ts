@@ -633,3 +633,40 @@ export async function addRate(code: string, rate: { date: string; rate: string }
 export async function correctRate(code: string, id: number, rate: string): Promise<CurrencyPageData> {
   return (await send<CurrencyPageData>("PUT", `/api/currencies/${code}/rates/${id}`, { rate, locale: getLocale().tag }))!;
 }
+
+// -- lists: every list is read the same way, from POST /api/lists/{key} --
+
+/** What a column holds, so the page can draw and align it: a stored whole number with a scale (`decimal`), an amount whose scale
+ *  and unit are in the row (`amount`), a UTC timestamp shown as its date, and so on. */
+export type ListColumn = {
+  key: string; label: string; path_label: string; linked: boolean;
+  kind: "text" | "integer" | "number" | "decimal" | "date" | "timestamp" | "yes_no" | "choice" | "amount";
+  scale: number | null;
+};
+
+/** One row: its values by column key, `_id`, and the route each linked column opens. An amount is {value, scale, unit}, or null. */
+export type ListRow = { _id: number; _links: Record<string, string>; [key: string]: unknown };
+
+export type ListPage = {
+  columns: ListColumn[]; rows: ListRow[];
+  total: number; page: number; pages: number; page_size: number; // total counts every matching row, not this page
+  group: string | null;
+  sort: { field: string; direction: "asc" | "desc" }; // the sort applied: the one asked for, or the list's own
+};
+
+/** What a view of a list asks for. Anything left out is the list's own default. */
+export type ListRequest = {
+  columns?: string[]; search?: string; page?: number; page_size?: number; group?: string | null;
+  sort?: { field: string; direction: "asc" | "desc" } | null;
+};
+
+export async function fetchList(key: string, request: ListRequest, signal?: AbortSignal): Promise<ListPage> {
+  const { sort, ...rest } = request;
+  return (await send<ListPage>("POST", `/api/lists/${encodeURIComponent(key)}`, sort ? { ...rest, sort } : rest, signal))!;
+}
+
+/** Remember how many rows a page of this list shows, for this person. */
+export async function saveListPageSize(key: string, pageSize: number): Promise<number> {
+  return (await send<{ page_size: number }>("PUT", `/api/lists/${encodeURIComponent(key)}/page-size`, { page_size: pageSize }))!.page_size;
+}
+

@@ -436,3 +436,29 @@ a.btn { display: inline-block; text-decoration: none; }
 .reads.ok { color: var(--pos); }
 .reads.bad { color: var(--neg); }
 .ub-in.code input { padding-left: 46px; }
+
+/* The list view (ListView.tsx): the same toolbar, sortable table and footer for every list. Uses the app's own tokens and .gcard. */
+.lf { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.lf-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 20px; }
+.lf-bar .grow, .lf-foot .grow { flex: 1; }
+.lf-search { font: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 9px; padding: 8px 12px; width: 240px; max-width: 100%; }
+.lf-search:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.lf-count { font-size: 13px; }
+.lf-card { margin-top: 14px; flex: 1; min-height: 0; overflow: auto; }
+.lf-table { min-width: 640px; table-layout: auto; }
+.lf-table.lf-busy { opacity: .6; }
+.lf-table th { position: relative; white-space: nowrap; }
+.lf-table a.name { color: var(--text); font-weight: 560; text-decoration: none; }
+.lf-table a.name:hover { text-decoration: underline; }
+.th-btn { background: none; border: 0; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; padding: 0; }
+.th-btn:hover { color: var(--text); }
+.th-btn:focus-visible, .th-menu:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.sort { color: var(--accent); margin-left: 4px; font-size: 10px; }
+.th-menu { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 0 0 6px; font-size: 10px; opacity: .6; }
+.lf-table th:hover .th-menu, .th-menu.on { opacity: 1; }
+.lf-table th .menu { top: 34px; right: auto; left: 0; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); z-index: 8; width: 180px; font-weight: 400; }
+.lf-table th.r .menu { left: auto; right: 0; }
+.lf-foot { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px 0 0; color: var(--muted); font-size: 13px; }
+.lf-foot select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; }
+.lf-foot button:disabled { opacity: .45; cursor: default; }

@@ -1,0 +1,225 @@
+import {
+  createColumnHelper, rowPaginationFeature, rowSortingFeature, tableFeatures, useTable,
+  type PaginationState, type SortingState,
+} from "@tanstack/react-table";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { fetchList, type ListColumn, type ListPage, type ListRow, saveListPageSize } from "./api";
+import { formatCell, isNumeric } from "./listFormat";
+import { listAddress, listRequest, parseListView, sortedBy, withPage, withSearch } from "./listState";
+import { formatInteger } from "./locale";
+import { RowMenu, type MenuItem } from "./RowMenu";
+import { Link, navigate, replaceAddress, usePath, useSearch } from "./router";
+import { useRequest } from "./useRequest";
+
+// What a list needs that only its own page knows. A list is data on the server; this is the little that cannot be: how a cell is
+// drawn when the default is not enough, and what a row's menu does (its dialogs are React).
+export type ListConfig = {
+  emptyText?: string;                                                      // what an empty list says, before anything is added
+  cell?: Record<string, (row: ListRow, page: ListPage) => ReactNode>;     // a column drawn its own way, by key
+  actions?: (row: ListRow) => MenuItem[];                                  // a row's menu; an item can be disabled, with its reason
+  rowLabel?: (row: ListRow) => string;                                     // what the row's menu button is called
+};
+
+const features = tableFeatures({ rowSortingFeature, rowPaginationFeature });
+const helper = createColumnHelper<typeof features, ListRow>();
+const NO_ROWS: ListRow[] = [];
+const PAGE_SIZES = [10, 25, 50, 100];
+const SEARCH_DELAY = 300; // milliseconds after the last key before the server is asked
+
+/** The same array while the columns are the same ones, so a new answer to the same question does not rebuild the table. */
+function useSameColumns(next: ListColumn[] | undefined): ListColumn[] {
+  const kept = useRef<ListColumn[]>([]);
+  const same = next && next.length === kept.current.length
+    && next.every((column, i) => column.key === kept.current[i].key && column.label === kept.current[i].label);
+  if (next && !same) kept.current = next;
+  return kept.current;
+}
+
+/** The column's menu: the ways to sort that are not a click. Group by, Filter and Hide join it in later steps. */
+function HeaderMenu({ label, onAscending, onDescending }: { label: string; onAscending: () => void; onDescending: () => void }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("click", close); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return (
+    <>
+      <button className={open ? "th-menu on" : "th-menu"} aria-label={`Column menu for ${label}`} aria-haspopup="menu"
+        aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>▾</button>
+      {open && (
+        <div className="menu" role="menu">
+          <button role="menuitem" onClick={onAscending}>Sort ascending</button>
+          <button role="menuitem" onClick={onDescending}>Sort descending</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function cellContent(column: ListColumn, row: ListRow, page: ListPage, config: ListConfig): ReactNode {
+  const custom = config.cell?.[column.key];
+  if (custom) return custom(row, page);
+  const text = formatCell(column, row[column.key]);
+  if (text === null) return <span className="m">—</span>;
+  const href = row._links[column.key];
+  return href ? <Link className="name" to={href}>{text}</Link> : text;
+}
+
+/** One list, any list: the server does the sorting, searching and paging, and the address says which view this is. */
+export function ListView({ listKey, config = {} }: { listKey: string; config?: ListConfig }) {
+  const path = usePath();
+  const address = useSearch();
+  const view = useMemo(() => parseListView(address), [address]);
+  const [size, setSize] = useState<number | undefined>(undefined); // chosen on this page; before that the server uses the person's own
+  const [text, setText] = useState(view.search);
+  const [problem, setProblem] = useState<string | null>(null);
+  const written = useRef(view.search);                              // the search text this page last put in the address
+
+  const { data: page, error, loading, reload } = useRequest(
+    (signal) => fetchList(listKey, listRequest(view, size), signal),
+    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, size],
+  );
+
+  const go = (next: typeof view) => { navigate(listAddress(path, next)); };
+
+  // The search box follows the address (Back, a link), and the address follows the box once typing pauses, without a history
+  // entry for every letter. A change this page made itself is not copied back, which would undo what was typed in the meantime.
+  useEffect(() => { if (view.search !== written.current) setText(view.search); }, [view.search]);
+  useEffect(() => {
+    if (text === view.search) return;
+    const timer = window.setTimeout(() => {
+      written.current = text.slice(0, 100);
+      replaceAddress(listAddress(path, withSearch(view, text)));
+    }, SEARCH_DELAY);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the pause restarts with the text, not with every change to the view
+  }, [text]);
+
+  const changeSize = (next: number) => {
+    setSize(next);
+    setProblem(null);
+    saveListPageSize(listKey, next).catch((e: Error) => setProblem(`The number of rows could not be remembered. ${e.message}`));
+    go(withPage(view, 1));
+  };
+
+  const shown = view.sort ?? page?.sort ?? null; // the list's own sort shows too, so a person can see what the order is
+  const sorting: SortingState = shown ? [{ id: shown.field, desc: shown.direction === "desc" }] : [];
+  const pagination: PaginationState = { pageIndex: (page?.page ?? view.page) - 1, pageSize: page?.page_size ?? size ?? 25 };
+  const columnList = useSameColumns(page?.columns);
+  const columns = useMemo(
+    () => columnList.map((column) => helper.accessor((row) => row[column.key] as unknown, { id: column.key, header: column.label })),
+    [columnList],
+  );
+  const table = useTable({
+    features, columns, data: page?.rows ?? NO_ROWS, getRowId: (row) => String(row._id),
+    manualSorting: true, manualPagination: true, rowCount: page?.total ?? 0,
+    enableMultiSort: false, enableSortingRemoval: false, sortDescFirst: false, // a click sorts ascending, a second click reverses
+    state: { sorting, pagination },
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      const first = next[0];
+      go(first ? sortedBy(view, first.id, first.desc ? "desc" : "asc") : { ...view, page: 1, sort: null });
+    },
+    onPaginationChange: (updater) => {
+      const next = typeof updater === "function" ? updater(pagination) : updater;
+      if (next.pageSize !== pagination.pageSize) changeSize(next.pageSize);
+      else go(withPage(view, next.pageIndex + 1));
+    },
+  });
+
+  const byKey = new Map(columnList.map((column) => [column.key, column]));
+  const first = page && page.rows.length > 0 ? (page.page - 1) * page.page_size + 1 : 0;
+  const sizes = PAGE_SIZES.includes(pagination.pageSize) ? PAGE_SIZES : [...PAGE_SIZES, pagination.pageSize].sort((a, b) => a - b);
+
+  return (
+    <div className="lf">
+      <div className="lf-bar">
+        <input className="lf-search" aria-label="Search" placeholder="Search" value={text} maxLength={100}
+          onChange={(e) => setText(e.target.value)} />
+        <span className="grow" />
+        {page && <span className="m lf-count">{formatInteger(page.total)} matching</span>}
+      </div>
+
+      {error && (
+        <p className="notice bad" role="alert">Could not load the list. {error}{" "}
+          <button className="link" onClick={reload}>Try again</button></p>
+      )}
+      {problem && <p className="notice bad" role="alert">{problem}</p>}
+
+      {!page ? (
+        !error && <p className="empty">Loading…</p>
+      ) : page.total === 0 ? (
+        view.search !== "" ? (
+          <p className="empty">No rows match “{view.search}”. <button className="link" onClick={() => go(withSearch(view, ""))}>Clear the search</button></p>
+        ) : (
+          <p className="empty">{config.emptyText ?? "There is nothing to show yet."}</p>
+        )
+      ) : (
+        <>
+          <div className="gcard lf-card" aria-busy={loading}>
+            <table className={loading ? "num lf-table lf-busy" : "num lf-table"}>
+              <thead>
+                {table.getHeaderGroups().map((group) => (
+                  <tr key={group.id}>
+                    {group.headers.map((header) => {
+                      const column = byKey.get(header.column.id);
+                      const label = column?.label ?? header.column.id;
+                      const sorted = header.column.getIsSorted();
+                      return (
+                        <th key={header.id} className={column && isNumeric(column) ? "r" : ""}
+                          aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}>
+                          <button className="th-btn" onClick={header.column.getToggleSortingHandler()}>
+                            {label}{sorted && <span className="sort" aria-hidden="true">{sorted === "asc" ? "▲" : "▼"}</span>}
+                          </button>
+                          <HeaderMenu label={label} onAscending={() => header.column.toggleSorting(false)}
+                            onDescending={() => header.column.toggleSorting(true)} />
+                        </th>
+                      );
+                    })}
+                    {config.actions && <th />}
+                  </tr>
+                ))}
+              </thead>
+              <tbody>
+                {table.getRowModel().rows.map((row) => (
+                  <tr key={row.id} className="row">
+                    {row.getAllCells().map((cell) => {
+                      const column = byKey.get(cell.column.id);
+                      return column && (
+                        <td key={cell.id} className={isNumeric(column) ? "r" : ""}>
+                          {cellContent(column, row.original, page, config)}
+                        </td>
+                      );
+                    })}
+                    {config.actions && (
+                      <td className="k">
+                        <RowMenu label={`Actions for ${config.rowLabel?.(row.original) ?? `row ${row.original._id}`}`}
+                          items={config.actions(row.original)} />
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="lf-foot">
+            <span>{formatInteger(first)}–{formatInteger(first + page.rows.length - 1)} of {formatInteger(page.total)}</span>
+            <span>Page {formatInteger(page.page)} of {formatInteger(page.pages)}</span>
+            <button className="btn ghost small" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>Previous</button>
+            <button className="btn ghost small" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>Next</button>
+            <span className="grow" />
+            <label>Rows per page{" "}
+              <select value={pagination.pageSize} onChange={(e) => table.setPageSize(Number(e.target.value))}>
+                {sizes.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

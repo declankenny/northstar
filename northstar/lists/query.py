@@ -16,7 +16,7 @@ import sqlite3
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from northstar.lists.kinds import Reference, Text, escape_like
+from northstar.lists.kinds import Reference, Scaled, Text, escape_like
 from northstar.lists.listdef import ListDef
 from northstar.lists.registry import Catalog, Resolved
 from northstar.lists.request import ListRequest
@@ -31,6 +31,7 @@ class ListResult:
     pages: int
     columns: tuple[str, ...]
     group: str | None
+    sort: tuple[str, str]                               # the sort applied (the request's, or the list's own): key and direction
 
 
 class _Joins:
@@ -133,11 +134,12 @@ def link_pattern(catalog: Catalog, base: str, resolved: Resolved, viewer) -> str
 
 def describe(catalog: Catalog, definition: ListDef, keys, viewer=frozenset()) -> list[dict]:
     """What a page needs to draw the columns: the key, a label (and the full path of labels), the kind's code and whether the
-    column opens a record page for this viewer."""
+    column opens a record page for this viewer. A decimal stored as an integer also says its scale."""
     described = []
     for key in keys:
         resolved = catalog.resolve(definition.table, key)
         described.append({"key": key, "label": resolved.labels[-1], "path_label": resolved.label, "kind": resolved.kind.code,
+                          "scale": resolved.kind.scale if isinstance(resolved.kind, Scaled) else None,   # of a stored integer
                           "linked": link_pattern(catalog, definition.table, resolved, viewer) is not None})
     return described
 
@@ -210,4 +212,4 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
         if request.group is not None:
             row["_group"], row["_group_count"] = record["_g"], record["_gn"]
         rows.append(row)
-    return ListResult(rows, total, page, request.page_size, pages, request.columns, request.group)
+    return ListResult(rows, total, page, request.page_size, pages, request.columns, request.group, (request.sort_key, request.direction))
