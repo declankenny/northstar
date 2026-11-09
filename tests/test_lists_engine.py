@@ -293,6 +293,15 @@ def test_a_scaled_integer_is_typed_as_a_decimal_and_refused_when_it_has_too_many
         parse_request(cat, TICKETS, {"filters": [{"field": "score_x100", "operator": "equals", "value": "1e400x"}]})
 
 
+def test_a_number_too_large_to_store_is_refused_not_passed_to_the_database(cat):
+    huge = "9" * 30
+    for field, operator in (("items", "equals"), ("score_x100", "at_least")):         # a float can hold it, so it is not refused
+        with pytest.raises(ValidationError):
+            parse_request(cat, TICKETS, {"filters": [{"field": field, "operator": operator, "value": huge}]})
+    with pytest.raises(ValidationError):
+        parse_request(cat, TICKETS, {"filters": [{"field": "items", "operator": "between", "value": ["0", huge]}]})
+
+
 def test_a_range_includes_both_ends_and_before_and_after_exclude_the_day(conn, cat):
     live = live_tickets(conn)
     low, high = "2025-03-05", "2025-06-20"

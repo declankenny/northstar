@@ -6,7 +6,7 @@ from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from northstar import backup, clock
+from northstar import backup, clock, conversion
 from northstar.errors import ValidationError
 from northstar.version import VERSION
 
@@ -60,10 +60,11 @@ def write_transaction(conn: sqlite3.Connection):
 
 
 def connect(path: str | Path) -> sqlite3.Connection:
-    """Open the database with foreign keys on. SQLite has them off by default."""
+    """Open the database with foreign keys on (SQLite has them off by default) and the application's SQL functions registered."""
     conn = sqlite3.connect(path, isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conversion.register(conn)         # the functions the views call; only a view that uses one needs this
     return conn
 
 

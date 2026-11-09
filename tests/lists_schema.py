@@ -8,7 +8,7 @@ Yes or No, a scaled integer, a float, a UTC timestamp, a status and repeated val
 import random
 import sqlite3
 
-from northstar.lists.kinds import Category, Date, Integer, Number, Scaled, Text, Timestamp, YesNo
+from northstar.lists.kinds import Category, Date, Integer, Number, Scaled, ScaledBy, Text, Timestamp, YesNo
 from northstar.lists.listdef import ListDef
 from northstar.lists.registry import Catalog, FieldDef, TableDef
 
@@ -34,9 +34,33 @@ CREATE TABLE ticket (
     status TEXT NOT NULL CHECK (status IN ('Open', 'Active', 'Closed')), deleted_at TEXT
 );
 CREATE VIEW ticket_live AS SELECT * FROM ticket WHERE deleted_at IS NULL;
+-- amounts whose scale differs from row to row, and values worked out from them
+CREATE TABLE measure (id INTEGER PRIMARY KEY, symbol TEXT NOT NULL, decimals INTEGER NOT NULL);
+CREATE TABLE factor  (measure_id INTEGER NOT NULL REFERENCES measure(id), from_day TEXT NOT NULL, value TEXT NOT NULL);
+CREATE TABLE reading (id INTEGER PRIMARY KEY, label TEXT NOT NULL, amount INTEGER, taken_on TEXT NOT NULL,
+                      measure_id INTEGER NOT NULL REFERENCES measure(id), note TEXT);
+-- A value worked out by a function SQLite has been given (exact decimal arithmetic), with its scale and unit beside it. The
+-- factor is the latest one on or before the day, and a reading with none has no worked value.
+CREATE VIEW reading_values AS
+SELECT r.*, work(r.amount, (SELECT f.value FROM factor f WHERE f.measure_id = r.measure_id AND f.from_day <= r.taken_on
+                             ORDER BY f.from_day DESC LIMIT 1)) AS worked, m.decimals AS worked_scale, 'W' AS worked_unit
+FROM reading r JOIN measure m ON m.id = r.measure_id;
+-- a view that leaves out a column a table has a relation on
+CREATE VIEW reading_without_measure AS SELECT id, label, amount FROM reading;
 """
 
 STATUSES = ("Open", "Active", "Closed")
+
+
+FACTORS = (("A", "2026-01-01", "1.5"), ("B", "2026-03-01", "0.25"))      # measure symbol, from day, factor
+
+
+def work(amount, factor):
+    """The function the database is given: an amount times a factor, exactly, truncated. Nothing here knows what it means."""
+    if amount is None or factor is None:
+        return None
+    from decimal import Decimal
+    return int(Decimal(amount) * Decimal(factor))
 
 
 def _text(searchable=False):
@@ -53,6 +77,13 @@ TABLES = {
     "site": TableDef("site", "name", {"name": _text(True)}),
     "family": TableDef("family", "name", {"name": _text()}),
     "kind": TableDef("kind", "name", {"name": _text()}),
+    "measure": TableDef("measure", "symbol", {"symbol": _text(), "decimals": FieldDef(Integer())}),
+    # a view with a column that is worked out: its key and its relations are those of the table it is based on
+    "reading_values": TableDef("reading_values", "label", {
+        "label": _text(True), "taken_on": FieldDef(Date()), "note": _text(),
+        "amount": FieldDef(ScaledBy(scale_from=("measure", "decimals"), unit_from=("measure", "symbol"))),
+        "worked": FieldDef(ScaledBy(scale_from=("worked_scale",), unit_from=("worked_unit",))),
+    }, based_on="reading"),
     "ticket": TableDef("ticket", "code", {
         "code": _text(True), "title": _text(True), "notes": _text(True),
         "opened_on": FieldDef(Date()), "closed_at": FieldDef(Timestamp()),
@@ -62,14 +93,16 @@ TABLES = {
     }, denied=frozenset({"deleted_at"}), labels={"assignee": "Assigned to"}),
 }
 
+READINGS = ListDef("readings", "reading_values", ("label", "taken_on", "amount", "worked"), ("taken_on", "desc"))
 TICKETS = ListDef("tickets", "ticket", ("code", "title", "assignee", "site", "opened_on"), ("opened_on", "desc"),
                   source="ticket_live")
 
 
-def build(seed: int = 7, tickets: int = 300) -> sqlite3.Connection:
+def build(seed: int = 7, tickets: int = 300, readings: int = 400) -> sqlite3.Connection:
     """A database with the schema above, filled deterministically."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    conn.create_function("work", 2, work, deterministic=True)
     conn.executescript(SCHEMA)
     rng = random.Random(seed)
     for number in range(2):
@@ -98,6 +131,14 @@ def build(seed: int = 7, tickets: int = 300) -> sqlite3.Connection:
              f"2025-{rng.randint(1, 12):02d}-{rng.randint(1, 28):02d}", closed,
              rng.choice([None, -250, 0, 1999, 2000]), rng.choice([None, 0.0, 1.5, 2.25]), rng.randint(0, 5),
              passed, rng.randint(0, 1), status, "2026-01-01T00:00:00Z" if number % 20 == 0 else None))
+    conn.execute("INSERT INTO measure (symbol, decimals) VALUES ('A', 2), ('B', 0), ('C', 3)")
+    for symbol, day, value in FACTORS:
+        conn.execute("INSERT INTO factor (measure_id, from_day, value) VALUES ((SELECT id FROM measure WHERE symbol = ?), ?, ?)",
+                     (symbol, day, value))
+    for number in range(1, readings + 1):
+        conn.execute("INSERT INTO reading (label, amount, taken_on, measure_id, note) VALUES (?,?,?,?,?)",
+                     (f"R-{number:05d}", rng.choice([None, 0, 5, 1000, rng.randint(-5000, 90000)]),
+                      f"2026-0{rng.randint(1, 5)}-{rng.randint(10, 28)}", rng.randint(1, 3), None))
     conn.commit()
     return conn
 
