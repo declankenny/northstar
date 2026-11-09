@@ -155,6 +155,16 @@ Version 0.3 adds currencies, number and date formats, exchange rates and the fir
 - **Northstar now makes one outbound request a day**, to `api.frankfurter.dev` over HTTPS, at 18:00 in your time zone, for exchange rates. It sends only currency codes and dates. It does nothing until you enable a currency other than the system currency, and clearing `currency.rate.fetch_time` under System properties turns it off completely. See "Exchange rates" below.
 - **The old `users create` command is gone.** Add users on the Users page.
 
+### Upgrading from 0.3 to 0.4
+
+Version 0.4 adds sign-in through one OpenID Connect (OIDC) identity provider, such as Authentik or Pocket ID. Nothing changes for an installation that does not turn it on:
+
+- **A checked backup is made first**, as for any database change (see above). Two migrations run (`0017_oidc_settings` and `0018_oidc_identities`): new system properties, a table that binds a person to a user at the provider, a table of sign-ins in progress, and two columns on sessions (every existing session becomes a password session and keeps its expiry).
+- **Three new settings**, all optional: `NORTHSTAR_PUBLIC_URL`, `NORTHSTAR_OIDC_CLIENT_SECRET_FILE` and `NORTHSTAR_OIDC_CLIENT_SECRET` (see "Settings" above). Leaving them out changes nothing.
+- **Password sign-in stays on**, OIDC stays off, and nobody is signed out.
+- **Northstar makes no new outbound request** until you turn OIDC on. With it on, Northstar also calls your identity provider and only that. See "Signing in through an identity provider" below.
+- **`python -m northstar.signin enable-local`** is a new command, the way back in if you switch password sign-in off and the provider fails.
+
 ### Rolling back
 
 You can't just start the old image on an upgraded database, because it doesn't understand the new schema. Restore the backup the upgrade made, under the old image. The file name has the version that made it and the UTC time, so take the newest one from the list:
@@ -253,10 +263,104 @@ Passwords need at least 12 characters. They are hashed with scrypt, which is del
 
 A person who gets the password wrong is limited: 5 attempts in 15 minutes per email from one address, 30 an hour per email from any address, and 20 in 15 minutes per address. A blocked attempt says how long to wait and does not check the password, so waiting is the only fix, and there is no lock-out to undo. Changing a password through the app has the same limit on a wrong current password.
 
+## Signing in through an identity provider
+
+Northstar can sign people in through one OIDC provider (version 0.4 and later). Password sign-in keeps working beside it unless you switch it off. Everything here is optional.
+
+**Read this first.** Everyone who signs in to Northstar sees all the household's financial data. Two things follow:
+
+- **Linking trusts the provider.** When someone signs in through the provider, Northstar matches the provider's **verified** email address to an existing Northstar user and signs them in as that user, with no password check. That includes administrators. So whoever can make your provider say "this address is verified" can sign in as that person. Use a provider you control, and keep its own administrators to people you would trust with Northstar's data.
+- **Creating users is off by default, and should stay off unless you mean it.** With `oidc.user.allow_creation` on, anyone the provider admits to Northstar's client, and whose email it reports as verified, gets a Northstar account that sees everything. Restrict who may use the Northstar application at the provider (below) before turning it on.
+
+### What Northstar needs
+
+- A public HTTPS address for Northstar, set as `NORTHSTAR_PUBLIC_URL` (for example `https://northstar.example.com`, no path). Northstar never works the address out from request headers. `http://` is accepted only for `localhost`, `127.0.0.1` and `[::1]`, for trying it out on one machine. Add it to the service's `environment:` in `compose.yaml`, and keep `NORTHSTAR_COOKIE_SECURE=1`.
+- An OIDC provider that Northstar's container can reach over HTTPS, at the **issuer** address you will enter below. Northstar finds the endpoints and keys from `<issuer>/.well-known/openid-configuration`, and the document must name that same issuer.
+- The client secret, in a file or an environment variable (below).
+
+### Register Northstar at the provider
+
+Make a **confidential** OIDC client (an "application" or "client", depending on the provider) with:
+
+- **Redirect (callback) address**: your public address plus `/api/auth/oidc/callback`, for example `https://northstar.example.com/api/auth/oidc/callback`. It must match exactly.
+- **Scopes**: `openid`, `profile` and `email`. Northstar uses only the ID token and asks for no other data.
+- **Authorization code flow with PKCE (S256)**. Northstar sends PKCE and a nonce on every sign-in.
+- **ID tokens signed with an asymmetric algorithm** (RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512 or EdDSA) that the provider lists in its discovery document. Northstar refuses tokens signed with a shared secret (HS256 and the like) and refuses `none`. **Some providers sign with the client secret unless you choose a signing key**, so pick one explicitly. TODO: confirm for Authentik and Pocket ID in the manual runs, and write the exact setting here.
+- **A client secret** that the provider accepts at its token endpoint by HTTP Basic or in the request body. Northstar uses whichever the provider lists.
+- **Access**: restrict the application to the people who should be able to use Northstar (a group, a policy, or "assigned users", depending on the provider). The provider decides who may reach Northstar's client, so this is the real access control when creating users is on. TODO: the exact steps for Authentik and Pocket ID.
+
+### Give Northstar the secret
+
+Prefer a file, because an environment variable shows in `docker inspect`. With a Docker secret:
+
+```
+services:
+  northstar:
+    environment:
+      NORTHSTAR_PUBLIC_URL: https://northstar.example.com
+      NORTHSTAR_OIDC_CLIENT_SECRET_FILE: /run/secrets/northstar_oidc_secret
+    secrets:
+      - northstar_oidc_secret
+
+secrets:
+  northstar_oidc_secret:
+    file: ./northstar_oidc_secret.txt
+```
+
+Keep that file private (it is a credential) and never commit it. Setting both the file and `NORTHSTAR_OIDC_CLIENT_SECRET` stops Northstar from starting. Northstar never shows, logs or stores the secret in the database.
+
+### Turn it on
+
+Under Admin, System properties, in the OIDC group:
+
+1. Set `oidc.issuer` (the provider's exact issuer address) and `oidc.client_id`. Set `oidc.provider` to the name for the button, such as Pocket ID (optional: without it the button says "your identity provider").
+2. Set `oidc.enabled` to Yes. It is refused with a list of what is still missing (issuer, client ID, secret, public address), so you cannot save a half-set-up configuration.
+3. Open the sign-in page in another browser or a private window. You should see "Continue with" and the provider's name above the password form.
+4. **Sign in through the provider as an administrator, once**, before doing anything else. That proves the whole path works and links the administrator's account.
+
+How people get an account:
+
+- **An existing user** signs in through the provider and is linked by their **verified** email address, keeping their name and role. Create or check each person's Northstar user first, with the same email the provider has for them.
+- **Someone who has no Northstar user** can come in only if `oidc.user.allow_creation` is Yes. They become a regular user (never an admin), with no password, named from the provider's name for them (or their email).
+- **Administrators stay managed in Northstar.** The provider's role information is ignored. Make someone an admin on the Users page.
+- Someone whose email the provider has not verified, who was deleted from Northstar, or who has no user while creation is off, is refused, and the page does not say which. Deleted users are never brought back by signing in.
+
+The Users page shows how each person can sign in: Local, OIDC, or Local and OIDC. A person who signs in only through the provider has no password; an admin can give them one from Reset password, which also lets them sign in with it while password sign-in is on.
+
+### Sessions
+
+A session started through the provider lasts `oidc.session.lifetime_hours` from sign-in (12 by default) and is **not** extended by use, after which the person signs in again, usually with no interaction. Signing out of Northstar ends the Northstar session only, not the one at the provider.
+
+Changing `oidc.issuer` or `oidc.client_id` ends every session that was started through the provider at its next request. **Rotating the client secret ends nothing**, so rotate it by putting the new secret in the file (or variable) and restarting Northstar. **Removing someone at the provider does not end a session they already have**, which the lifetime bounds. Deleting their Northstar user does, at once. Password sessions are not affected by any of this.
+
+### Switching password sign-in off
+
+`system.auth.local.enabled` can be set to No only when OIDC is on and fully set up and an administrator has already signed in through it, so a mistake in the provider's setup cannot lock everyone out. Turning it off does not end existing password sessions. It stops new password sign-ins at the sign-in endpoint too, not just on the page, and the sign-in page then shows only the provider's button. While it is off, OIDC cannot be turned off and the issuer cannot be changed.
+
+**If the provider is down or misconfigured while password sign-in is off**, run this on the host. It needs only the database, so it works with no provider and no signed-in session:
+
+```
+docker compose exec northstar python -m northstar.signin enable-local
+```
+
+Then sign in with a password. If an admin has none, give them one with `python -m northstar.users set-password`. Plan for this before you switch password sign-in off: keep a password for at least one admin, and know how to reach the host.
+
+### When sign-in through the provider fails
+
+The sign-in page says what happened in plain words and never shows text from the provider. The server log has the reason, in words that hold no token, claim, address or secret (look for lines beginning "OIDC sign-in"). The usual causes:
+
+- **"Couldn't reach ..."**: Northstar's container cannot reach the provider over HTTPS, the issuer address is wrong, or the provider is down. Northstar follows no redirects and ignores proxy settings from the environment, so the issuer must be the provider's own final address. Check the log line.
+- **"... hasn't confirmed your email address"**: the provider's ID token does not say the email is verified. Verify the address at the provider.
+- **"This account can't sign in to Northstar"**: no Northstar user has that email and creation is off, the user was deleted, or the account is not allowed in. Add the user on the Users page, or turn creation on deliberately.
+- **A token Northstar could not accept**: usually the signing algorithm (see above), the client ID, or a clock more than a minute apart from the provider's. Check the log line.
+- **"Too many sign-in attempts"**: starts and returns are limited like passwords are, 5 in 15 minutes from one address, and five unfinished starts count. Wait and try again.
+
+Northstar calls the provider only for sign-in, to read its discovery document and signing keys (kept for an hour) and to exchange the sign-in code at its token endpoint, over HTTPS, with certificate checks, a 10-second limit and a 1 MB cap. Nothing about your accounts or balances is ever sent.
+
 ## Known behaviour
 
 - **Two people editing the same balance at the same moment:** the second save is refused, nothing is written, and the screen says who changed it and shows what it is now, so the person decides. Adding a balance on a date that already has one replaces it.
-- **Sessions last 30 days** from sign-in, and are not extended by use.
+- **Sessions last 30 days** from sign-in, and are not extended by use. A session started through an identity provider lasts `oidc.session.lifetime_hours` (12 by default) instead.
 - **Every account has one currency,** chosen when it is created and never changed. Household totals are in the system currency, converted with the latest exchange rate on or before each date. A date on which an account has no rate has no net worth, and the app says which currencies need one.
 - **Crypto is not a currency here.** Enter a balance held in crypto as its value in the system currency at the time.
 - **The secure cookie on `http://localhost`** has been checked in a Chromium-based browser only. Other browsers may behave differently, and if sign-in fails on `localhost`, set `NORTHSTAR_COOKIE_SECURE=0`.
