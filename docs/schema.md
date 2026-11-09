@@ -5,8 +5,7 @@ The SQLite schema as the migrations in `northstar/migrations/` build it. The mig
 ```mermaid
 erDiagram
     account_classes ||--o{ account_types : "class_id"
-    account_classes ||--o{ accounts : "class_id"
-    account_types ||--o{ accounts : "type_id, class_id"
+    account_types ||--o{ accounts : "type_id"
     currencies ||--o{ accounts : "currency_id"
     currencies ||--o{ exchange_rates : "currency_id"
     accounts ||--o{ balances : "account_id"
@@ -52,8 +51,7 @@ erDiagram
     accounts {
         integer id PK
         text name
-        integer class_id FK
-        integer type_id FK
+        integer type_id FK "the type decides the class"
         integer currency_id FK "set at creation, never changed"
         integer is_open "0 or 1"
         text notes "optional"
@@ -253,8 +251,8 @@ A person checks these against the migrations, because the test cannot read them 
 | Table | Constraint |
 |---|---|
 | `account_classes` | Exactly two rows, Asset (1) and Liability (2), inserted by the first migration. |
-| `account_types` | `UNIQUE (id, class_id)`, which is the target of the composite key from `accounts`. The first migration also inserts the 11 starting types. |
-| `accounts` | `FOREIGN KEY (type_id, class_id)` references `account_types (id, class_id)` with `ON UPDATE RESTRICT ON DELETE RESTRICT`, so an account's type always belongs to its class, and a type in use can be neither deleted nor moved to another class. |
+| `account_types` | The first migration also inserts the 11 starting types. The trigger `account_types_class_fixed_while_used` refuses a change of `class_id` while any account uses the type, deleted accounts included. It reads `accounts`, so a rebuild of `accounts` drops it first (with the views) and creates it again afterwards. |
+| `accounts` | `type_id` references `account_types (id)` with `ON UPDATE RESTRICT ON DELETE RESTRICT`, so a type in use cannot be deleted. An account has no class of its own: its class is its type's, read through `account_types`. |
 | `accounts` (name) | Unique index `accounts_name_unique` on `name COLLATE NOCASE`, only `WHERE deleted = 0`: a name is unique ignoring ASCII case among accounts that are not deleted, open or closed. A deleted account frees its name. |
 | `currencies` | The ISO 4217 catalog (155 rows, from a file published 2026-09-17), loaded by migration `0010`. `code` is three capital letters and unique, `minor_units` is 0, 2 or 3. Triggers refuse deleting a row and changing `code` or `minor_units`; only `is_enabled` changes. A currency is usable for a new account if it is `is_enabled`, which the system currency (the `system.currency` property) always is: saving it enables it. `rates_start` is the date rates are wanted from, chosen when a currency is first enabled and empty for the system currency. |
 | `exchange_rates` | `UNIQUE (currency_id, rate_date)`: one rate per currency per date. `rate_date` is a date and `rate` is digits with at most one point and a digit other than zero (a `CHECK`); the service limits it to 12 significant digits. Triggers refuse deleting a rate and changing its currency or date: a value is corrected and nothing else. |

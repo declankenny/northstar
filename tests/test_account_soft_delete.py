@@ -136,7 +136,7 @@ def test_the_name_rule_is_partial_in_the_database_too(conn, household):
     assert "WHERE deleted = 0" in sql and "NOCASE" in sql
     accounts.delete_account(op(conn), household["checking"])
     system = "(SELECT id FROM users WHERE is_system = 1)"
-    insert = f"INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES (?, 1, 1, (SELECT id FROM currencies WHERE code = 'USD'), {system}, {system})"
+    insert = f"INSERT INTO accounts (name, type_id, currency_id, created_by, updated_by) VALUES (?, 1, (SELECT id FROM currencies WHERE code = 'USD'), {system}, {system})"
     conn.execute(insert, ("TEST CHECKING",))                                   # the name is free
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(insert, ("test checking",))                                # but still unique among live accounts

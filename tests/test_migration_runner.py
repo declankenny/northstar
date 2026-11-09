@@ -18,9 +18,9 @@ LEGACY_LEDGER = (
     "applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))")
 
 # A rebuild of accounts or balances has to drop the views over them first (SQLite cannot rename a table under a view) and
-# recreate them, and the partial name index, afterwards: the live views and account_days, which is read from the migration
-# that creates it. The runner's guard checks that everything came back.
-_RATES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0013_exchange_rates.sql").read_text(encoding="utf-8")
+# recreate them, and the partial name index, afterwards: the live views and account_days, which is read from the newest
+# migration that creates it. The runner's guard checks that everything came back.
+_RATES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0019_account_class_from_type.sql").read_text(encoding="utf-8")
 ACCOUNT_DAYS = _RATES[_RATES.index("CREATE VIEW account_days"):_RATES.index(") WHERE amount IS NOT NULL;") + len(") WHERE amount IS NOT NULL;")] + "\n"
 LIVE_BALANCES = ("CREATE VIEW live_balances AS SELECT balances.* FROM balances "
                  "JOIN accounts ON accounts.id = balances.account_id WHERE accounts.deleted = 0;\n")
@@ -29,11 +29,11 @@ REBUILD_ACCOUNTS = """-- northstar: rebuild
 DROP VIEW account_days;
 DROP VIEW live_accounts;
 DROP VIEW live_balances;
+DROP TRIGGER account_types_class_fixed_while_used;
 CREATE TABLE accounts_new (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
-    class_id   INTEGER NOT NULL REFERENCES account_classes (id),
-    type_id    INTEGER NOT NULL,
+    type_id    INTEGER NOT NULL REFERENCES account_types (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     currency_id INTEGER NOT NULL REFERENCES currencies (id),
     is_open    INTEGER NOT NULL DEFAULT 1 CHECK (is_open IN (0, 1)),
     notes      TEXT,
@@ -42,12 +42,10 @@ CREATE TABLE accounts_new (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_by INTEGER NOT NULL REFERENCES users (id),
     deleted    INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
-    colour     TEXT,
-    FOREIGN KEY (type_id, class_id) REFERENCES account_types (id, class_id)
-        ON UPDATE RESTRICT ON DELETE RESTRICT
+    colour     TEXT
 );
-INSERT INTO accounts_new (id, name, class_id, type_id, currency_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted)
-    SELECT id, name, class_id, type_id, currency_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted FROM accounts;
+INSERT INTO accounts_new (id, name, type_id, currency_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted)
+    SELECT id, name, type_id, currency_id, is_open, notes, created_at, created_by, updated_at, updated_by, deleted FROM accounts;
 DROP TABLE accounts;
 ALTER TABLE accounts_new RENAME TO accounts;
 CREATE UNIQUE INDEX accounts_name_unique ON accounts (name COLLATE NOCASE) WHERE deleted = 0;
@@ -55,6 +53,11 @@ CREATE TRIGGER accounts_currency_fixed BEFORE UPDATE OF currency_id ON accounts
 WHEN NEW.currency_id IS NOT OLD.currency_id
 BEGIN
     SELECT RAISE(ABORT, 'The currency of an account cannot be changed.');
+END;
+CREATE TRIGGER account_types_class_fixed_while_used BEFORE UPDATE OF class_id ON account_types
+WHEN NEW.class_id IS NOT OLD.class_id AND EXISTS (SELECT 1 FROM accounts WHERE type_id = OLD.id)
+BEGIN
+    SELECT RAISE(ABORT, 'The class of a type that accounts use cannot be changed.');
 END;
 """ + VIEWS + ACCOUNT_DAYS
 
@@ -76,7 +79,10 @@ def fill(conn):
     has_currency = any(row[1] == "currency_id" for row in conn.execute("PRAGMA table_info(accounts)"))
     currency_column = ", currency_id" if has_currency else ""
     currency = ", (SELECT id FROM currencies WHERE code = 'USD')" if has_currency else ""
-    conn.execute(f"INSERT INTO accounts (name, class_id, type_id{currency_column}{by}) VALUES ('Test account', 1, 1{currency}{system})")
+    has_class = any(row[1] == "class_id" for row in conn.execute("PRAGMA table_info(accounts)"))     # until migration 0019
+    class_column = ", class_id" if has_class else ""
+    class_value = ", 1" if has_class else ""
+    conn.execute(f"INSERT INTO accounts (name{class_column}, type_id{currency_column}{by}) VALUES ('Test account'{class_value}, 1{currency}{system})")
     conn.execute(f"INSERT INTO balances (account_id, as_of_date, amount_cents{by}) VALUES (1, '2026-01-31', 12345{system})")
 
 
@@ -398,7 +404,7 @@ def test_a_database_from_a_newer_version_with_a_stray_ledger_is_refused_without_
     db.upgrade(path)
     stray(path)
     conn = sqlite3.connect(path)
-    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0019_from_the_future')")
+    conn.execute("INSERT INTO sys_schema_migrations (version) VALUES ('0999_from_the_future')")
     conn.commit()
     conn.close()
     before = path.read_bytes()

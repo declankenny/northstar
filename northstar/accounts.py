@@ -8,12 +8,12 @@ from northstar.errors import NotFoundError, ValidationError
 from northstar.writer import Operation
 
 _SELECT = (
-    "SELECT a.id, a.name, a.class_id, c.name AS class_name, a.type_id, t.name AS type_name, "
+    "SELECT a.id, a.name, t.class_id, c.name AS class_name, a.type_id, t.name AS type_name, "
     "       a.is_open, a.notes, "
     "       (SELECT COUNT(*) FROM live_balances b WHERE b.account_id = a.id) AS balance_count "
     "FROM live_accounts a "
-    "JOIN account_classes c ON c.id = a.class_id "
     "JOIN account_types t ON t.id = a.type_id "
+    "JOIN account_classes c ON c.id = t.class_id "
 )
 
 
@@ -80,11 +80,11 @@ def account_rows(conn: sqlite3.Connection, today: date, closed: bool = False) ->
         "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
         "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_cents "
         "FROM live_accounts a "
-        "JOIN account_classes c ON c.id = a.class_id "
         "JOIN account_types t ON t.id = a.type_id "
+        "JOIN account_classes c ON c.id = t.class_id "
         "JOIN currencies cu ON cu.id = a.currency_id "
         "WHERE a.is_open = ? "
-        "ORDER BY a.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
+        "ORDER BY t.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
         (0 if closed else 1,),
     ).fetchall()
     result = []
@@ -191,8 +191,7 @@ def add_account(op: Operation, name: str | None, class_id: int,
         type_id = _check_type(conn, type_id, class_id)
         _check_name_free(conn, name)
         return writer.insert(op, "accounts", {
-            "name": name, "class_id": class_id, "type_id": type_id, "currency_id": currency.id,
-            "notes": _clean_notes(notes)})
+            "name": name, "type_id": type_id, "currency_id": currency.id, "notes": _clean_notes(notes)})
 
 
 def update_account(op: Operation, account_id: int, name: str | None,
@@ -219,7 +218,7 @@ def change_class(op: Operation, account_id: int, new_type_id: int | None) -> Non
             raise ValidationError("Choose a type from the list.")
         if row["class_id"] == account["class_id"]:
             raise ValidationError("Choose a type in the other class.")
-        writer.update(op, "accounts", account_id, {"class_id": row["class_id"], "type_id": new_type_id})
+        writer.update(op, "accounts", account_id, {"type_id": new_type_id})   # the type decides the class
 
 
 def close_account(op: Operation, account_id: int) -> None:

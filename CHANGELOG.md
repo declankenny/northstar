@@ -6,6 +6,16 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Changed
+
+- An account's class is now read from its type and is no longer stored on the account (#181). Nothing changes on any screen, and the rule that a type's class cannot change while an account uses it is kept, by a trigger.
+
+### Breaking
+
+- Migration: `0019_account_class_from_type` rebuilds `accounts` without `class_id` and `account_types` without its `UNIQUE (id, class_id)`, recreates the views over them, adds the trigger `account_types_class_fixed_while_used` and keeps both tables' id counters. A checked backup is made first.
+- Environment variables: nothing.
+- Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
+
 ## [0.4.0] - 2026-11-09
 
 Sign-in through one OpenID Connect identity provider, such as Authentik or Pocket ID (#67). It is off until an admin sets it up, and password sign-in keeps working beside it unless an admin switches it off. A person is linked to their Northstar user by the provider's verified email, new users are created only when an admin allows it, and an OIDC user has no password. The operator guide has a section on setting it up, including what linking by email trusts the provider with. It was set up and tried on a real Pocket ID instance (linking, creating, the refusal when creation is off, and switching password sign-in off and back on from the host). Authentik was not tried.

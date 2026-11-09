@@ -60,8 +60,8 @@ def test_the_restored_database_still_enforces_every_rule(conn, household, tmp_pa
     restored = db.connect(db_file)
     try:
         assert restored.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-        with pytest.raises(sqlite3.IntegrityError):        # a type from the other class
-            add_account(restored, "Wrong", 1, "Mortgage")
+        with pytest.raises(sqlite3.IntegrityError):        # the class of a type that an account uses
+            restored.execute("UPDATE account_types SET class_id = 2 WHERE id = (SELECT type_id FROM accounts LIMIT 1)")
         with pytest.raises(sqlite3.IntegrityError):        # a date that is not a date
             add_balance(restored, household["checking"], "01/31/2026", 1)
         with pytest.raises(sqlite3.IntegrityError):        # a second balance on one date

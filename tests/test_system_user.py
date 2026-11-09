@@ -89,7 +89,7 @@ def test_the_seeded_rows_are_authored_by_the_system_user(conn):
 
 def test_an_author_must_be_a_real_user(conn):
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO accounts (name, class_id, type_id, currency_id, created_by, updated_by) VALUES ('X', 1, 1, (SELECT id FROM currencies WHERE code = 'USD'), 9999, 9999)")
+        conn.execute("INSERT INTO accounts (name, type_id, currency_id, created_by, updated_by) VALUES ('X', 1, (SELECT id FROM currencies WHERE code = 'USD'), 9999, 9999)")
 
 
 # -- the system user cannot be used --

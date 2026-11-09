@@ -28,7 +28,7 @@ def test_the_rename_keeps_the_value_the_row_and_its_validators(tmp_path):
     assert validators, "the property has a validator to keep"
     conn.close()
 
-    assert db.upgrade(path) == ["0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities"]
+    assert db.upgrade(path) == ["0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type"]
 
     conn = db.connect(path)
     assert conn.execute("SELECT COUNT(*) FROM system_properties WHERE name = ?", (OLD,)).fetchone()[0] == 0
