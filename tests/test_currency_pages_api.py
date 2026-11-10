@@ -58,8 +58,8 @@ def test_switching_on_saves_the_flag_and_the_date_together_and_answers_with_the_
     assert response.status_code == 200
     body = response.json()
     assert (body["is_enabled"], body["rates_start"], body["can_add_rates"]) == (True, "2020-01-01", True)
-    row = {r["code"]: r for r in usd_client.get(URL).json()["currencies"]}["EUR"]
-    assert row["is_enabled"] is True
+    rows = usd_client.post("/api/lists/currencies", json={"filters": [{"field": "code", "operator": "contains", "value": "EUR"}]}).json()["rows"]
+    assert [(r["code"], r["is_enabled"]) for r in rows if r["code"] == "EUR"] == [("EUR", 1)]
 
 
 def test_switching_on_without_a_date_is_a_422_that_names_the_date(usd_client):

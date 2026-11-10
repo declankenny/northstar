@@ -587,13 +587,6 @@ export async function commitImport(accountId: number, settings: ImportSettings, 
   return (await send<ImportResult>("POST", importUrl(accountId, "commit"), { ...importBody(settings), reviewed }))!;
 }
 
-/** One row of the admin Currencies page: the catalog entry as stored, and how many accounts use it. */
-export type CurrencyRow = { code: string; name: string; minor_units: number; is_enabled: boolean; account_count: number };
-
-export async function fetchCurrencies(signal?: AbortSignal): Promise<{ currencies: CurrencyRow[] }> {
-  return (await send<{ currencies: CurrencyRow[] }>("GET", "/api/currencies", undefined, signal))!;
-}
-
 /** One stored rate: 1 unit of the currency = `rate` units of the system currency on `date`. `rate` is the exact decimal text.
  *  `until` is the date of the next newer rate (null for the newest): a correction changes net worth up to it. */
 export type RateRow = { id: number; date: string; rate: string; source: string; changed: string; until: string | null };
