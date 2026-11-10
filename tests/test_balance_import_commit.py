@@ -136,7 +136,7 @@ def test_the_file_name_is_reduced_to_a_plain_base_name(conn, account, given, kep
 def test_written_balances_show_in_the_views_and_in_net_worth(conn, account):
     go(conn, account, [row(2, "2026-01-31", 10000), row(3, "2026-02-28", 25000)])
     assert networth.net_worth_on(conn, TODAY)["net_worth"] == 25000
-    assert [r["last_cents"] for r in accounts.account_rows(conn, TODAY)] == [25000]
+    assert [r["last_cents"] for r in conn.execute("SELECT last_cents FROM account_summaries")] == [25000]
 
 
 def test_nothing_to_write_writes_nothing_not_even_a_header(conn, account):

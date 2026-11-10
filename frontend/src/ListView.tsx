@@ -99,8 +99,9 @@ function cellContent(column: ListColumn, row: ListRow, page: ListPage, config: L
   return href ? <Link className="name" to={href}>{text}</Link> : text;
 }
 
-/** One list, any list: the server does the sorting, searching and paging, and the address says which view this is. */
-export function ListView({ listKey, config = {} }: { listKey: string; config?: ListConfig }) {
+/** One list, any list: the server does the sorting, searching and paging, and the address says which view this is. A page that changes
+ *  what the list holds (an Add button) raises `refreshKey`, and the rows are read again in place: the sort, filters, page and drawer stay. */
+export function ListView({ listKey, config = {}, refreshKey = 0 }: { listKey: string; config?: ListConfig; refreshKey?: number }) {
   const [drawer, setDrawer] = useState<"filters" | "columns" | null>(null);   // which tab the open drawer starts on
   const opener = useRef<HTMLButtonElement | null>(null);                    // the button that opened it, to give focus back to
   const [columnsChanged, setColumnsChanged] = useState(0);                    // counts the person's changes to their columns, which are not in the address
@@ -119,7 +120,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
 
   const { data: page, error, loading, reload } = useRequest(
     (signal) => fetchList(listKey, listRequest(view, size), signal),
-    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, view.group, size, JSON.stringify(view.filters), columnsChanged],
+    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, view.group, size, JSON.stringify(view.filters), columnsChanged, refreshKey],
   );
 
   const go = (next: typeof view) => { navigate(listAddress(path, next)); };

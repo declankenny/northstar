@@ -194,14 +194,14 @@ def test_northstar_today_follows_the_installations_time_zone(conn, monkeypatch):
     assert conn.execute("SELECT northstar_today()").fetchone()[0] == "2026-06-04"
 
 
-# -- migration 0024, on a copy of a database as 0023 left it --
+# -- migrations 0024 and 0025, on a copy of a database as 0023 left it --
 
 @pytest.fixture
 def before(tmp_path):
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith("0024"):
+        if not file.name.startswith(("0024", "0025")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -223,7 +223,7 @@ def use_dollars_and_accounts(conn):
 
 
 def test_the_upgrade_adds_the_two_views_and_changes_no_data(before):
-    assert db.upgrade(before) == ["0024_account_summaries"]
+    assert db.upgrade(before) == ["0024_account_summaries", "0025_accounts_list"]
     conn = db.connect(before)
     assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 2
     assert conn.execute("SELECT COUNT(*) FROM balances").fetchone()[0] == 3
@@ -231,3 +231,50 @@ def test_the_upgrade_adds_the_two_views_and_changes_no_data(before):
     assert [tuple(r) for r in rows] == [(2, "2026-05-01", 200, 33, 0)]       # 3 June 2026 less 1 May
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+# -- migration 0025, on a copy of a database as 0024 left it --
+
+@pytest.fixture
+def before_0025(tmp_path):
+    folder = tmp_path / "before"
+    folder.mkdir()
+    for file in db.MIGRATIONS_DIR.glob("*.sql"):
+        if not file.name.startswith("0025"):
+            shutil.copy(file, folder)
+    path = tmp_path / "data" / "northstar.db"
+    db.upgrade(path, folder)
+    conn = db.connect(path)
+    use_dollars_and_accounts(conn)
+    conn.commit()
+    conn.close()
+    return path
+
+
+def test_the_view_gains_the_accounts_own_columns_and_keeps_its_figures(before_0025):
+    conn = db.connect(before_0025)
+    figures = "balance_count, last_date, last_cents, reporting_value, reporting_scale, reporting_unit, days_since, is_stale"
+    old = [tuple(r) for r in conn.execute(f"SELECT id, {figures} FROM account_summaries")]
+    assert "name" not in [r[1] for r in conn.execute("PRAGMA table_info(account_summaries)")]
+    conn.close()
+    assert db.upgrade(before_0025) == ["0025_accounts_list"]
+    conn = db.connect(before_0025)
+    columns = [r[1] for r in conn.execute("PRAGMA table_info(account_summaries)")]
+    assert columns[:len(accounts_columns(conn))] == accounts_columns(conn)                 # the account's own, then the figures
+    assert [tuple(r) for r in conn.execute(f"SELECT id, {figures} FROM account_summaries")] == old
+    assert [tuple(r) for r in conn.execute("SELECT name, type_id, currency_id FROM account_summaries")] == [
+        tuple(r) for r in conn.execute("SELECT name, type_id, currency_id FROM live_accounts")]
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+def accounts_columns(conn):
+    return [r[1] for r in conn.execute("PRAGMA table_info(accounts)")]
+
+
+def test_the_upgrade_seeds_one_shared_default_filter_for_the_accounts_list(before_0025):
+    db.upgrade(before_0025)
+    conn = db.connect(before_0025)
+    rows = conn.execute("SELECT owner_id, list_key, name, conditions, is_default, "
+                        "(SELECT is_system FROM users WHERE id = created_by) AS system FROM list_filters").fetchall()
+    assert [tuple(r) for r in rows] == [(None, "accounts", "Open accounts", '[{"field":"is_open","operator":"is_yes"}]', 1, 1)]

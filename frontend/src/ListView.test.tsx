@@ -271,6 +271,30 @@ describe("while it loads and when it cannot", () => {
     expect(screen.getByRole("table").className).not.toContain("lf-busy");
   });
 
+  it("reads the rows again in place when its refreshKey is raised: the same request, the rows kept meanwhile, the address untouched", async () => {
+    window.history.replaceState(null, "", "/balances?sort=-amount_cents&page=2");
+    const { rerender } = render(<ListView listKey="balances" refreshKey={0} />);
+    await screen.findByRole("table");
+    expect(requests().length).toBe(1);
+    const again = deferred<ListPage>();
+    vi.mocked(fetchList).mockReturnValue(again.promise);
+    rerender(<ListView listKey="balances" refreshKey={1} />);
+    await waitFor(() => expect(requests().length).toBe(2));
+    expect(requests()[1]).toEqual(requests()[0]);
+    expect(screen.getByText("Test account 1")).toBeTruthy();                          // not blanked while it loads
+    await act(async () => again.resolve(page({ rows: [row(31, { account: "Added account" })] })));
+    await screen.findByText("Added account");
+    expect(here()).toBe("/balances?sort=-amount_cents&page=2");
+  });
+
+  it("does not read again when it is drawn again with the same refreshKey", async () => {
+    const { rerender } = render(<ListView listKey="balances" refreshKey={3} />);
+    await screen.findByRole("table");
+    rerender(<ListView listKey="balances" refreshKey={3} />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests().length).toBe(1);
+  });
+
   it("shows the answer to the latest request even when an earlier one arrives after it", async () => {
     render(<ListView listKey="balances" />);
     await screen.findByRole("table");

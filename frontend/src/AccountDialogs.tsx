@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { type AccountList, type AccountPage, type BalanceEntry, type BalanceRow, type NewAccount } from "./api";
+import { type AccountOptions, type AccountPage, type BalanceEntry, type BalanceRow, type NewAccount } from "./api";
 import { conflictText } from "./conflicts";
 import { formatDate } from "./dates";
 import { AmountReading } from "./AmountReading";
@@ -180,25 +180,25 @@ export function ChangeClassDialog(props: {
 
 /** Add an account, and its first balance too when an amount is typed. A blank amount adds the account alone. */
 export function AddAccountDialog(props: {
-  list: AccountList;
+  options: AccountOptions;
   isAdmin: boolean;
   accountClass: "asset" | "liability";
   onSave: (account: NewAccount) => Promise<void>;
   onClose: () => void;
 }) {
-  const { list, accountClass } = props;
-  const cls = list.classes.find((c) => c.name.toLowerCase() === accountClass)!;
+  const { options, accountClass } = props;
+  const cls = options.classes.find((c) => c.name.toLowerCase() === accountClass)!;
   const owed = accountClass === "liability";
   const [name, setName] = useState("");
   const [typeId, setTypeId] = useState<number | "">(cls.types.length === 1 ? cls.types[0].id : "");
   const [notes, setNotes] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(list.today);
-  const [code, setCode] = useState(list.currency?.code ?? "");
+  const [date, setDate] = useState(options.today);
+  const [code, setCode] = useState(options.currency?.code ?? "");
   const { busy, error, run } = useAction();
   // A Currency box is offered only when an account can be in a currency other than the system currency.
-  const several = list.currencies.length > 1;
-  const chosen = list.currencies.find((c) => c.code === code) ?? list.currency;
+  const several = options.currencies.length > 1;
+  const chosen = options.currencies.find((c) => c.code === code) ?? options.currency;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -208,7 +208,7 @@ export function AddAccountDialog(props: {
 
   return (
     <Modal title={`Add ${accountClass} account`} onClose={props.onClose}>
-      {list.currency === null ? (
+      {options.currency === null ? (
         <div>
           <p className="notice warn" role="alert"><b>Choose the system currency first.</b> Accounts can't be created until it is set, and it can't be changed afterwards.</p>
           <p className="sub">{props.isAdmin ? "An admin sets it on the System properties page." : "Ask an admin to set the system currency."}</p>
@@ -234,7 +234,7 @@ export function AddAccountDialog(props: {
             {several && (
               <label>Currency
                 <select value={code} onChange={(e) => { setCode(e.target.value); setAmount(""); }}>
-                  {list.currencies.map((c, i) => <option key={c.code} value={c.code}>{c.code} · {c.name}{i === 0 ? " (system currency)" : ""}</option>)}
+                  {options.currencies.map((c, i) => <option key={c.code} value={c.code}>{c.code} · {c.name}{i === 0 ? " (system currency)" : ""}</option>)}
                 </select>
               </label>
             )}
@@ -247,7 +247,7 @@ export function AddAccountDialog(props: {
               <input inputMode="decimal" placeholder={amountPlaceholder(chosen ?? undefined)} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </label>
             <label>As of
-              <input type="date" value={date} max={list.today} onChange={(e) => setDate(e.target.value)} />
+              <input type="date" value={date} max={options.today} onChange={(e) => setDate(e.target.value)} />
             </label>
           </div>
           <AmountReading text={amount} currency={chosen ?? undefined} />

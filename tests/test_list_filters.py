@@ -81,7 +81,7 @@ def test_conditions_the_list_would_refuse_are_refused_when_they_are_saved(conn, 
         return
     with pytest.raises(ValidationError, match=message):
         save(conn, cat, people["ann"], "Bad", conditions)
-    assert conn.execute("SELECT COUNT(*) FROM list_filters").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM list_filters WHERE list_key = 'filters_test'").fetchone()[0] == 0
 
 
 def test_a_filter_too_big_to_store_is_refused(conn, cat, people):
@@ -238,7 +238,7 @@ def test_removing_the_default_means_the_list_opens_with_none(conn, cat, people):
     list_filters.update(op(conn, people["ann"]), cat, DEFINITION, filter_id, is_admin=False, is_default=True)
     list_filters.delete(op(conn, people["ann"]), DEFINITION, filter_id, is_admin=False)
     assert list_filters.default_id(conn, people["ann"], "filters_test") is None
-    assert conn.execute("SELECT COUNT(*) FROM list_filters").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM list_filters WHERE list_key = 'filters_test'").fetchone()[0] == 0
     assert conn.execute("SELECT change FROM sys_record_changes WHERE tablename = 'list_filters' ORDER BY id DESC").fetchone()[0] == "DELETE"
 
 

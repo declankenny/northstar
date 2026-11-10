@@ -64,34 +64,6 @@ def balance_history(conn: sqlite3.Connection, account_id: int) -> list[sqlite3.R
     ).fetchall()
 
 
-def account_rows(conn: sqlite3.Connection, today: date, closed: bool = False) -> list[dict]:
-    """The Accounts list: open accounts, or closed ones, each with its latest balance, how old that
-    is and whether it is stale for its type. Grouped by class, then type, then name.
-
-    Closed accounts are never flagged stale: their last balance is meant to be old.
-    """
-    rows = conn.execute(
-        "SELECT a.id, a.name, c.name AS class_name, t.name AS type_name, t.stale_after_days, a.notes, a.is_open, "
-        "  cu.code AS currency_code, cu.name AS currency_name, cu.minor_units AS currency_minor_units, "
-        "  s.balance_count, s.last_date, s.last_cents "
-        "FROM live_accounts a "
-        "JOIN account_summaries s ON s.id = a.id "
-        "JOIN account_types t ON t.id = a.type_id "
-        "JOIN account_classes c ON c.id = t.class_id "
-        "JOIN currencies cu ON cu.id = a.currency_id "
-        "WHERE a.is_open = ? "
-        "ORDER BY t.class_id, t.name COLLATE NOCASE, a.name COLLATE NOCASE",
-        (0 if closed else 1,),
-    ).fetchall()
-    result = []
-    for row in rows:
-        item = with_currency(dict(row))
-        item["days_since"] = staleness.days_since(row["last_date"], today)
-        item["stale"] = bool(row["is_open"]) and staleness.is_stale(row["last_date"], today, row["stale_after_days"])
-        result.append(item)
-    return result
-
-
 def classes_with_types(conn: sqlite3.Connection) -> list[dict]:
     """Both classes with the types each offers, for the Add account dialog."""
     classes = conn.execute("SELECT id, name FROM account_classes ORDER BY id").fetchall()

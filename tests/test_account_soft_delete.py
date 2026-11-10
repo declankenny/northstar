@@ -54,17 +54,17 @@ def test_a_deleted_account_is_gone_from_every_account_read(conn, household):
     ):
         with pytest.raises(NotFoundError):
             read()
-    assert [row["name"] for row in accounts.account_rows(conn, TODAY)] == ["Test mortgage"]
-    assert accounts.account_rows(conn, TODAY, closed=True) == []
+    assert [row["name"] for row in conn.execute("SELECT name FROM account_summaries WHERE is_open = 1")] == ["Test mortgage"]
+    assert conn.execute("SELECT name FROM account_summaries WHERE is_open = 0").fetchall() == []
     assert [row["name"] for row in balances.update_rows(conn, TODAY, TODAY)] == ["Test mortgage"]
 
 
 def test_a_deleted_closed_account_leaves_the_closed_list(conn):
     old = add_account(conn, "Test old card", LIABILITY, "Credit card")
     accounts.close_account(op(conn), old)
-    assert [row["name"] for row in accounts.account_rows(conn, TODAY, closed=True)] == ["Test old card"]
+    assert [row["name"] for row in conn.execute("SELECT name FROM account_summaries WHERE is_open = 0")] == ["Test old card"]
     accounts.delete_account(op(conn), old)
-    assert accounts.account_rows(conn, TODAY, closed=True) == []
+    assert conn.execute("SELECT name FROM account_summaries WHERE is_open = 0").fetchall() == []
 
 
 def test_a_deleted_accounts_balances_cannot_be_read_or_changed(conn, household):

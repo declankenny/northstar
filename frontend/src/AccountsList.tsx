@@ -1,66 +1,16 @@
 import { useEffect, useState } from "react";
-import {
-  type AccountPage, addAccount, addBalance, downloadExport, editAccount, fetchAccount, fetchAccounts, type ListedAccount,
-} from "./api";
-import { AddAccountDialog, BalanceDialog, EditAccountDialog } from "./AccountDialogs";
-import { formatDate } from "./dates";
-import { formatCents } from "./money";
-import { RowMenu } from "./RowMenu";
-import { Link, navigate } from "./router";
-import { accountPath, importPath } from "./routes";
+import { addAccount, fetchAccountOptions } from "./api";
+import { AddAccountDialog } from "./AccountDialogs";
+import { ListView } from "./ListView";
 import { useRequest } from "./useRequest";
-import { formatInteger } from "./locale";
 
-function ago(days: number | null): string {
-  if (days === null) return "";
-  return days === 0 ? "today" : `${formatInteger(days)} day${days === 1 ? "" : "s"} ago`;
-}
-
-type RowActions = { onEdit: (a: ListedAccount) => void; onAddBalance: (a: ListedAccount) => void };
-
-function Row({ account, showStale, actions }: { account: ListedAccount; showStale: boolean; actions: RowActions }) {
-  const stale = showStale && account.stale;
-  const items = [
-    { label: "Open", onClick: () => { navigate(accountPath(account.id)); } },
-    { label: "Edit", onClick: () => actions.onEdit(account) },
-    // A closed account takes no new balances, so its menu has no Add balance and no Import CSV.
-    ...(showStale ? [
-      { label: "Add balance", onClick: () => actions.onAddBalance(account) },
-      { label: "Import CSV…", onClick: () => { navigate(importPath(account.id)); } },
-    ] : []),
-    { label: "Export CSV", onClick: () => { downloadExport(account.id); } },
-  ];
-  return (
-    <tr className="row">
-      <td>
-        <Link className="name" to={accountPath(account.id)}>{account.name}</Link>
-        {stale && <span className="badge stale">Stale</span>}
-      </td>
-      <td className="m">{account.type_name}</td>
-      <td>{account.currency.code}</td>
-      <td className="r">{account.last_cents === null ? <span className="m">—</span> : formatCents(account.last_cents, account.currency)}</td>
-      <td>
-        {account.last_date === null ? (
-          <span className={stale ? "w" : "m"}>No balances yet</span>
-        ) : (
-          <>{formatDate(account.last_date)} <span className={stale ? "w" : "m"}>· {ago(account.days_since)}</span></>
-        )}
-      </td>
-      <td className="r">{formatInteger(account.balance_count)}</td>
-      <td className="note" title={account.notes ?? undefined}>{account.notes}</td>
-      <td className="k"><RowMenu label={`Actions for ${account.name}`} items={items} /></td>
-    </tr>
-  );
-}
-
+/** Every account, as a list of the framework: the columns, the sort and the shared "Open accounts" filter are data on the server, so
+ *  this page is the heading, the Add account button and the table. An account's page has every action on it, so a row has no menu. */
 export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
-  const [closed, setClosed] = useState(false);
-  const loaded = useRequest((signal) => fetchAccounts(closed, signal), [closed]); // the other list is not shown meanwhile
-  const { data: list, error, setData: setList } = loaded;
+  const { data: options, error } = useRequest((signal) => fetchAccountOptions(signal), []);
   const [menu, setMenu] = useState(false);
   const [adding, setAdding] = useState<"asset" | "liability" | null>(null);
-  const [dialog, setDialog] = useState<{ kind: "edit" | "balance"; account: AccountPage } | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);      // raised when an account is added, so the list reads its rows again in place
 
   useEffect(() => {
     if (!menu) return;
@@ -69,35 +19,12 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
     return () => document.removeEventListener("click", close);
   }, [menu]);
 
-  // The dialogs take the whole account, so fetch it first; the list only carries what its table shows.
-  const openDialog = (kind: "edit" | "balance") => (listed: ListedAccount) => {
-    setFailure(null);
-    fetchAccount(listed.id).then((account) => setDialog({ kind, account }), (e: Error) => setFailure(e.message));
-  };
-  const actions: RowActions = { onEdit: openDialog("edit"), onAddBalance: openDialog("balance") };
-  /** A change is saved on the account, then the list is read again so the row and its group total are right. */
-  const saved = async () => {
-    setList(await fetchAccounts(closed));
-    setDialog(null);
-  };
-
-  if (error) return <p className="empty">Could not load accounts. {error}</p>;
-  if (!list) return <p className="empty">Loading…</p>;
-
-  const groups = [
-    { name: "Assets", cls: "Asset", total: list.totals?.assets },
-    { name: "Liabilities", cls: "Liability", total: list.totals?.liabilities },
-  ].map((g) => ({ ...g, rows: list.accounts.filter((a) => a.class_name === g.cls) })).filter((g) => g.rows.length > 0);
-
   return (
     <div className="acct">
       <div className="top">
-        <div>
-          <div className="eyebrow">{formatDate(list.today).toUpperCase()}</div>
-          <h1>Accounts</h1>
-        </div>
+        <div><h1>Accounts</h1></div>
         <div className="actions-bar">
-          <button className="btn" aria-haspopup="menu" aria-expanded={menu}
+          <button className="btn" aria-haspopup="menu" aria-expanded={menu} disabled={!options}
             onClick={(e) => { e.stopPropagation(); setMenu(!menu); }}>Add account ▾</button>
           {menu && (
             <div className="menu" role="menu">
@@ -108,61 +35,21 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
-      <div className="listbar">
-        <div className="ranges" role="group" aria-label="Show">
-          <button className={!closed ? "on" : ""} aria-pressed={!closed} onClick={() => setClosed(false)}>Open</button>
-          <button className={closed ? "on" : ""} aria-pressed={closed} onClick={() => setClosed(true)}>Closed</button>
-        </div>
-      </div>
+      {error && <p className="notice bad" role="alert">Could not load what Add account offers. {error}</p>}
+      {options?.currency === null && (
+        <p className="notice warn" role="status">The system currency is not set yet. Set it before adding the first account.</p>
+      )}
 
-      {failure && <p className="notice bad" role="alert">{failure}</p>}
+      <ListView listKey="accounts" refreshKey={refreshKey}
+        config={{ title: "Accounts", isAdmin, emptyText: "There are no accounts yet. Use Add account to create one." }} />
 
-      <div className="stack">
-        {groups.length === 0 ? (
-          <div className="gcard"><p className="empty pad">{closed ? "No closed accounts."
-            : list.currency === null ? "The system currency is not set yet. Set it before adding the first account."
-              : "No open accounts yet. Use Add account to create one."}</p></div>
-        ) : (
-          groups.map((g) => (
-            <div key={g.cls} className={`gcard ${g.cls.toLowerCase()}`}>
-              <div className="gh">
-                <span className="gt">{g.name}</span>
-                {g.total !== undefined && <span className="tot num">{formatCents(g.total)}</span>}
-              </div>
-              <table className="num list">
-                <colgroup>
-                  <col style={{ width: "19%" }} /><col style={{ width: "11%" }} /><col style={{ width: "8%" }} /><col style={{ width: "14%" }} />
-                  <col style={{ width: "19%" }} /><col style={{ width: "8%" }} /><col /><col style={{ width: "64px" }} />
-                </colgroup>
-                <thead>
-                  <tr><th>Account</th><th>Type</th><th>Currency</th><th className="r">Latest balance</th><th>As of</th><th className="r">Balances</th><th className="note">Notes</th><th /></tr>
-                </thead>
-                <tbody>
-                  {g.rows.map((a) => <Row key={a.id} account={a} showStale={!closed} actions={actions} />)}
-                </tbody>
-              </table>
-            </div>
-          ))
-        )}
-      </div>
-
-      {adding && (
-        <AddAccountDialog list={list} isAdmin={isAdmin} accountClass={adding} onClose={() => setAdding(null)}
+      {adding && options && (
+        <AddAccountDialog options={options} isAdmin={isAdmin} accountClass={adding} onClose={() => setAdding(null)}
           onSave={async (account) => {
-            const fresh = await addAccount(account); // answers with the open list, which now has the new account
-            setClosed(false);
-            setList(fresh);
+            await addAccount(account);
+            setRefreshKey((n) => n + 1);
             setAdding(null);
           }} />
-      )}
-
-      {dialog?.kind === "edit" && (
-        <EditAccountDialog account={dialog.account} onClose={() => setDialog(null)}
-          onSave={async (change) => { await editAccount(dialog.account.id, change); await saved(); }} />
-      )}
-      {dialog?.kind === "balance" && (
-        <BalanceDialog account={dialog.account} editing={null} onClose={() => setDialog(null)}
-          onSave={async (entry) => { await addBalance(dialog.account.id, entry); await saved(); }} />
       )}
     </div>
   );
