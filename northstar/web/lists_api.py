@@ -7,13 +7,15 @@ for admins is a 403 for anyone else, and a request that breaks a rule is a 422.
 """
 
 import json
+import re
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, StrictInt
 
-from northstar import list_filters, list_prefs
-from northstar.lists import loader
+from northstar import clock, db, list_filters, list_prefs
+from northstar.lists import export as list_export, loader
 from northstar.lists.query import choices as filter_choices, describe, run as run_list
 from northstar.lists.request import parse_request
 from northstar.lists.tree import field_tree
@@ -111,6 +113,24 @@ def _definition(key: str, user):
     return definition
 
 
+def _with_choices(conn, catalog, definition, user, key, data) -> tuple[list, int | None, list, bool]:
+    """Put the person's own choices into a request that names none, in `data`: their saved columns, and their default filter (or the
+    shared one). A request that names columns or filters, even an empty list of filters, gets exactly those. It says what it did: the
+    conditions and columns that no longer fit the list and were left out, the filter it opened with, and whether the columns are the person's."""
+    skipped, opened_with, skipped_columns, customised = [], None, [], False
+    if "columns" not in data:                       # no columns named: the person's own choice, else the list's
+        stored = list_prefs.saved_columns(conn, user["id"], key)
+        if stored is not None:
+            kept, skipped_columns = list_prefs.usable_columns(catalog, definition, stored)
+            if kept:
+                data["columns"], customised = kept, True
+    if "filters" not in data:                       # no filter named: the person's default, else the shared one. An empty list is "none"
+        opened_with = list_filters.default_id(conn, user["id"], key)
+        if opened_with is not None:
+            data["filters"], skipped = list_filters.usable(catalog, definition, list_filters.get(conn, user["id"], key, opened_with)["conditions"])
+    return skipped, opened_with, skipped_columns, customised
+
+
 @router.post("/{key}", response_model=ListPage)
 def query_list(key: str, request: Request, body: dict = Body(default_factory=dict)):
     user = current_user(request)
@@ -121,18 +141,7 @@ def query_list(key: str, request: Request, body: dict = Body(default_factory=dic
         data = dict(body)
         if "page_size" not in data:                 # the person's own choice, else the list's
             data["page_size"] = list_prefs.page_size(conn, user["id"], key, definition.page_size)
-        skipped, opened_with = [], None
-        skipped_columns, customised = [], False
-        if "columns" not in data:                   # no columns named: the person's own choice, else the list's
-            stored = list_prefs.saved_columns(conn, user["id"], key)
-            if stored is not None:
-                kept, skipped_columns = list_prefs.usable_columns(catalog, definition, stored)
-                if kept:
-                    data["columns"], customised = kept, True
-        if "filters" not in data:                   # no filter named: the person's default, else the shared one. An empty list is "none"
-            opened_with = list_filters.default_id(conn, user["id"], key)
-            if opened_with is not None:
-                data["filters"], skipped = list_filters.usable(catalog, definition, list_filters.get(conn, user["id"], key, opened_with)["conditions"])
+        skipped, opened_with, skipped_columns, customised = _with_choices(conn, catalog, definition, user, key, data)
         parsed = parse_request(catalog, definition, data)
         result = run_list(conn, catalog, definition, parsed, _roles(user))
         return {"columns": describe(catalog, definition, parsed.columns, _roles(user)), "rows": result.rows,
@@ -236,3 +245,34 @@ def set_columns(key: str, body: ColumnChoice, request: Request):
         return {"columns": columns, "customised": body.columns is not None}
 
     return run(request, action)
+
+
+@router.post("/{key}/export")
+def export_list(key: str, request: Request, body: dict = Body(default_factory=dict)):
+    """The view as a CSV file: every row it matches, in its order, with its columns, however many pages that is. The request is the same
+    as the list's, and a page and a page size are ignored. It names the person's own columns and default filter when it names none, so the
+    file is the list as they see it, and it changes nothing they have saved. It is a POST so that a filter's values are in neither the
+    address nor a log. A request that breaks a rule is refused before the file starts."""
+    user = current_user(request)
+    definition = _definition(key, user)
+
+    def validate(conn):
+        catalog = household_catalog(conn)
+        data = {name: value for name, value in body.items() if name not in ("page", "page_size")}
+        _with_choices(conn, catalog, definition, user, key, data)
+        return parse_request(catalog, definition, data)
+
+    parsed = run(request, validate)
+    roles = _roles(user)
+    path = request.app.state.db_path
+
+    def file():
+        conn = db.connect(path)             # its own connection, open for as long as the file takes to send
+        try:
+            yield from list_export.stream(conn, household_catalog(conn), definition, parsed, roles)
+        finally:
+            conn.close()
+
+    name = f"northstar-{re.sub(r'[^A-Za-z0-9]+', '-', key).strip('-')}-{clock.today().isoformat()}.csv"
+    return StreamingResponse(file(), media_type="text/csv; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})

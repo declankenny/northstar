@@ -155,12 +155,41 @@ def _href(pattern: str, record_id, value) -> str | None:
     return pattern.replace("{id}", str(record_id)).replace("{value}", quote(str(value), safe=""))
 
 
-def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request: ListRequest,
-        viewer=frozenset()) -> ListResult:
-    """The page of rows the request asks for, with the count of every matching row. Rows are dicts by key, with the record's
-    id as `_id`, `_links` (the route each linked column opens, for this viewer) and, when grouped, `_group`, `_group_count` (the
-    group's size across all pages) and `_group_before` (how many rows of the group come before this one in the order, so a page can
-    tell that its first rows continue a group from the page before)."""
+@dataclass
+class _Plan:
+    """What one request needs to read its rows: the statement's parts, and how a record read with it becomes a row."""
+
+    view: "_View"
+    source: str
+    where_sql: str
+    where_joins: list
+    where_params: list
+    selected: list
+    shaped: list                                        # (key, kind, first position, how many) of each column in `selected`
+    linked: list                                        # (key, pattern, position of the id selected for it, or None for the row's own)
+    order: list
+    group: str | None                                   # the key rows are grouped by and carry `_group`, `_group_count` and `_group_before` for
+
+    def select_sql(self) -> str:
+        return (f'SELECT {", ".join(self.selected)} FROM "{self.source}" AS b {" ".join(self.view.joins.sql)}{self.where_sql} '
+                f'ORDER BY {", ".join(self.order)}')
+
+    def row(self, record) -> dict:
+        row = {key: kind.shape([record[f"c{start + n}"] for n in range(count)]) for key, kind, start, count in self.shaped}
+        row["_id"] = record["_id"]
+        row["_links"] = {}
+        for key, pattern, position in self.linked:
+            href = _href(pattern, record["_id"] if position is None else record[f"l{position}"], row[key])
+            if href is not None:
+                row["_links"][key] = href
+        if self.group is not None:
+            row["_group"], row["_group_count"], row["_group_before"] = record["_g"], record["_gn"], record["_gb"]
+        return row
+
+
+def _plan(catalog: Catalog, definition: ListDef, request: ListRequest, viewer, *, group_columns: bool = True) -> _Plan:
+    """The statement for a request. `group_columns` adds what a page needs to draw its groups (the size of each and a row's place in
+    it); an export orders by the group but has no use for them."""
     base = definition.table
     pk = catalog.primary_key[base]
     source = definition.source or base
@@ -171,8 +200,8 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
     where_params = list(view.params)
 
     selected = [f'b."{pk}" AS _id']
-    shaped = []                                         # (key, kind, first position, how many) of each column in `selected`
-    linked = []                                         # (key, pattern, position of the id selected for it, or None for the row's own)
+    shaped = []
+    linked = []
     for key in request.columns:
         resolved = catalog.resolve(base, key)
         expressions = resolved.kind.select(view, resolved)
@@ -191,9 +220,10 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
     if request.group is not None:
         group = catalog.resolve(base, request.group)
         expression = group.kind.group_key(view, group)
-        selected.append(f"{expression} AS _g")
-        selected.append(f"COUNT(*) OVER (PARTITION BY {expression}) AS _gn")
-        selected.append(f"ROW_NUMBER() OVER (PARTITION BY {expression} ORDER BY {', '.join(within)}) - 1 AS _gb")
+        if group_columns:
+            selected.append(f"{expression} AS _g")
+            selected.append(f"COUNT(*) OVER (PARTITION BY {expression}) AS _gn")
+            selected.append(f"ROW_NUMBER() OVER (PARTITION BY {expression} ORDER BY {', '.join(within)}) - 1 AS _gb")
         # Groups follow the value, and their direction follows the sort when the list is sorted by the grouped column: otherwise a click on
         # that column's header would change nothing, every row of a group being equal. A group with no value comes last either way.
         direction = f" {request.direction.upper()}" if request.sort_key == request.group else ""
@@ -201,28 +231,41 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
     order += within
 
     where_sql = f" WHERE {where}" if where else ""
-    count_sql = f'SELECT COUNT(*) FROM "{source}" AS b {" ".join(where_joins)}{where_sql}'
-    total = conn.execute(count_sql, where_params).fetchone()[0]
+    return _Plan(view, source, where_sql, where_joins, where_params, selected, shaped, linked, order, request.group if group_columns else None)
+
+
+def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request: ListRequest,
+        viewer=frozenset()) -> ListResult:
+    """The page of rows the request asks for, with the count of every matching row. Rows are dicts by key, with the record's
+    id as `_id`, `_links` (the route each linked column opens, for this viewer) and, when grouped, `_group`, `_group_count` (the
+    group's size across all pages) and `_group_before` (how many rows of the group come before this one in the order, so a page can
+    tell that its first rows continue a group from the page before)."""
+    plan = _plan(catalog, definition, request, viewer)
+    count_sql = f'SELECT COUNT(*) FROM "{plan.source}" AS b {" ".join(plan.where_joins)}{plan.where_sql}'
+    total = conn.execute(count_sql, plan.where_params).fetchone()[0]
 
     pages = max(1, math.ceil(total / request.page_size))
     page = min(request.page, pages)                     # a page past the end shows the last
-    sql = (f'SELECT {", ".join(selected)} FROM "{source}" AS b {" ".join(view.joins.sql)}{where_sql} '
-           f'ORDER BY {", ".join(order)} LIMIT ? OFFSET ?')
-    fetched = conn.execute(sql, [*view.params, request.page_size, (page - 1) * request.page_size]).fetchall()
-
-    rows = []
-    for record in fetched:
-        row = {key: kind.shape([record[f"c{start + n}"] for n in range(count)]) for key, kind, start, count in shaped}
-        row["_id"] = record["_id"]
-        row["_links"] = {}
-        for key, pattern, position in linked:
-            href = _href(pattern, record["_id"] if position is None else record[f"l{position}"], row[key])
-            if href is not None:
-                row["_links"][key] = href
-        if request.group is not None:
-            row["_group"], row["_group_count"], row["_group_before"] = record["_g"], record["_gn"], record["_gb"]
-        rows.append(row)
+    fetched = conn.execute(f"{plan.select_sql()} LIMIT ? OFFSET ?", [*plan.view.params, request.page_size, (page - 1) * request.page_size]).fetchall()
+    rows = [plan.row(record) for record in fetched]
     return ListResult(rows, total, page, request.page_size, pages, request.columns, request.group, (request.sort_key, request.direction))
+
+
+EXPORT_CHUNK = 500
+
+
+def iterate(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request: ListRequest, viewer=frozenset()):
+    """Every row the request matches, in its order, one at a time, however many there are: a page and a page size do not limit it.
+    It is one statement, read in chunks, so it is one consistent read of the data and holds no more than a chunk in memory. Rows are
+    shaped as `run` shapes them, without the groups' sizes, which an export has no use for."""
+    plan = _plan(catalog, definition, request, viewer, group_columns=False)
+    cursor = conn.execute(plan.select_sql(), plan.view.params)
+    while True:
+        chunk = cursor.fetchmany(EXPORT_CHUNK)
+        if not chunk:
+            return
+        for record in chunk:
+            yield plan.row(record)
 
 
 CHOICE_LIMIT = 500
