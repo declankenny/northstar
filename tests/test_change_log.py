@@ -409,7 +409,7 @@ def test_web_actions_are_ui_edits_by_the_signed_in_user_and_the_bulk_save_says_i
         clear_log(conn)
     created = client.post("/api/accounts", json={"name": "Test api", "account_class": "asset", "type_id": 1})
     assert created.status_code == 201
-    account = created.json()["accounts"][0]["id"]
+    account = created.json()["id"]
     saved = client.post("/api/balances/update", json={"date": "2026-01-31", "amounts": {str(account): "10.00"}, "versions": {str(account): None}})
     assert saved.status_code == 200
     with with_db(client) as conn:

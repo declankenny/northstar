@@ -169,16 +169,3 @@ def test_the_net_worth_endpoint_says_where_a_series_starts_and_which_currency_ha
         ("2026-05-01", 110850), ("2026-05-31", 110850), ("2026-06-03", 110850)]
     per_account = usd_client.get(f"/api/networth?account_id={euros}").json()
     assert per_account["limited"] is None and per_account["series"][0]["net_worth"] == 10000
-
-
-def test_a_date_with_no_rate_is_a_422_that_names_the_currency(usd_client, monkeypatch):
-    switch_on(usd_client)
-    add(usd_client, "2026-05-01", "1.0850")
-    with with_db(usd_client) as conn:
-        euros = accounts.add_account(op(conn), "Test euros", 1, type_id(conn, "Savings"), None, currencies.by_code(conn, "EUR").id)
-        add_balance(conn, euros, "2026-03-01", 10000)
-    assert usd_client.get("/api/accounts").json()["totals"] == {"assets": 10850, "liabilities": 0}
-    monkeypatch.setattr(clock, "today", lambda: date(2026, 4, 15))          # a day on which the euro account has no rate
-    response = usd_client.get("/api/accounts")
-    assert response.status_code == 422
-    assert "no EUR rate on or before Apr 15, 2026" in response.json()["detail"] and response.json()["missing_rates"] == ["EUR"]

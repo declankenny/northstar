@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AccountList, AccountPage as Account, ListedAccount, UpdatePage } from "./api";
+import type { AccountOptions, AccountPage as Account, ListColumn, ListPage, UpdatePage } from "./api";
 import { AddAccountDialog } from "./AccountDialogs";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
@@ -10,10 +10,10 @@ import { type Currency, setCurrency } from "./money";
 import { UpdateBalances } from "./UpdateBalances";
 
 vi.mock("./api", async (original) => ({
-  ...(await original<typeof import("./api")>()), fetchAccounts: vi.fn(), fetchAccount: vi.fn(), fetchNetWorth: vi.fn(), fetchUpdate: vi.fn(),
+  ...(await original<typeof import("./api")>()), fetchAccountOptions: vi.fn(), fetchList: vi.fn(), fetchListFields: vi.fn(), fetchAccount: vi.fn(), fetchNetWorth: vi.fn(), fetchUpdate: vi.fn(),
 }));
 
-import { fetchAccount, fetchAccounts, fetchNetWorth, fetchUpdate } from "./api";
+import { fetchAccount, fetchAccountOptions, fetchList, fetchListFields, fetchNetWorth, fetchUpdate } from "./api";
 
 const USD: Currency = { code: "USD", name: "US Dollar", minor_units: 2 };
 const EUR: Currency = { code: "EUR", name: "Euro", minor_units: 2 };
@@ -28,15 +28,15 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-const list = (currencies: Currency[], accounts: ListedAccount[] = []): AccountList => ({
-  currency: currencies[0], currencies, closed: false, accounts, totals: { assets: 1402500, liabilities: 0 }, today: "2026-06-03",
+const list = (currencies: Currency[]): AccountOptions => ({
+  currency: currencies[0], currencies, today: "2026-06-03",
   classes: [{ id: 1, name: "Asset", types: [{ id: 1, name: "Savings" }] }, { id: 2, name: "Liability", types: [] }],
 });
 
 describe("the Add account dialog with several currencies", () => {
-  const open = (l: AccountList, isAdmin = true) => {
+  const open = (l: AccountOptions, isAdmin = true) => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<AddAccountDialog list={l} isAdmin={isAdmin} accountClass="asset" onSave={onSave} onClose={vi.fn()} />);
+    render(<AddAccountDialog options={l} isAdmin={isAdmin} accountClass="asset" onSave={onSave} onClose={vi.fn()} />);
     return onSave;
   };
 
@@ -93,29 +93,36 @@ describe("the Add account dialog with several currencies", () => {
 });
 
 describe("the Accounts list with accounts in several currencies", () => {
-  const listed = (id: number, name: string, currency: Currency, cents: number): ListedAccount => ({
-    id, name, currency, class_name: "Asset", type_name: "Savings", notes: null, balance_count: 1, last_date: "2026-05-12",
-    last_cents: cents, days_since: 22, stale: false,
+  const column = (key: string, label: string, kind: ListColumn["kind"] = "text"): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: false, groupable: true });
+  const COLUMNS = [column("name", "Account"), column("type", "Type"), column("currency", "Currency"), column("last_cents", "Last balance", "amount"), column("last_date", "Balance date", "date")];
+  const listed = (id: number, name: string, code: string, value: number, scale: number) => ({
+    _id: id, _links: {}, name, type: "Savings", currency: code, last_cents: { value, scale, unit: code }, last_date: "2026-05-12",
   });
+  const show = (rows: ListPage["rows"]) => {
+    vi.mocked(fetchAccountOptions).mockResolvedValue(list([USD, EUR, JPY]));
+    vi.mocked(fetchListFields).mockResolvedValue({ fields: [], relations: [] });
+    vi.mocked(fetchList).mockResolvedValue({
+      columns: COLUMNS, rows, total: rows.length, page: 1, pages: 1, page_size: 25, group: null, sort: { field: "name", direction: "asc" }, filters: [],
+      skipped: [], default_filter_id: null, default_columns: COLUMNS.map((c) => c.key), customised: false, skipped_columns: [],
+    });
+    render(<AccountsList isAdmin />);
+  };
 
   it("has a Currency column, and writes each balance in its own account's currency", async () => {
-    vi.mocked(fetchAccounts).mockResolvedValue(list([USD, EUR, JPY], [
-      listed(1, "Test checking", USD, 150000), listed(2, "Test euros", EUR, 1000000), listed(3, "Test yen", JPY, 250000)]));
-    render(<AccountsList isAdmin />);
+    show([listed(1, "Test checking", "USD", 150000, 2), listed(2, "Test euros", "EUR", 1000000, 2), listed(3, "Test yen", "JPY", 250000, 0)]);
     await screen.findByText("Test euros");
-    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toContain("Currency");
-    const cells = (name: string) => [...(screen.getByText(name).closest("tr") as HTMLElement).querySelectorAll("td")].map((c) => c.textContent);
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▲▼▾]/g, "").trim())).toContain("Currency");
+    const cells = (name: string) => [...(screen.getByText(name).closest("tr") as HTMLElement).querySelectorAll("td")].map((c) => c.textContent?.replace(/ /g, " "));
     expect(cells("Test checking").slice(1, 4)).toEqual(["Savings", "USD", "$1,500.00"]);
-    expect(cells("Test euros").slice(1, 4)).toEqual(["Savings", "EUR", "EUR 10,000.00"]);
-    expect(cells("Test yen").slice(1, 4)).toEqual(["Savings", "JPY", "JPY 250,000"]);
+    expect(cells("Test euros").slice(1, 4)).toEqual(["Savings", "EUR", "EUR 10,000.00"]);
+    expect(cells("Test yen").slice(1, 4)).toEqual(["Savings", "JPY", "JPY 250,000"]);
   });
 
   it("writes them in the person's format", async () => {
     setLocale(GERMAN);
-    vi.mocked(fetchAccounts).mockResolvedValue(list([USD, EUR], [listed(2, "Test euros", EUR, 1000000)]));
-    render(<AccountsList isAdmin />);
+    show([listed(2, "Test euros", "EUR", 1000000, 2)]);
     const row = (await screen.findByText("Test euros")).closest("tr") as HTMLElement;
-    expect(row.textContent).toContain("10.000,00 EUR");
+    expect(row.textContent?.replace(/ /g, " ")).toContain("10.000,00 EUR");
     expect(row.textContent).toContain("12.05.2026");
   });
 });

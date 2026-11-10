@@ -33,6 +33,20 @@ TABLES = {
     "accounts": TableDef("accounts", "name", {
         "name": _text(True), "is_open": FieldDef(YesNo(), label="Open"), "notes": _text(True), **_audit()},
         denied=frozenset({"deleted"}), record_page="/accounts/{id}"),
+    # The live accounts with the figures that are worked out for each (migration 0025): its balance count, last balance and date, that
+    # balance's value in the system currency, its age and whether it is stale. It is a view of `accounts`, so it has that table's key
+    # and relations, and it leaves out a deleted account itself.
+    "account_summaries": TableDef("account_summaries", "name", {
+        "name": _text(True, "Account"), "is_open": FieldDef(YesNo(), label="Open"), "notes": _text(True),
+        "balance_count": FieldDef(Integer(), label="Balances"),
+        "last_date": FieldDef(Date(), label="Balance date"),
+        "last_cents": FieldDef(ScaledBy(scale_from=("currency", "minor_units"), unit_from=("currency", "code")),
+                               label="Last balance", groupable=False),
+        "reporting_value": FieldDef(ScaledBy(scale_from=("reporting_scale",), unit_from=("reporting_unit",)),
+                                    label="Reporting value", groupable=False),
+        "days_since": FieldDef(Integer(), label="Balance age (days)"),
+        "is_stale": FieldDef(YesNo(), label="Stale"), **_audit()},
+        denied=frozenset({"deleted"}), based_on="accounts", record_page="/accounts/{id}"),
     # The balances of live accounts, each with its value in the system currency (migration 0020). It is a view of `balances`, so
     # it has that table's key and relations, and the covering test counts it for that table.
     "live_balance_values": TableDef("live_balance_values", "as_of_date", {

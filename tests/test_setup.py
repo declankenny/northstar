@@ -138,7 +138,7 @@ def test_the_token_is_not_used_up_by_giving_it_or_by_a_refused_form(entered):
 
 def test_the_setup_session_is_not_a_signed_in_session(entered):
     assert entered.get("/api/me").status_code == 401
-    assert entered.get("/api/accounts").status_code == 401
+    assert entered.get("/api/accounts/options").status_code == 401
 
 
 def test_the_form_data_and_the_save_need_a_setup_session(fresh):

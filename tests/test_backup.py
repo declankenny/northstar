@@ -415,4 +415,4 @@ def test_data_survives_restarting_the_app(tmp_path):
     assert first.post("/api/accounts", json={"account_class": "asset", "name": "Survivor", "type_id": 1}).status_code == 201
     second = TestClient(create_app(db_file))                 # a fresh app on the same file
     second.cookies.set("northstar_session", first.cookies["northstar_session"])   # sessions survive too
-    assert "Survivor" in [a["name"] for a in second.get("/api/accounts").json()["accounts"]]
+    assert "Survivor" in [a["name"] for a in second.post("/api/lists/accounts", json={"filters": []}).json()["rows"]]

@@ -26,8 +26,12 @@ LIVE_BALANCES = ("CREATE VIEW live_balances AS SELECT balances.* FROM balances "
                  "JOIN accounts ON accounts.id = balances.account_id WHERE accounts.deleted = 0;\n")
 _VALUES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0020_live_balance_values.sql").read_text(encoding="utf-8")
 LIVE_BALANCE_VALUES = _VALUES[_VALUES.index("CREATE VIEW live_balance_values"):]      # reads live_balances and live_accounts, so it comes last
-_SUMMARIES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0024_account_summaries.sql").read_text(encoding="utf-8")
-ACCOUNT_SUMMARIES = _SUMMARIES[_SUMMARIES.index("CREATE VIEW last_balances"):]       # last_balances, then account_summaries, which reads it
+_MIGRATIONS = pathlib.Path(__file__).parent.parent / "northstar" / "migrations"
+_LAST = (_MIGRATIONS / "0024_account_summaries.sql").read_text(encoding="utf-8")
+_LIST = (_MIGRATIONS / "0025_accounts_list.sql").read_text(encoding="utf-8")
+# last_balances (0024), then account_summaries as 0025 left it, which reads it
+ACCOUNT_SUMMARIES = (_LAST[_LAST.index("CREATE VIEW last_balances"):_LAST.index("CREATE VIEW account_summaries")]
+                     + _LIST[_LIST.index("CREATE VIEW account_summaries"):_LIST.index("INSERT INTO list_filters")])
 VIEWS = "CREATE VIEW live_accounts AS SELECT * FROM accounts WHERE deleted = 0;\n" + LIVE_BALANCES
 REBUILD_ACCOUNTS = """-- northstar: rebuild
 DROP VIEW account_summaries;

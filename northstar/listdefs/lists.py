@@ -13,4 +13,13 @@ BALANCES = ListDef(
     ("as_of_date", "desc"),
 )
 
+# Every live account with its last balance and how old it is. Open accounts are the shared default filter (migration 0025), which is
+# data, so it is not here; and the page is the heading, the Add account button and the table.
+ACCOUNTS = ListDef(
+    "accounts", "account_summaries",
+    ("name", "type.class", "type", "currency", "last_cents", "reporting_value", "last_date", "days_since", "is_stale", "balance_count"),
+    ("name", "asc"),
+)
+
 loader.register(BALANCES)
+loader.register(ACCOUNTS)

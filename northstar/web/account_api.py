@@ -8,7 +8,7 @@ exactly what the server now holds. A broken rule is a 422 and an unknown account
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
-from northstar import accounts, balance_export, balances, clock, currencies, networth
+from northstar import accounts, balance_export, balances, clock, currencies
 from northstar.web.auth_routes import operation, run
 
 router = APIRouter(prefix="/api")
@@ -61,39 +61,22 @@ class AccountOut(BaseModel):
     today: str               # the server's today(), so the browser never needs its own clock
 
 
-class ListedAccount(BaseModel):
-    id: int
-    name: str
-    currency: CurrencyOut    # the currency last_cents is in
-    class_name: str
-    type_name: str
-    notes: str | None
-    balance_count: int
-    last_date: str | None
-    last_cents: int | None
-    days_since: int | None
-    stale: bool
-
-
 class ClassTypes(BaseModel):
     id: int
     name: str
     types: list[TypeOut]
 
 
-class Totals(BaseModel):
-    assets: int
-    liabilities: int
-
-
-class AccountList(BaseModel):
+class AccountOptions(BaseModel):
+    """What the Add account dialog offers. The list of accounts is the list framework's (`/api/lists/accounts`)."""
     currency: CurrencyOut | None     # the system currency; null while it is unset, when no account can be added
     currencies: list[CurrencyOut]    # what a new account can be in: the system currency first, then the other usable ones
-    closed: bool
-    accounts: list[ListedAccount]    # grouped by class, then type, then name
-    totals: Totals | None            # as of today, from net_worth_on; only for the open list
-    classes: list[ClassTypes]        # what the Add account dialog offers
+    classes: list[ClassTypes]        # the types each class offers
     today: str
+
+
+class AccountCreated(BaseModel):
+    id: int
 
 
 class NewAccount(BaseModel):
@@ -133,26 +116,25 @@ def _page(conn, account_id: int) -> dict:
     return {**accounts.account_page(conn, account_id, today), "today": today.isoformat()}
 
 
-def _list(conn, closed: bool) -> dict:
-    today = clock.today()
-    totals = None if closed else networth.net_worth_on(conn, today)
-    return {"currency": currencies.system_currency_dict(conn), "currencies": currencies.choosable(conn), "closed": closed,
-            "accounts": accounts.account_rows(conn, today, closed),
-            "totals": totals, "classes": accounts.classes_with_types(conn), "today": today.isoformat()}
+def _options(conn) -> dict:
+    return {"currency": currencies.system_currency_dict(conn), "currencies": currencies.choosable(conn),
+            "classes": accounts.classes_with_types(conn), "today": clock.today().isoformat()}
 
 
-@router.get("/accounts", response_model=AccountList)
-def list_accounts(request: Request, closed: bool = False):
-    return run(request, lambda conn: _list(conn, closed))
+# Declared before the routes of one account, whose id is a number, so that "options" is never read as an id.
+@router.get("/accounts/options", response_model=AccountOptions)
+def account_options(request: Request):
+    return run(request, _options)
 
 
-@router.post("/accounts", response_model=AccountList, status_code=201)
+@router.post("/accounts", response_model=AccountCreated, status_code=201)
 def add_account(body: NewAccount, request: Request):
-    """Adds the account (and its first balance, if an amount is typed) and answers with the open list."""
+    """Adds the account (and its first balance, if an amount is typed) and answers with its id."""
     def action(conn):
-        balances.add_account_with_balance(operation(request, conn), body.account_class, body.name, body.type_id,
-                                          body.notes, body.amount, body.date, clock.today(), body.locale, body.currency)
-        return _list(conn, closed=False)
+        account_id = balances.add_account_with_balance(
+            operation(request, conn), body.account_class, body.name, body.type_id, body.notes, body.amount, body.date,
+            clock.today(), body.locale, body.currency)
+        return {"id": account_id}
     return run(request, action)
 
 

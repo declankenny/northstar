@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from conftest import add_balance, op, type_id, with_db
-from northstar import accounts, balances, clock, currencies, rates
+from northstar import accounts, balances, clock, currencies, networth, rates
 from northstar.errors import ValidationError
 
 TODAY = date(2026, 6, 3)
@@ -112,25 +112,38 @@ KWD = {"code": "KWD", "name": "Kuwaiti Dinar", "minor_units": 3}
 USD = {"code": "USD", "name": "US Dollar", "minor_units": 2}
 
 
-def test_the_list_says_what_a_new_account_can_be_in_and_each_account_its_own_currency(client, mixed):
-    body = client.get(URL).json()
+def accounts_list(client):
+    """The Accounts list as the page reads it, every account: each row's currency and last balance with its own digits."""
+    return {row["name"]: row for row in client.post("/api/lists/accounts", json={"filters": []}).json()["rows"]}
+
+
+def test_the_options_say_what_a_new_account_can_be_in_and_each_listed_account_its_own_currency(client, mixed):
+    body = client.get(f"{URL}/options").json()
     assert body["currency"] == USD and body["currencies"] == [USD, EUR, KWD]
-    assert {a["name"]: a["currency"] for a in body["accounts"]} == {"Test dollars": USD, "Test euros": EUR, "Test dinars": KWD}
-    assert {a["name"]: a["last_cents"] for a in body["accounts"]} == {"Test dollars": 100000, "Test euros": 10000, "Test dinars": 1234}
+    rows = accounts_list(client)
+    assert {name: row["currency"] for name, row in rows.items()} == {"Test dollars": "USD", "Test euros": "EUR", "Test dinars": "KWD"}
+    assert {name: row["last_cents"] for name, row in rows.items()} == {
+        "Test dollars": {"value": 100000, "scale": 2, "unit": "USD"}, "Test euros": {"value": 10000, "scale": 2, "unit": "EUR"},
+        "Test dinars": {"value": 1234, "scale": 3, "unit": "KWD"}}
 
 
-def test_the_totals_are_in_the_system_currency_whatever_the_accounts_are_in(client, mixed):
+def test_the_reporting_values_are_in_the_system_currency_whatever_the_accounts_are_in(client, mixed):
     # 1,000.00 + 100.00 EUR at 1.0850 + 1.234 KWD at 3.25 (4.0105 dollars, so 401 cents)
-    assert client.get(URL).json()["totals"] == {"assets": 100000 + 10850 + 401, "liabilities": 0}
+    values = {name: row["reporting_value"] for name, row in accounts_list(client).items()}
+    assert values == {name: {"value": cents, "scale": 2, "unit": "USD"}
+                      for name, cents in {"Test dollars": 100000, "Test euros": 10850, "Test dinars": 401}.items()}
+    with with_db(client) as conn:
+        assert networth.net_worth_on(conn, TODAY)["assets"] == 100000 + 10850 + 401
 
 
 def test_adding_an_account_through_the_api_takes_a_currency_code(client, mixed):
-    type_id_ = client.get(URL).json()["classes"][0]["types"][0]["id"]
+    type_id_ = client.get(f"{URL}/options").json()["classes"][0]["types"][0]["id"]
     response = client.post(URL, json={"account_class": "asset", "name": "More euros", "type_id": type_id_, "currency": "EUR",
                                       "amount": "1,234.50", "date": "2026-05-12"})
     assert response.status_code == 201
-    added = next(a for a in response.json()["accounts"] if a["name"] == "More euros")
-    assert (added["currency"], added["last_cents"]) == (EUR, 123450)
+    added = accounts_list(client)["More euros"]
+    assert response.json() == {"id": added["_id"]}
+    assert (added["currency"], added["last_cents"]) == ("EUR", {"value": 123450, "scale": 2, "unit": "EUR"})
     refused = client.post(URL, json={"account_class": "asset", "name": "Odd", "type_id": type_id_, "currency": "ZZZ"})
     assert refused.status_code == 422 and "Choose a currency from the list" in refused.json()["detail"]
     unusable = client.post(URL, json={"account_class": "asset", "name": "Yen", "type_id": type_id_, "currency": "JPY"})

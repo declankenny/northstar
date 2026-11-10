@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type AccountList, type PropertyList, type PropertyRow } from "./api";
+import { type AccountOptions, type PropertyList, type PropertyRow } from "./api";
 import { AddAccountDialog } from "./AccountDialogs";
 import { amountPlaceholder, centsToInput, formatCents, parseCents, setCurrency } from "./money";
 import { SystemProperties } from "./SystemProperties";
@@ -65,14 +65,14 @@ describe("amounts in the currency's minor unit", () => {
   });
 });
 
-const accountList = (currency: AccountList["currency"]): AccountList => ({
-  currency, currencies: currency ? [currency] : [], closed: false, accounts: [], totals: { assets: 0, liabilities: 0 }, today: "2026-11-04",
+const accountList = (currency: AccountOptions["currency"]): AccountOptions => ({
+  currency, currencies: currency ? [currency] : [], today: "2026-11-04",
   classes: [{ id: 1, name: "Asset", types: [{ id: 1, name: "Savings" }] }, { id: 2, name: "Liability", types: [] }],
 });
 
 describe("the Add account dialog", () => {
-  const open = (list: AccountList, isAdmin: boolean) =>
-    render(<AddAccountDialog list={list} isAdmin={isAdmin} accountClass="asset" onSave={vi.fn()} onClose={vi.fn()} />);
+  const open = (list: AccountOptions, isAdmin: boolean) =>
+    render(<AddAccountDialog options={list} isAdmin={isAdmin} accountClass="asset" onSave={vi.fn()} onClose={vi.fn()} />);
 
   it("has no currency field with one currency, and says which one amounts are in", () => {
     open(accountList(USD), true);

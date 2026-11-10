@@ -349,30 +349,13 @@ export async function fetchBalance(id: number, signal?: AbortSignal): Promise<Ba
   return (await send<BalancePageData>("GET", `/api/balances/${id}`, undefined, signal))!;
 }
 
-/** One row of the Accounts list. last_* are the latest balance, null for an account with none. */
-export type ListedAccount = {
-  id: number;
-  name: string;
-  currency: Currency; // the currency last_cents is in
-  class_name: "Asset" | "Liability";
-  type_name: string;
-  notes: string | null;
-  balance_count: number;
-  last_date: string | null;
-  last_cents: number | null;
-  days_since: number | null;
-  stale: boolean;
-};
-
 export type ClassTypes = { id: number; name: string; types: TypeChoice[] };
 
-export type AccountList = {
+/** What the Add account dialog offers. The list of accounts is a list of the framework (listKey "accounts"). */
+export type AccountOptions = {
   currency: Currency | null; // the system currency; null while it is unset, when no account can be added
   currencies: Currency[]; // what a new account can be in: the system currency first, then the other usable ones
-  closed: boolean;
-  accounts: ListedAccount[]; // grouped by class, then type, then name
-  totals: { assets: number; liabilities: number } | null; // as of today; only for the open list
-  classes: ClassTypes[]; // what the Add account dialog offers
+  classes: ClassTypes[]; // the types each class offers
   today: string;
 };
 
@@ -386,13 +369,13 @@ export type NewAccount = {
   date: string; // as of; ignored when the amount is blank
 };
 
-export async function fetchAccounts(closed: boolean, signal?: AbortSignal): Promise<AccountList> {
-  return (await send<AccountList>("GET", `/api/accounts?closed=${closed}`, undefined, signal))!;
+export async function fetchAccountOptions(signal?: AbortSignal): Promise<AccountOptions> {
+  return (await send<AccountOptions>("GET", "/api/accounts/options", undefined, signal))!;
 }
 
-/** Answers with the open list, which now includes the new account. */
-export async function addAccount(account: NewAccount): Promise<AccountList> {
-  return (await send<AccountList>("POST", "/api/accounts", { ...account, locale: getLocale().tag }))!;
+/** Answers with the new account's id. */
+export async function addAccount(account: NewAccount): Promise<{ id: number }> {
+  return (await send<{ id: number }>("POST", "/api/accounts", { ...account, locale: getLocale().tag }))!;
 }
 
 /** One account type. account_count is how many accounts use it, and deleted_account_count how many deleted accounts still do

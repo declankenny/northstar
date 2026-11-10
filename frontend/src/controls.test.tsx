@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type AccountList, type AccountPage, type Me, RequestError, type UpdatePage } from "./api";
+import { type AccountOptions, type AccountPage, type Me, RequestError, type UpdatePage } from "./api";
 import { AddAccountDialog, BalanceDialog } from "./AccountDialogs";
 import { AmountReading } from "./AmountReading";
 import { type Locale, setLocale, US_ENGLISH } from "./locale";
@@ -178,8 +178,8 @@ describe("the new-user form's number and date format", () => {
 
 // -- amount boxes and the refusal when the format changed --
 
-const list = (): AccountList => ({
-  currency: { code: "EUR", name: "Euro", minor_units: 2 }, currencies: [{ code: "EUR", name: "Euro", minor_units: 2 }], closed: false, accounts: [], totals: { assets: 0, liabilities: 0 }, today: "2026-11-05",
+const options = (): AccountOptions => ({
+  currency: { code: "EUR", name: "Euro", minor_units: 2 }, currencies: [{ code: "EUR", name: "Euro", minor_units: 2 }], today: "2026-11-05",
   classes: [{ id: 1, name: "Asset", types: [{ id: 1, name: "Savings" }] }, { id: 2, name: "Liability", types: [] }],
 });
 
@@ -191,7 +191,7 @@ describe("the Add account dialog", () => {
     setCurrency({ code: "EUR", name: "Euro", minor_units: 2 });
     render(
       <RefreshMe.Provider value={refresh}>
-        <AddAccountDialog list={list()} isAdmin accountClass="asset" onSave={onSave} onClose={vi.fn()} />
+        <AddAccountDialog options={options()} isAdmin accountClass="asset" onSave={onSave} onClose={vi.fn()} />
       </RefreshMe.Provider>,
     );
     return { onSave, refresh };
