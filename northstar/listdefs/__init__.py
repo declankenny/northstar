@@ -14,3 +14,5 @@ def catalog(conn) -> Catalog:
     names = (row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'"))
     owned = {name for name in names if name.startswith(("sys_", "ref_"))}
     return Catalog(conn, TABLES, excluded=owned | set(NOT_LISTABLE))
+
+from northstar.listdefs import lists as _lists  # noqa: E402,F401  registers Northstar's lists when the package is first used
