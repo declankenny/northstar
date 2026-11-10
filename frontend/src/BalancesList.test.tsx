@@ -11,8 +11,9 @@ vi.mock("./api", async (original) => ({
 import { fetchList, fetchListFields } from "./api";
 
 const column = (key: string, label: string, kind: ListColumn["kind"] = "text"): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: false });
-const COLUMNS = [column("as_of_date", "Date", "date"), column("account", "Account"), column("account.type", "Type"), column("amount_cents", "Value", "amount"),
-  column("account.currency", "Currency"), column("reporting_value", "Reporting value", "amount"), column("note", "Note")];
+const related = (key: string, label: string, path: string): ListColumn => ({ ...column(key, label), path_label: path });      // as the server names a related column
+const COLUMNS = [column("as_of_date", "Date", "date"), column("account", "Account"), related("account.type", "Type", "Account › Type"), column("amount_cents", "Value", "amount"),
+  related("account.currency", "Currency", "Account › Currency"), column("reporting_value", "Reporting value", "amount"), column("note", "Note")];
 
 const page = (over: Partial<ListPage> = {}): ListPage => ({
   columns: COLUMNS, total: 1, page: 1, pages: 1, page_size: 25, group: null, sort: { field: "as_of_date", direction: "desc" }, filters: [], skipped: [],
@@ -34,12 +35,12 @@ afterEach(() => {
 });
 
 describe("the Balances page", () => {
-  it("has a heading and shows the balances list with the columns the server gives, by their own names", async () => {
+  it("has a heading and shows the balances list with the columns the server gives, a related one headed by where it comes from", async () => {
     render(<BalancesList isAdmin={false} />);
     expect(screen.getByRole("heading", { name: "Balances" })).toBeTruthy();
     expect(await screen.findByText("Test dollars")).toBeTruthy();
     expect(screen.getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▲▼▾]/g, "").trim())).toEqual(
-      ["Date", "Account", "Type", "Value", "Currency", "Reporting value", "Note"]);
+      ["Date", "Account", "Account › Type", "Value", "Account › Currency", "Reporting value", "Note"]);
   });
 
   it("asks the server for the list called balances and names nothing else, so its own defaults apply", async () => {

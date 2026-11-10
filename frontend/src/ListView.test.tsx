@@ -331,3 +331,29 @@ describe("a row's menu", () => {
     expect(screen.getAllByRole("columnheader")).toHaveLength(4);
   });
 });
+
+// -- header paths and long text --
+
+describe("a related column and a long text", () => {
+  const related = { key: "account.updated_by", label: "Updated by", path_label: "Account › Updated by", kind: "text" as const, scale: null, linked: false };
+  const note = { key: "note", label: "Note", path_label: "Note", kind: "text" as const, scale: null, linked: false };
+  const LONG = "A long note that goes on and on well past forty characters of text";
+
+  it("heads a column of a related table by its whole path, and names its menu by it", async () => {
+    vi.mocked(fetchList).mockResolvedValue(page({ columns: [related, note], rows: [{ _id: 1, _links: {}, "account.updated_by": "Test person", note: "x" }] }));
+    render(<ListView listKey="balances" />);
+    const heads = await screen.findAllByRole("columnheader");
+    expect(heads.map((h) => h.textContent?.replace(/[▾▲▼]/g, "").trim())).toEqual(["Account › Updated by", "Note"]);
+    expect(screen.getByRole("button", { name: "Column menu for Account › Updated by" })).toBeTruthy();
+  });
+
+  it("shows the whole of a long text on hover, and nothing extra on a short one or one drawn its own way", async () => {
+    vi.mocked(fetchList).mockResolvedValue(page({ columns: [note, { ...note, key: "short", label: "Short", path_label: "Short" }, { ...note, key: "mine", label: "Mine", path_label: "Mine" }],
+      rows: [{ _id: 1, _links: {}, note: LONG, short: "brief", mine: LONG }] }));
+    render(<ListView listKey="balances" config={{ cell: { mine: () => <span>{LONG}</span> } }} />);
+    const cells = (await screen.findAllByRole("cell"));
+    expect(cells[0].getAttribute("title")).toBe(LONG);
+    expect(cells[1].getAttribute("title")).toBeNull();
+    expect(cells[2].getAttribute("title")).toBeNull();
+  });
+});

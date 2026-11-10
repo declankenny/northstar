@@ -456,7 +456,10 @@ a.btn { display: inline-block; text-decoration: none; }
 .lf-search:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 .lf-count { font-size: 13px; }
 .lf-card { margin-top: 14px; flex: 1; min-height: 0; overflow: auto; }
-.lf-table { min-width: 640px; table-layout: auto; }
+/* The list table sizes itself to its content and the card scrolls sideways. The selector says "table" because `.gcard table` (the Accounts
+   card) is as specific and would otherwise make the layout fixed, giving every column an equal share and letting its text spill into the next. */
+.lf-card table.lf-table { table-layout: auto; width: max-content; min-width: 100%; }
+.lf-table td { max-width: 40ch; overflow: hidden; text-overflow: ellipsis; }      /* a long text shows its start, and all of it on hover */
 .lf-table.lf-busy { opacity: .6; }
 .lf-table th { position: relative; white-space: nowrap; }
 .lf-table a.name { color: var(--text); font-weight: 560; text-decoration: none; }
@@ -519,6 +522,9 @@ a.btn { display: inline-block; text-decoration: none; }
 .lc-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .lc-item { display: grid; grid-template-columns: 24px 1fr auto auto auto; gap: 8px; align-items: center; padding: 8px 10px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--bg); position: relative; }
+.lc-item.added { animation: lc-added 1.5s ease-out; }
+@keyframes lc-added { from { background: var(--accent-soft); border-color: var(--accent); } to { background: var(--bg); border-color: var(--border); } }
+@media (prefers-reduced-motion: reduce) { .lc-item.added { animation: none; border-color: var(--accent); } }
 .lc-item.lifted { z-index: 2; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); border-color: var(--accent); background: var(--surface); }
 .lc-item:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 .lc-handle { cursor: grab; color: var(--muted); background: none; border: 0; font-size: 16px; letter-spacing: -2px; padding: 0; touch-action: none; }

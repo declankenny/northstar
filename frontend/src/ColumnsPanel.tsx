@@ -3,7 +3,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FieldNode, FieldTree } from "./api";
 import { FieldPicker } from "./FieldPicker";
 import { moved } from "./listColumns";
@@ -16,14 +16,14 @@ function names(node: FieldNode | undefined, key: string): { name: string; path: 
   return { name: node.label, path };
 }
 
-function Row({ id, index, count, node, onMove, onRemove }: {
-  id: string; index: number; count: number; node: FieldNode | undefined; onMove: (to: number) => void; onRemove: () => void;
+function Row({ id, index, count, node, added, onMove, onRemove }: {
+  id: string; index: number; count: number; node: FieldNode | undefined; added: boolean; onMove: (to: number) => void; onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const { name, path } = names(node, id);
   const full = node?.path_label ?? id;
   return (
-    <li ref={setNodeRef} className={isDragging ? "lc-item lifted" : "lc-item"} style={{ transform: CSS.Transform.toString(transform), transition }}>
+    <li ref={setNodeRef} className={isDragging ? "lc-item lifted" : added ? "lc-item added" : "lc-item"} style={{ transform: CSS.Transform.toString(transform), transition }}>
       <button ref={setActivatorNodeRef} className="lc-handle" aria-label={`Drag ${full} to move it`} {...attributes} {...listeners}>⠿</button>
       <span className="lc-name">{name}{path && <small>{path}</small>}</span>
       <button className="lc-arrow" aria-label={`Move ${full} up`} disabled={index === 0} onClick={() => onMove(index - 1)}>↑</button>
@@ -39,6 +39,14 @@ function Row({ id, index, count, node, onMove, onRemove }: {
 export function ColumnsPanel({ tree, keys, skipped, onChange }: { tree: FieldTree; keys: string[]; skipped: string[]; onChange: (next: string[]) => void }) {
   const nodes = useMemo(() => new Map(flatten(tree).map((n) => [n.key, n])), [tree]);
   const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);        // the column just added, said until the picker closes or anything else changes
+  const [flash, setFlash] = useState(false);                       // and its row shown for a moment
+  useEffect(() => {
+    if (added === null) return;
+    setFlash(true);
+    const timer = window.setTimeout(() => setFlash(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [added]);
   const label = (id: string | number) => nodes.get(String(id))?.path_label ?? String(id);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),   // a click on the handle is not a drag
@@ -51,12 +59,14 @@ export function ColumnsPanel({ tree, keys, skipped, onChange }: { tree: FieldTre
     onDragEnd: ({ active, over }) => (over ? `Dropped ${label(active.id)} at position ${position(over.id)} of ${keys.length}.` : `Dropped ${label(active.id)} where it was.`),
     onDragCancel: ({ active }) => `Moving ${label(active.id)} was cancelled. It stays at position ${position(active.id)} of ${keys.length}.`,
   };
-  const onDragEnd = ({ active, over }: DragEndEvent) => { if (over) onChange(moved(keys, keys.indexOf(String(active.id)), keys.indexOf(String(over.id)))); };
+  const change = (next: string[]) => { setAdded(null); onChange(next); };      // anything but an addition ends what was said about the last one
+  const onDragEnd = ({ active, over }: DragEndEvent) => { if (over) change(moved(keys, keys.indexOf(String(active.id)), keys.indexOf(String(over.id)))); };
 
   return (
     <>
-      <p className="lc-add"><button className="link" aria-expanded={adding} onClick={() => setAdding(!adding)}>+ Add column</button></p>
-      {adding && <FieldPicker tree={tree} used={new Set(keys)} label="Columns to show" onPick={(node) => { onChange([...keys, node.key]); setAdding(false); }} />}
+      <p className="lc-add"><button className="link" aria-expanded={adding} onClick={() => { setAdding(!adding); setAdded(null); }}>+ Add column</button></p>
+      {adding && <FieldPicker tree={tree} used={new Set(keys)} label="Columns to show" onPick={(node) => { onChange([...keys, node.key]); setAdded(node.key); }} />}
+      {adding && added !== null && keys.includes(added) && <p className="hint" role="status">“{label(added)}” added at the end of the list.</p>}
       {skipped.length > 0 && (
         <p className="notice warn" role="status">
           {skipped.map((k) => `“${label(k)}”`).join(", ")} {skipped.length === 1 ? "is" : "are"} not offered by this list any more, so {skipped.length === 1 ? "it was" : "they were"} left
@@ -67,8 +77,8 @@ export function ColumnsPanel({ tree, keys, skipped, onChange }: { tree: FieldTre
         <SortableContext items={keys} strategy={verticalListSortingStrategy}>
           <ol className="lc-list" aria-label="Columns shown">
             {keys.map((key, i) => (
-              <Row key={key} id={key} index={i} count={keys.length} node={nodes.get(key)}
-                onMove={(to) => onChange(moved(keys, i, to))} onRemove={() => onChange(keys.filter((k) => k !== key))} />
+              <Row key={key} id={key} index={i} count={keys.length} node={nodes.get(key)} added={flash && key === added}
+                onMove={(to) => change(moved(keys, i, to))} onRemove={() => change(keys.filter((k) => k !== key))} />
             ))}
           </ol>
         </SortableContext>
