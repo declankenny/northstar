@@ -4,7 +4,7 @@ import { formatCell, formatScaled, isNumeric } from "./listFormat";
 import { getLocale } from "./locale";
 
 const column = (kind: ListColumn["kind"], scale: number | null = null): ListColumn =>
-  ({ key: "k", label: "K", path_label: "K", kind, scale, linked: false });
+  ({ key: "k", label: "K", path_label: "K", kind, scale, linked: false, groupable: true });
 
 describe("what a cell shows", () => {
   it("shows nothing for an empty value, so the list can draw its own dash", () => {

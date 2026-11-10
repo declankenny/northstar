@@ -14,8 +14,8 @@ import {
 } from "./api";
 
 const COLUMNS: ListColumn[] = [
-  { key: "account", label: "Account", path_label: "Account", kind: "text", scale: null, linked: false },
-  { key: "as_of_date", label: "Date", path_label: "Date", kind: "date", scale: null, linked: false },
+  { key: "account", label: "Account", path_label: "Account", kind: "text", scale: null, linked: false, groupable: true },
+  { key: "as_of_date", label: "Date", path_label: "Date", kind: "date", scale: null, linked: false, groupable: true },
 ];
 const LABELS: Record<string, string> = { is_any_of: "is one of", is_not_any_of: "is not one of", is_not: "is not", is: "is" };   // as the server words them
 const ops = (...names: string[]) => names.map((name) => ({ name, label: LABELS[name] ?? name.replaceAll("_", " ") }));

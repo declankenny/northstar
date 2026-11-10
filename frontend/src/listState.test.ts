@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { listAddress, listQuery, listRequest, parseListView, sortedBy, withFilters, withPage, withSearch, type ListView } from "./listState";
+import { listAddress, listQuery, listRequest, parseListView, sortedBy, withFilters, withGroup, withPage, withSearch, type ListView } from "./listState";
 
-const DEFAULT: ListView = { page: 1, sort: null, search: "", filters: null };
+const DEFAULT: ListView = { page: 1, sort: null, search: "", filters: null, group: null };
 
 describe("a list's view in the address", () => {
   it("is the default view when the address says nothing", () => {
@@ -12,7 +12,7 @@ describe("a list's view in the address", () => {
 
   it("reads a sort, a page and a search, and writes them back the same", () => {
     const view = parseListView("?sort=-account&page=3&q=test%20note");
-    expect(view).toEqual({ page: 3, sort: { field: "account", direction: "desc" }, search: "test note", filters: null });
+    expect(view).toEqual({ page: 3, sort: { field: "account", direction: "desc" }, search: "test note", filters: null, group: null });
     expect(parseListView(listQuery(view))).toEqual(view);
     expect(parseListView("?sort=as_of_date")).toEqual({ ...DEFAULT, sort: { field: "as_of_date", direction: "asc" } });
   });
@@ -98,5 +98,32 @@ describe("filters in the address", () => {
     const later = { ...DEFAULT, page: 4, filters: [DATE] };
     expect(withFilters(later, [TYPE])).toEqual({ ...DEFAULT, page: 1, filters: [TYPE] });
     expect(withFilters(later, null).filters).toBeNull();
+  });
+});
+
+describe("the group in the address", () => {
+  it("is carried as the column's key and read back the same, and the default view has none", () => {
+    expect(parseListView("").group).toBeNull();
+    const view = { ...DEFAULT, group: "account.type" };
+    expect(listQuery(view)).toBe("?group=account.type");
+    expect(parseListView(listQuery(view))).toEqual(view);
+    expect(parseListView("?sort=-date&group=account&page=2&q=x")).toEqual({ page: 2, sort: { field: "date", direction: "desc" }, search: "x", filters: null, group: "account" });
+  });
+
+  it("falls back to no group for an empty or absurdly long one, because an address is typed and pasted", () => {
+    expect(parseListView("?group=").group).toBeNull();
+    expect(parseListView(`?group=${"x".repeat(201)}`).group).toBeNull();
+  });
+
+  it("goes back to the first page when the grouping changes, and ungroups with null", () => {
+    const later = { ...DEFAULT, page: 4, group: "account" };
+    expect(withGroup(later, "account.type")).toEqual({ ...DEFAULT, page: 1, group: "account.type" });
+    expect(withGroup(later, null)).toEqual({ ...DEFAULT, page: 1, group: null });
+    expect(listQuery(withGroup(later, null))).toBe("");
+  });
+
+  it("asks the server to group only when the view is grouped", () => {
+    expect("group" in listRequest(DEFAULT)).toBe(false);
+    expect(listRequest({ ...DEFAULT, group: "account.type" })).toEqual({ page: 1, group: "account.type" });
   });
 });

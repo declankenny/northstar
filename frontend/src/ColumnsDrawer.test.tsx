@@ -11,7 +11,7 @@ vi.mock("./api", async (original) => ({
 
 import { fetchList, fetchListChoices, fetchListFields, fetchSavedFilters, saveListColumns } from "./api";
 
-const column = (key: string, label: string, path_label = label): ListColumn => ({ key, label, path_label, kind: "text", scale: null, linked: false });
+const column = (key: string, label: string, path_label = label): ListColumn => ({ key, label, path_label, kind: "text", scale: null, linked: false, groupable: true });
 const COLUMNS = [column("as_of_date", "Date"), column("account", "Account"), column("amount_cents", "Value")];
 const field = (over: Partial<FieldNode>): FieldNode => ({ key: "k", label: "K", path_label: "K", kind: "text", scale: null, operators: [{ name: "equals", label: "equals" }], choices: null, ...over });
 

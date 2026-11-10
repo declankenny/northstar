@@ -13,10 +13,10 @@ vi.mock("./api", async (original) => ({
 import { fetchList, fetchListFields, saveListPageSize } from "./api";
 
 const COLUMNS: ListColumn[] = [
-  { key: "as_of_date", label: "Date", path_label: "Date", kind: "date", scale: null, linked: false },
-  { key: "account", label: "Account", path_label: "Account", kind: "text", scale: null, linked: true },
-  { key: "amount_cents", label: "Value", path_label: "Value", kind: "amount", scale: null, linked: false },
-  { key: "note", label: "Note", path_label: "Note", kind: "text", scale: null, linked: false },
+  { key: "as_of_date", label: "Date", path_label: "Date", kind: "date", scale: null, linked: false, groupable: true },
+  { key: "account", label: "Account", path_label: "Account", kind: "text", scale: null, linked: true, groupable: true },
+  { key: "amount_cents", label: "Value", path_label: "Value", kind: "amount", scale: null, linked: false, groupable: true },
+  { key: "note", label: "Note", path_label: "Note", kind: "text", scale: null, linked: false, groupable: true },
 ];
 
 const row = (id: number, over: Partial<ListRow> = {}): ListRow => ({
@@ -335,8 +335,8 @@ describe("a row's menu", () => {
 // -- header paths and long text --
 
 describe("a related column and a long text", () => {
-  const related = { key: "account.updated_by", label: "Updated by", path_label: "Account › Updated by", kind: "text" as const, scale: null, linked: false };
-  const note = { key: "note", label: "Note", path_label: "Note", kind: "text" as const, scale: null, linked: false };
+  const related = { key: "account.updated_by", label: "Updated by", path_label: "Account › Updated by", kind: "text" as const, scale: null, linked: false, groupable: true };
+  const note = { key: "note", label: "Note", path_label: "Note", kind: "text" as const, scale: null, linked: false, groupable: true };
   const LONG = "A long note that goes on and on well past forty characters of text";
 
   it("heads a column of a related table by its whole path, and names its menu by it", async () => {

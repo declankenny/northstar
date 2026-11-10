@@ -10,7 +10,7 @@ vi.mock("./api", async (original) => ({
 
 import { fetchList, fetchListFields } from "./api";
 
-const column = (key: string, label: string, kind: ListColumn["kind"] = "text"): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: false });
+const column = (key: string, label: string, kind: ListColumn["kind"] = "text"): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: false, groupable: true });
 const related = (key: string, label: string, path: string): ListColumn => ({ ...column(key, label), path_label: path });      // as the server names a related column
 const COLUMNS = [column("as_of_date", "Date", "date"), column("account", "Account"), related("account.type", "Type", "Account › Type"), column("amount_cents", "Value", "amount"),
   related("account.currency", "Currency", "Account › Currency"), column("reporting_value", "Reporting value", "amount"), column("note", "Note")];
