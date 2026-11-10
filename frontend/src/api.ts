@@ -1,3 +1,4 @@
+import { fileNameOf, saveFile } from "./download";
 import { getLocale, type Locale } from "./locale";
 import type { Currency } from "./money";
 
@@ -691,6 +692,25 @@ export type ListRequest = {
 export async function fetchList(key: string, request: ListRequest, signal?: AbortSignal): Promise<ListPage> {
   const { sort, ...rest } = request;
   return (await send<ListPage>("POST", `/api/lists/${encodeURIComponent(key)}`, sort ? { ...rest, sort } : rest, signal))!;
+}
+
+/** A list's view as a CSV file, saved by the browser. The view is the list's own request, sent as a POST so that a filter's values are in
+ *  no address or log; the page and the page size are left out, because the file has every row. A request that names no columns or
+ *  filters gets the person's own on the server, so the file is the list as they see it. A refusal is an Error, with the server's words. */
+export async function exportList(key: string, request: ListRequest): Promise<void> {
+  const { page: _page, page_size: _size, sort, ...rest } = request;
+  const response = await fetch(`/api/lists/${encodeURIComponent(key)}/export`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sort ? { ...rest, sort } : rest),
+  });
+  if (response.status === 401) {
+    signIn();
+    throw new Error("You are signed out.");
+  }
+  if (!response.ok) {
+    const answer = await response.json().catch(() => null);
+    throw new Error(typeof answer?.detail === "string" ? answer.detail : `The server answered ${response.status}`);
+  }
+  saveFile(await response.blob(), fileNameOf(response.headers.get("Content-Disposition"), `${key}.csv`));
 }
 
 /** Remember how many rows a page of this list shows, for this person. */

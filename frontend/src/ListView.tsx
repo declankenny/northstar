@@ -4,7 +4,7 @@ import {
 } from "@tanstack/react-table";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  type Choices, type Condition, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListColumns,
+  type Choices, type Condition, exportList, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListColumns,
   saveListPageSize,
 } from "./api";
 import { FilterDrawer } from "./FilterDrawer";
@@ -112,6 +112,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
   const [size, setSize] = useState<number | undefined>(undefined); // chosen on this page; before that the server uses the person's own
   const [text, setText] = useState(view.search);
   const [problem, setProblem] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const written = useRef(view.search);                              // the search text this page last put in the address
   const [collapsing, setCollapsing] = useState<Collapsing>(OPEN);     // which groups are collapsed: kept for the visit, not in the address
   useEffect(() => { setCollapsing(OPEN); }, [view.group]);            // another grouping is a new set of groups
@@ -151,6 +152,15 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the pause restarts with the text, not with every change to the view
   }, [text]);
+
+  /** The view as a CSV file: the list's own request, which the server answers with every matching row. */
+  const exportView = () => {
+    setExporting(true);
+    setProblem(null);
+    exportList(listKey, listRequest(view, size))
+      .catch((e: Error) => setProblem(`The list could not be exported. ${e.message}`))
+      .finally(() => setExporting(false));
+  };
 
   const changeSize = (next: number) => {
     setSize(next);
@@ -216,6 +226,13 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
   const groupKind = groupColumn?.kind ?? groupNode?.kind;
   const groupScale = groupColumn?.scale ?? groupNode?.scale ?? null;
   const columnCount = columnList.length + (config.actions ? 1 : 0);
+  /** The button, with how many rows the file will have beside it. It is there for an empty result too, which gives the headers alone. */
+  const exportButton = page && (
+    <>
+      <button className="btn ghost small" disabled={exporting} onClick={exportView}>{exporting ? "Exporting…" : "Export CSV"}</button>
+      <span className="m">{formatInteger(page.total)} {page.total === 1 ? "row" : "rows"}</span>
+    </>
+  );
   const first = page && page.rows.length > 0 ? (page.page - 1) * page.page_size + 1 : 0;
   const sizes = PAGE_SIZES.includes(pagination.pageSize) ? PAGE_SIZES : [...PAGE_SIZES, pagination.pageSize].sort((a, b) => a - b);
 
@@ -335,6 +352,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
             <span>Page {formatInteger(page.page)} of {formatInteger(page.pages)}</span>
             <button className="btn ghost small" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>Previous</button>
             <button className="btn ghost small" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>Next</button>
+            {exportButton}
             <span className="grow" />
             <label>Rows per page{" "}
               <select value={pagination.pageSize} onChange={(e) => table.setPageSize(Number(e.target.value))}>
@@ -344,6 +362,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
           </div>
         </>
       )}
+      {page && page.total === 0 && <div className="lf-foot">{exportButton}</div>}
       {drawer && tree && (
         <FilterDrawer listKey={listKey} title={config.title ?? "List"} tree={tree} applied={applied} openedWith={page?.default_filter_id ?? null}
           isAdmin={config.isAdmin ?? false} choices={named} ensureChoices={ensureChoices} tab={drawer}
