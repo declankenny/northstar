@@ -124,11 +124,14 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
           <form className="panel" onSubmit={submit}>
             <h2>Balance</h2>
             {!open && <p className="notice warn">This account is closed. Reopen it to change its balances.</p>}
-            <label>Balance in {account.currency.code}
-              <input inputMode="decimal" placeholder={amountPlaceholder(account.currency)} value={amount} disabled={locked}
+            <div className="field">
+              <div className="label-row">
+                <label htmlFor="balance-amount">Balance in {account.currency.code}</label>
+                <AmountReading text={amount !== base.amount ? amount : ""} currency={account.currency} />   {/* beside the label, so it reserves no line */}
+              </div>
+              <input id="balance-amount" inputMode="decimal" placeholder={amountPlaceholder(account.currency)} value={amount} disabled={locked}
                 onChange={(e) => setAmount(e.target.value)} required />
-            </label>
-            <AmountReading text={amount !== base.amount ? amount : ""} currency={account.currency} />
+            </div>
             <label>Note (optional)
               <input value={note} maxLength={500} disabled={locked} onChange={(e) => setNote(e.target.value)} />
             </label>

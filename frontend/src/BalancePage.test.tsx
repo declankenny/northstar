@@ -95,6 +95,18 @@ describe("the balance page", () => {
     expect(await screen.findByText(/Could not load this balance\. The server is not answering\./)).toBeTruthy();
   });
 
+  it("keeps the line that says how the amount was read beside its label, so no line is reserved between the amount and the note", async () => {
+    await shown();
+    const row = document.querySelector(".label-row") as HTMLElement;
+    expect(within(row).getByText("Balance in EUR")).toBeTruthy();
+    expect(row.querySelector(".reads")).not.toBeNull();                                   // there, and empty, beside the label
+    expect(document.querySelector(".reads")?.textContent).toBe("");
+    expect(document.querySelectorAll(".panel .field + .reads, .panel label .reads")).toHaveLength(0);   // not under the box, and not inside a label
+    expect((screen.getByLabelText("Balance in EUR") as HTMLInputElement).value).toBe("300.00");        // the box is still the label's
+    fireEvent.change(amountBox(), { target: { value: "325.5" } });
+    expect((await within(row).findByText("Reads as EUR 325.50"))).toBeTruthy();           // and says it there
+  });
+
   it("turns Save on when the amount or the note changes, and says how a changed amount was read, not before", async () => {
     await shown();
     expect(screen.queryByText(/Reads as/)).toBeNull();
