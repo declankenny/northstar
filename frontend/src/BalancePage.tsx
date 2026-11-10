@@ -111,7 +111,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
       <div className="top">
         <div>
           <div className="titlerow">
-            <h1><Link className="titlelink" to={accountPath(account.id)}>{account.name}</Link></h1>
+            <h1><Link to={accountPath(account.id)}>{account.name}</Link></h1>
             <span className="badge plain">{account.type_name} · {account.class_name}</span>
             {!open && <span className="badge plain">Closed</span>}
           </div>
