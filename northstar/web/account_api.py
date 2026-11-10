@@ -210,6 +210,34 @@ def delete_account(account_id: int, request: Request):
     return Response(status_code=204)
 
 
+class ReportingOut(BaseModel):
+    value: int | None        # in the system currency, empty when the account's currency has no rate on or before the date
+    scale: int               # the system currency's decimal places
+    unit: str                # its code
+    rate_date: str | None    # the date of the rate used; empty with no value
+
+
+class BalancePageOut(BaseModel):
+    account: AccountOut      # the whole page of the balance's account, whose balances hold the version of each
+    balance: BalanceOut
+    reporting: ReportingOut | None    # empty when the account is in the system currency, or there is none yet
+    entered_by: str
+    entered_on: str          # the UTC date it was entered
+    changed_by: str
+    changed_on: str
+
+
+@router.get("/balances/{balance_id:int}", response_model=BalancePageOut)         # not "/balances/update", which is the Update balances page
+def read_balance(balance_id: int, request: Request):
+    """One balance for its own page: the balance, its account's page and the details. A balance that is gone is a 404."""
+    def action(conn):
+        account_id = balances.get_balance(conn, balance_id)["account_id"]
+        page = _page(conn, account_id)
+        balance = next(b for b in page["balances"] if b["id"] == balance_id)
+        return {"account": page, "balance": balance, **balances.balance_details(conn, balance_id, page["currency"]["code"])}
+    return run(request, action)
+
+
 @router.post("/accounts/{account_id}/balances", response_model=AccountOut)
 def add_balance(account_id: int, body: BalanceEntry, request: Request):
     """A date that already has a balance is edited."""

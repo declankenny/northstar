@@ -334,6 +334,20 @@ export async function deleteBalance(balanceId: number, version: number): Promise
   return (await send<AccountPage>("DELETE", `/api/balances/${balanceId}?version=${version}`, undefined))!;
 }
 
+/** What a balance's own page shows. `reporting` is null when there is nothing to convert (the account is in the system currency), and
+ *  its `value` is null, with no `rate_date`, when the account's currency has no rate on or before the date. */
+export type BalancePageData = {
+  account: AccountPage; // the balance's account, whose balances hold the version of each
+  balance: BalanceRow;
+  reporting: { value: number | null; scale: number; unit: string; rate_date: string | null } | null;
+  entered_by: string; entered_on: string; // the UTC date it was entered
+  changed_by: string; changed_on: string;
+};
+
+export async function fetchBalance(id: number, signal?: AbortSignal): Promise<BalancePageData> {
+  return (await send<BalancePageData>("GET", `/api/balances/${id}`, undefined, signal))!;
+}
+
 /** One row of the Accounts list. last_* are the latest balance, null for an account with none. */
 export type ListedAccount = {
   id: number;
