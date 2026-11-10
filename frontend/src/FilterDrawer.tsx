@@ -4,11 +4,12 @@ import {
   type SavedFilter, type SavedFilters, saveSavedFilter,
 } from "./api";
 import { ColumnsPanel } from "./ColumnsPanel";
+import { Combobox } from "./Combobox";
 import { ConfirmDialog } from "./Dialogs";
 import { FieldPicker } from "./FieldPicker";
 import { columnChoice, sameColumns } from "./listColumns";
 import {
-  flatten, isDateKind, isNumberKind, isRange, problem, sameConditions, startCondition, takesNoValue, toWire, withOperator,
+  flatten, isDateKind, isNumberKind, isRange, isSingleChoice, problem, sameConditions, startCondition, takesNoValue, toWire, withOperator,
 } from "./listFilters";
 import { useRequest } from "./useRequest";
 
@@ -45,9 +46,26 @@ function ChoiceBox({ node, value, choices, onChange }: { node: FieldNode; value:
   );
 }
 
+/** One choice among a declared set or the records the list points at, found by typing. The choice is an id for a record and the value
+ *  itself for a declared set. */
+function ChoiceSelect({ node, value, choices, onChange }: { node: FieldNode; value: unknown; choices?: Choices; onChange: (next: unknown) => void }) {
+  if (node.choices === "records" && !choices) return <span className="hint">Loading the choices…</span>;
+  const options = node.choices === "values"
+    ? (node.values ?? []).map((v) => ({ id: v as string | number, label: v, detail: null as string | null }))
+    : (choices?.options ?? []).map((o) => ({ id: o.id as string | number, label: o.value, detail: o.detail }));
+  return (
+    <>
+      <Combobox options={options} value={typeof value === "string" || typeof value === "number" ? value : ""} onChange={onChange}
+        label={`Value for ${node.path_label}`} placeholder="Search" />
+      {choices?.more && <span className="hint">Only the first {options.length} are listed.</span>}
+    </>
+  );
+}
+
 function ValueInputs({ node, condition, choices, onChange }: { node: FieldNode; condition: Condition; choices?: Choices; onChange: (value: unknown) => void }) {
   const { operator, value } = condition;
   if (takesNoValue(operator)) return null;
+  if (node.choices !== null && isSingleChoice(operator)) return <ChoiceSelect node={node} value={value} choices={choices} onChange={onChange} />;
   if (node.choices !== null) return <ChoiceBox node={node} value={Array.isArray(value) ? value : []} choices={choices} onChange={onChange} />;
   const type = isDateKind(node.kind) ? "date" : "text";
   const mode = isNumberKind(node.kind) ? "decimal" : undefined;

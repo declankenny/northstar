@@ -234,7 +234,7 @@ def test_a_lists_fields_are_a_tree_of_its_own_columns_and_those_of_the_records_i
     assert "account.type.class" in all_keys(tree) and "account.currency.minor_units" in all_keys(tree)
     assert not [k for k in all_keys(tree) if "email" in k or "password" in k or "deleted" in k or k.endswith("version")]
     value = next(f for f in tree["fields"] if f["key"] == "amount_cents")
-    assert (value["label"], value["kind"], [o["name"] for o in value["operators"]]) == ("Value", "amount", ["equals", "at_least", "at_most", "between", "is_empty"])
+    assert (value["label"], value["kind"], [o["name"] for o in value["operators"]]) == ("Value", "amount", ["equals", "at_least", "at_most", "between", "is_empty", "is_not_empty"])
 
 
 def test_a_relation_offers_the_records_the_list_actually_has_and_never_a_deleted_accounts(client, household):
