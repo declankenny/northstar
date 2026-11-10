@@ -8,6 +8,7 @@ property is saved (see system_properties.py), so `today()` needs no database. Wi
 
 import logging
 import os
+import sqlite3
 from datetime import date, datetime, timezone, tzinfo
 from zoneinfo import ZoneInfo
 
@@ -33,6 +34,12 @@ def set_zone(name: str | None) -> None:
 def today() -> date:
     """Today's date in the installation's time zone."""
     return now().astimezone(_zone).date()
+
+
+def register(conn: sqlite3.Connection) -> None:
+    """Make `northstar_today()` available to SQL on this connection: today's date as `YYYY-MM-DD`, from `today()` at the moment
+    it is called (so a test that fixes the clock fixes it here too). Not deterministic, so SQLite never caches it."""
+    conn.create_function("northstar_today", 0, lambda: today().isoformat())
 
 
 def now() -> datetime:

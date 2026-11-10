@@ -19,6 +19,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Changed
 
+- The Accounts and Update balances pages and closing an account now read an account's last balance from a view, `last_balances`, instead of each working it out in its own query (#190). Nothing changes on any screen.
 - An account's class is now read from its type and is no longer stored on the account (#181). Nothing changes on any screen, and the rule that a type's class cannot change while an account uses it is kept, by a trigger.
 
 ### Breaking
@@ -28,6 +29,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 - Migration: `0021_user_list_prefs` adds the table that holds a person's page size for each list, for the list framework. A checked backup is made first.
 - Migration: `0022_list_filters` adds the table that holds saved filters for the lists, for the list framework. A checked backup is made first.
 - Migration: `0023_user_list_columns` rebuilds `user_list_prefs` so that a person can save the columns they chose for a list, and so that its page size may be empty. Every saved page size is kept. A checked backup is made first.
+- Migration: `0024_account_summaries` adds two views, `last_balances` (each account's newest balance) and `account_summaries` (the figures of each account: its balance count, last balance and date, value in the system currency, age and whether it is stale), for the Accounts list. The second works out the age with a SQL function that the application registers on every connection it opens, so, like `live_balance_values`, it can only be read through the application. No data changes. A checked backup is made first.
 - Environment variables: nothing.
 - Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
 
