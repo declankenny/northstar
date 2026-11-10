@@ -42,7 +42,7 @@ TABLES = {
         "reporting_value": FieldDef(ScaledBy(scale_from=("reporting_scale",), unit_from=("reporting_unit",)),
                                     label="Reporting value"),
         "note": _text(True), "source": _text(), **_audit()},
-        denied=frozenset({"version"}), based_on="balances"),
+        denied=frozenset({"version"}), based_on="balances", record_page="/balances/{id}"),
     "currencies": TableDef("currencies", "code", {
         "code": _text(), "name": _text(True), "minor_units": FieldDef(Integer(), label="Decimal places"),
         "is_enabled": FieldDef(YesNo(), label="Enabled"), "rates_start": FieldDef(Date(), label="Rates start"), **_audit()},

@@ -1,5 +1,5 @@
 /** The app's pages. The page is chosen by the address path, so no router library is needed. */
-export type Route = "login" | "setup" | "dashboard" | "profile" | "users" | "accounts" | "account" | "balances" | "import" | "types" | "imports" | "currencies" | "currency" | "properties" | "update" | "notfound";
+export type Route = "login" | "setup" | "dashboard" | "profile" | "users" | "accounts" | "account" | "balances" | "balance" | "import" | "types" | "imports" | "currencies" | "currency" | "properties" | "update" | "notfound";
 
 /** Where each page without a parameter lives. Links use these, so an address is spelled in one place. */
 export const PATHS = {
@@ -18,11 +18,15 @@ export const PATHS = {
 } as const;
 
 const ACCOUNT = /^\/accounts\/(\d+)$/;
+const BALANCE = /^\/balances\/(\d+)$/;
 const CURRENCY = /^\/currencies\/([A-Z]{3})$/;
 const IMPORT = /^\/accounts\/(\d+)\/import$/;
 
 /** The address of one account's page. */
 export const accountPath = (id: number) => `/accounts/${id}`;
+
+/** The address of one balance's page. */
+export const balancePath = (id: number) => `/balances/${id}`;
 
 /** The address of one currency's page: its state and its rates. */
 export const currencyPath = (code: string) => `/currencies/${code}`;
@@ -47,6 +51,7 @@ export function routeFromPath(path: string): Route {
   if (clean === PATHS.types) return "types";
   if (clean === PATHS.update) return "update";
   if (ACCOUNT.test(clean)) return "account";
+  if (BALANCE.test(clean)) return "balance";
   if (CURRENCY.test(clean)) return "currency";
   if (IMPORT.test(clean)) return "import";
   return "notfound";
@@ -56,6 +61,13 @@ export function routeFromPath(path: string): Route {
 export function accountIdFromPath(path: string): number | null {
   const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
   const match = ACCOUNT.exec(clean);
+  return match ? Number(match[1]) : null;
+}
+
+/** The balance id in /balances/12, or null for any other address. */
+export function balanceIdFromPath(path: string): number | null {
+  const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const match = BALANCE.exec(clean);
   return match ? Number(match[1]) : null;
 }
 

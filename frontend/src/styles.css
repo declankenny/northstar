@@ -537,3 +537,13 @@ a.btn { display: inline-block; text-decoration: none; }
 .lc-item .lf-x:disabled:hover { color: var(--muted); }
 button.link:disabled { color: var(--muted); cursor: default; text-decoration: none; opacity: .6; }
 
+/* A balance's own page: the account is the title and the date the subtitle, and the details are a list of facts. */
+.titlelink { color: inherit; text-decoration: none; }
+.titlelink:hover { text-decoration: underline; }
+.sub.strong { color: var(--text); font-size: 15px; }
+.btnrow { display: flex; gap: 8px; align-items: center; }
+.btnrow .spacer { flex: 1; }
+button.btn.ghost.danger-text { color: var(--neg); }
+.facts-list { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; margin: 0; font-size: 14px; }
+.facts-list dt { color: var(--muted); }
+.facts-list dd { margin: 0; }

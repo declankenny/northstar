@@ -230,6 +230,30 @@ def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
     return dict(row)
 
 
+def balance_details(conn: sqlite3.Connection, balance_id: int, currency_code: str) -> dict:
+    """What a balance's own page shows beside the balance: its value in the system currency with the date of the rate it used, and
+    who entered it and who last changed it, with the dates (the UTC date of the time written). `currency_code` is the account's.
+    `reporting` is None when there is nothing to show: no system currency yet, or the account is in it. Its `value` is None, with no
+    `rate_date`, when the currency has no rate on or before the balance's date. The value is the view's own (live_balance_values), so
+    it is the same figure the list shows; only the date of the rate is looked up here, by the rule the view uses."""
+    row = conn.execute(
+        "SELECT v.reporting_value, v.reporting_scale, v.reporting_unit, v.created_at, v.updated_at, "
+        "       cu.display_name AS entered_by, uu.display_name AS changed_by, "
+        "       (SELECT r.rate_date FROM exchange_rates r WHERE r.currency_id = (SELECT currency_id FROM live_accounts WHERE id = v.account_id) "
+        "          AND r.rate_date <= v.as_of_date ORDER BY r.rate_date DESC LIMIT 1) AS rate_date "
+        "FROM live_balance_values v JOIN users cu ON cu.id = v.created_by JOIN users uu ON uu.id = v.updated_by WHERE v.id = ?",
+        (balance_id,),
+    ).fetchone()
+    if row is None:
+        raise NotFoundError("That balance no longer exists.")
+    reporting = None
+    if row["reporting_unit"] is not None and row["reporting_unit"] != currency_code:
+        reporting = {"value": row["reporting_value"], "scale": row["reporting_scale"], "unit": row["reporting_unit"],
+                     "rate_date": row["rate_date"] if row["reporting_value"] is not None else None}
+    return {"reporting": reporting, "entered_by": row["entered_by"], "entered_on": row["created_at"][:10],
+            "changed_by": row["changed_by"], "changed_on": row["updated_at"][:10]}
+
+
 def _balance_currency(conn: sqlite3.Connection, balance_id: int) -> currencies.Currency:
     """The currency of the balance's account. A balance that is gone is read as dollars, so the amount is still checked
     and the caller's own check (a version, or the balance no longer existing) is what refuses it."""

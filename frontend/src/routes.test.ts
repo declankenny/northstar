@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { accountIdFromPath, accountPath, currencyCodeFromPath, currencyPath, importAccountIdFromPath, importPath, PATHS, routeFromPath } from "./routes";
+import { accountIdFromPath, accountPath, balanceIdFromPath, balancePath, currencyCodeFromPath, currencyPath, importAccountIdFromPath, importPath, PATHS, routeFromPath } from "./routes";
 
 describe("routeFromPath", () => {
   it("opens each page at its own address", () => {
     expect(routeFromPath("/dashboard")).toBe("dashboard");
     expect(routeFromPath("/accounts")).toBe("accounts");
     expect(routeFromPath("/balances")).toBe("balances");
+    expect(routeFromPath("/balances/12")).toBe("balance");
+    expect(routeFromPath("/balances/12/")).toBe("balance");
     expect(routeFromPath("/balance-update")).toBe("update");
     expect(routeFromPath("/types")).toBe("types");
     expect(routeFromPath("/users")).toBe("users");
@@ -56,7 +58,7 @@ describe("routeFromPath", () => {
   });
 
   it("says anything else is not a page", () => {
-    for (const path of ["", "/nope", "/profile/extra", "/users/1", "/accounts/x", "/accounts/1/edit", "/types/1", "/balance-update/1",
+    for (const path of ["", "/nope", "/profile/extra", "/users/1", "/accounts/x", "/accounts/1/edit", "/types/1", "/balance-update/1", "/balances/x", "/balances/1/edit",
       "/app/", "/app/accounts", "/#/accounts", "/Dashboard", "/accounts//", "/api/networth", "/login/extra", "/logout"]) {
       expect(routeFromPath(path), path).toBe("notfound");
     }
@@ -75,5 +77,14 @@ describe("routeFromPath", () => {
     expect(routeFromPath(PATHS.properties)).toBe("properties");
     expect(routeFromPath(PATHS.currencies)).toBe("currencies");
     expect(routeFromPath(PATHS.profile)).toBe("profile");
+  });
+});
+
+describe("a balance's page", () => {
+  it("has an address that reads back as the balance's id", () => {
+    expect(balancePath(12)).toBe("/balances/12");
+    expect(balanceIdFromPath("/balances/12")).toBe(12);
+    expect(balanceIdFromPath("/balances/12/")).toBe(12);
+    for (const path of ["/balances", "/balances/x", "/balances/12/edit", "/accounts/12", "/balances/-1"]) expect(balanceIdFromPath(path), path).toBeNull();
   });
 });

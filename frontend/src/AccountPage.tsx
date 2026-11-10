@@ -4,10 +4,11 @@ import {
   deleteBalance, downloadExport, editAccount, editBalance, fetchAccount, fetchNetWorth, reopenAccount,
 } from "./api";
 import { BalanceDialog, ChangeClassDialog, EditAccountDialog } from "./AccountDialogs";
+import { deleteConsequence } from "./balanceText";
 import { formatDate } from "./dates";
 import { conflictText } from "./conflicts";
 import { ConfirmDialog } from "./Dialogs";
-import { type Currency, formatCents, percentChange } from "./money";
+import { formatCents, percentChange } from "./money";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
 import { Link, navigate } from "./router";
@@ -35,17 +36,6 @@ function ago(days: number | null): string {
 }
 
 /** What deleting a balance does to the account's history, from where that entry sits in the list (newest first). */
-function deleteConsequence(balances: BalanceRow[], index: number, currency: Currency): string {
-  const entry = balances[index];
-  const head = `The ${formatCents(entry.amount_cents, currency)} entry for ${formatDate(entry.as_of_date)} is removed. `;
-  if (balances.length === 1) return head + "It is the only balance, so this account will have no history.";
-  if (index === balances.length - 1) {
-    return head + `It is the first balance, so the history will start at the next entry, on ${formatDate(balances[index - 1].as_of_date)}.`;
-  }
-  const before = balances[index + 1];
-  return head + `Until the next entry, the balance will go back to ${formatCents(before.amount_cents, currency)} (entered ${formatDate(before.as_of_date)}).`;
-}
-
 export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const [range, setRange] = useState<Range>("1Y");
   const [failure, setFailure] = useState<string | null>(null); // a change that was refused (reopening)

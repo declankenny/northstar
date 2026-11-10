@@ -89,10 +89,11 @@ def test_a_balance_with_no_rate_yet_has_no_reporting_value_rather_than_zero(clie
     assert rows[("2026-02-01", "Test euros")]["reporting_value"] is None
 
 
-def test_the_account_links_to_its_page_and_there_is_no_row_link(client, household):
+def test_the_account_and_the_date_link_to_their_pages(client, household):
     row = ask(client).json()["rows"][0]                    # the newest: Test dollars
     assert row["_links"]["account"] == f"/accounts/{household['usd']}"
-    assert set(row["_links"]) <= {"account", "account.currency"}              # nothing else opens a page, so a row has no link of its own
+    assert row["_links"]["as_of_date"] == f"/balances/{row['_id']}"             # the date opens the balance's own page
+    assert set(row["_links"]) <= {"as_of_date", "account", "account.currency"}
 
 
 def test_the_currency_links_to_its_page_for_admins_only(client, member_client, household):

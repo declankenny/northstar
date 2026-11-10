@@ -42,8 +42,8 @@ export function useAction() {
       const first = e instanceof RequestError ? e.conflicts[0] : undefined;
       if (first) setConflict(first);
       else setError((e as Error).message);
-      setBusy(false); // on success the dialog is closed by the caller, so there is nothing to reset
     }
+    setBusy(false); // a dialog is usually closed by the caller on success, which makes this a no-op; a page that stays open needs it
   };
   const clear = () => {
     setError(null);
