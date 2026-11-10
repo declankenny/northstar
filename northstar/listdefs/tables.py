@@ -38,9 +38,9 @@ TABLES = {
     "live_balance_values": TableDef("live_balance_values", "as_of_date", {
         "as_of_date": FieldDef(Date(), label="Date"),
         "amount_cents": FieldDef(ScaledBy(scale_from=("account", "currency", "minor_units"),
-                                          unit_from=("account", "currency", "code")), label="Value"),
+                                          unit_from=("account", "currency", "code")), label="Value", groupable=False),
         "reporting_value": FieldDef(ScaledBy(scale_from=("reporting_scale",), unit_from=("reporting_unit",)),
-                                    label="Reporting value"),
+                                    label="Reporting value", groupable=False),       # the same number in two currencies would be one group
         "note": _text(True), "source": _text(), **_audit()},
         denied=frozenset({"version"}), based_on="balances", record_page="/balances/{id}"),
     "currencies": TableDef("currencies", "code", {

@@ -1,6 +1,7 @@
 """The list engine, on a schema that is not Northstar's (see lists_schema.py)."""
 
 import sqlite3
+from dataclasses import replace
 
 import pytest
 
@@ -8,7 +9,7 @@ from lists_schema import STATUSES, TABLES, TICKETS, build, catalog
 from northstar.errors import NotFoundError, ValidationError
 from northstar.lists import loader, registry
 from northstar.lists.listdef import ListDef, check
-from northstar.lists.query import run
+from northstar.lists.query import describe, run
 from northstar.lists.registry import Catalog, FieldDef, RegistryError, TableDef
 from northstar.lists.kinds import Text
 from northstar.lists.request import parse_request
@@ -444,6 +445,86 @@ def test_grouping_orders_by_the_group_then_the_sort_and_counts_each_group_across
         assert codes == sorted(codes, reverse=True)
     first = view(conn, cat, {**data, "page_size": 10})
     assert all(r["_group_count"] == sizes[r["_group"]] for r in first.rows)         # the count is the whole group's, not the page's
+
+
+def pages_of(conn, cat, data, size):
+    """Every page of a request, as a list of lists of rows."""
+    pages, page = [], 1
+    while True:
+        result = view(conn, cat, {**data, "page": page, "page_size": size})
+        pages.append(result.rows)
+        if page >= result.pages:
+            return pages
+        page += 1
+
+
+def test_each_row_says_how_many_rows_of_its_group_come_before_it_so_a_page_can_tell_a_group_continues(conn, cat):
+    data = {"columns": ["code", "kind"], "group": "kind", "sort": {"field": "code", "direction": "desc"}}
+    flat = everything(conn, cat, data)
+    seen = {}
+    for row in flat:                                                                    # the position in the whole list, counted by hand
+        assert row["_group_before"] == seen.get(row["_group"], 0)
+        seen[row["_group"]] = seen.get(row["_group"], 0) + 1
+    pages = pages_of(conn, cat, data, 10)
+    assert len(pages) > 2
+    assert [row["_id"] for rows in pages for row in rows] == [row["_id"] for row in flat]
+    assert [row["_group_before"] for rows in pages for row in rows] == [row["_group_before"] for row in flat]     # the same whatever the page size
+    continued = [rows[0] for rows in pages[1:] if rows[0]["_group_before"] > 0]
+    assert continued, "a page size that cuts a group, so a page opens on a group that began on the page before"
+    for rows in pages[1:]:
+        first = rows[0]
+        assert (first["_group_before"] > 0) == (first["_group"] == pages[pages.index(rows) - 1][-1]["_group"])
+
+
+def test_a_group_with_no_value_counts_its_rows_from_the_first_too(conn, cat):
+    rows = everything(conn, cat, {"columns": ["code", "assignee"], "group": "assignee"})
+    empty = [r for r in rows if r["_group"] is None]
+    assert [r["_group_before"] for r in empty] == list(range(len(empty)))
+
+
+def test_sorting_by_the_grouped_column_orders_the_groups_by_that_direction_and_the_empty_group_stays_last(conn, cat):
+    asc = everything(conn, cat, {"columns": ["code", "kind"], "group": "kind", "sort": {"field": "kind", "direction": "asc"}})
+    desc = everything(conn, cat, {"columns": ["code", "kind"], "group": "kind", "sort": {"field": "kind", "direction": "desc"}})
+    first = lambda rows: list(dict.fromkeys(r["_group"] for r in rows))
+    assert first(desc) == first(asc)[::-1] and len(first(asc)) > 2
+    other = everything(conn, cat, {"columns": ["code", "kind"], "group": "kind", "sort": {"field": "code", "direction": "desc"}})
+    assert first(other) == first(asc)                                                 # sorted by another column: the groups stay as they were
+    for direction in ("asc", "desc"):
+        rows = everything(conn, cat, {"columns": ["code", "assignee"], "group": "assignee", "sort": {"field": "assignee", "direction": direction}})
+        names = list(dict.fromkeys(r["_group"] for r in rows))
+        assert names[-1] is None and None not in names[:-1]
+        assert names[:-1] == sorted(names[:-1], key=str.lower, reverse=direction == "desc")
+
+
+def test_a_timestamp_is_grouped_by_its_utc_date_not_its_instant(conn, cat):
+    live = live_tickets(conn)
+    rows = everything(conn, cat, {"columns": ["code", "closed_at"], "group": "closed_at"})
+    by_day = {}
+    for t in live:
+        key = t["closed_at"][:10] if t["closed_at"] else None
+        by_day[key] = by_day.get(key, 0) + 1
+    assert any(count > 1 for key, count in by_day.items() if key), "two tickets closed on one day, or this proves nothing"
+    assert {r["_group"] for r in rows} == set(by_day)
+    assert all(r["_group_count"] == by_day[r["_group"]] for r in rows)
+    days = [r["_group"] for r in rows]
+    order = list(dict.fromkeys(days))
+    assert len(order) == len(set(days))                                                 # no date is split into two groups
+    assert order[-1] is None and order[:-1] == sorted(order[:-1])                       # in date order, the empty one last
+
+
+def test_a_field_that_says_it_is_not_groupable_is_refused_and_its_description_says_so(conn):
+    ticket = TABLES["ticket"]
+    tables = {**TABLES, "ticket": replace(ticket, fields={**ticket.fields, "score_x100": replace(ticket.fields["score_x100"], groupable=False)})}
+    strict = Catalog(conn, tables)
+    with pytest.raises(ValidationError, match="cannot be grouped"):
+        parse_request(strict, TICKETS, {"group": "score_x100"})
+    assert {d["key"]: d["groupable"] for d in describe(strict, TICKETS, ["score_x100", "title", "assignee"])} == {"score_x100": False, "title": True, "assignee": True}
+    parse_request(strict, TICKETS, {"group": "title"})                                  # the others are not affected
+
+
+def test_a_decimal_that_is_not_an_amount_can_still_be_grouped(conn, cat):
+    rows = everything(conn, cat, {"columns": ["code", "score_x100"], "group": "score_x100"})
+    assert len({r["_group"] for r in rows}) > 1
 
 
 def test_a_group_with_no_value_comes_last(conn, cat):

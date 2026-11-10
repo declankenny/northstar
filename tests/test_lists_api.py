@@ -99,6 +99,10 @@ def test_a_request_can_sort_filter_search_group_and_choose_columns(client, house
     grouped = ask(client, "balances_api_test", {"group": "account", "columns": ["account"]}).json()
     assert {r["_group"] for r in grouped["rows"]} == {"Test card", "Test dollars", "Test euros"}
     assert all(r["_group_count"] == 4 for r in grouped["rows"])
+    assert sorted(r["_group_before"] for r in grouped["rows"] if r["_group"] == "Test card") == [0, 1, 2, 3]        # each row's place in its group
+    second = ask(client, "balances_api_test", {"group": "account", "columns": ["account"], "page": 2, "page_size": 10}).json()
+    assert second["rows"][0]["_group_before"] > 0 and second["rows"][0]["_group"] == grouped["rows"][10]["_group"]     # a group that continues says so
+    assert ask(client, "balances_api_test", {"group": "amount_cents"}).status_code == 422                          # an amount is not grouped
 
 
 def test_a_page_past_the_end_shows_the_last_and_nothing_matching_is_an_empty_page(client, household):

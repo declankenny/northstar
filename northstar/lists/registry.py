@@ -29,6 +29,7 @@ class FieldDef:
     kind: Kind
     searchable: bool = False
     label: str | None = None
+    groupable: bool = True                          # may a list be grouped by it? A column whose groups would mislead says no
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,7 @@ class Resolved:
     kind: Kind
     relation: Relation | None                       # set when the key is a relation: its display value
     labels: tuple[str, ...]
+    groupable: bool = True
 
     @property
     def label(self) -> str:
@@ -219,12 +221,12 @@ class Catalog:
             self._step(current, relation, key, seen, len(path) + 1, walking=False)
             target = self.tables[relation.target]
             return Resolved(key, (*path, relation), relation.target, target.display, target.fields[target.display].kind,
-                            relation, (*labels, self._label(current, relation)))
+                            relation, (*labels, self._label(current, relation)), target.fields[target.display].groupable)
         definition = self.tables[current].fields.get(last)
         if definition is None:
             raise ValidationError(f"“{key}” is not a column of this list.")
         return Resolved(key, tuple(path), current, last, definition.kind, None,
-                        (*labels, definition.label or humanize(last)))
+                        (*labels, definition.label or humanize(last)), definition.groupable)
 
     def _step(self, current: str, relation: Relation, key: str, seen: set, depth: int, *, walking: bool) -> None:
         if depth > MAX_DEPTH:

@@ -112,8 +112,10 @@ class _View:
         self.params += [pattern] * len(expressions)
         return "(" + " OR ".join(f"{e} LIKE ? ESCAPE '\\'" for e in expressions) + ")"
 
-    def order(self, resolved: Resolved) -> str:
-        expression = resolved.kind.compare(self, resolved)
+    def order(self, resolved: Resolved, expression: str | None = None) -> str:
+        """The ORDER BY terms for a column: rows with no value last, then the value. `expression` is what is ordered by when it is not the
+        column's own comparison, as when a group is a coarser key than the column is sorted by."""
+        expression = expression or resolved.kind.compare(self, resolved)
         collate = " COLLATE NOCASE" if resolved.kind.sorts_without_case else ""
         return f"({expression} IS NULL), {expression}{collate}"
 
@@ -135,13 +137,15 @@ def link_pattern(catalog: Catalog, base: str, resolved: Resolved, viewer) -> str
 
 def describe(catalog: Catalog, definition: ListDef, keys, viewer=frozenset()) -> list[dict]:
     """What a page needs to draw the columns: the key, a label (and the full path of labels), the kind's code and whether the
-    column opens a record page for this viewer. A decimal stored as an integer also says its scale."""
+    column opens a record page for this viewer and whether the list may be grouped by it. A decimal stored as an integer also says its
+    scale."""
     described = []
     for key in keys:
         resolved = catalog.resolve(definition.table, key)
         described.append({"key": key, "label": resolved.labels[-1], "path_label": resolved.label, "kind": resolved.kind.code,
                           "scale": resolved.kind.scale if isinstance(resolved.kind, Scaled) else None,   # of a stored integer
-                          "linked": link_pattern(catalog, definition.table, resolved, viewer) is not None})
+                          "linked": link_pattern(catalog, definition.table, resolved, viewer) is not None,
+                          "groupable": resolved.groupable})
     return described
 
 
@@ -154,8 +158,9 @@ def _href(pattern: str, record_id, value) -> str | None:
 def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request: ListRequest,
         viewer=frozenset()) -> ListResult:
     """The page of rows the request asks for, with the count of every matching row. Rows are dicts by key, with the record's
-    id as `_id`, `_links` (the route each linked column opens, for this viewer) and, when grouped, `_group` and `_group_count`,
-    the group's size across all pages."""
+    id as `_id`, `_links` (the route each linked column opens, for this viewer) and, when grouped, `_group`, `_group_count` (the
+    group's size across all pages) and `_group_before` (how many rows of the group come before this one in the order, so a page can
+    tell that its first rows continue a group from the page before)."""
     base = definition.table
     pk = catalog.primary_key[base]
     source = definition.source or base
@@ -181,15 +186,19 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
             else:
                 linked.append((key, pattern, None))
     order = []
+    sort = catalog.resolve(base, request.sort_key)
+    within = [f"{view.order(sort)} {request.direction.upper()}", f'b."{pk}" ASC']      # the order inside a group, which is the whole order when not grouped
     if request.group is not None:
         group = catalog.resolve(base, request.group)
-        expression = group.kind.compare(view, group)
+        expression = group.kind.group_key(view, group)
         selected.append(f"{expression} AS _g")
         selected.append(f"COUNT(*) OVER (PARTITION BY {expression}) AS _gn")
-        order.append(view.order(group))
-    sort = catalog.resolve(base, request.sort_key)
-    order.append(f"{view.order(sort)} {request.direction.upper()}")
-    order.append(f'b."{pk}" ASC')
+        selected.append(f"ROW_NUMBER() OVER (PARTITION BY {expression} ORDER BY {', '.join(within)}) - 1 AS _gb")
+        # Groups follow the value, and their direction follows the sort when the list is sorted by the grouped column: otherwise a click on
+        # that column's header would change nothing, every row of a group being equal. A group with no value comes last either way.
+        direction = f" {request.direction.upper()}" if request.sort_key == request.group else ""
+        order.append(f"{view.order(group, expression)}{direction}")
+    order += within
 
     where_sql = f" WHERE {where}" if where else ""
     count_sql = f'SELECT COUNT(*) FROM "{source}" AS b {" ".join(where_joins)}{where_sql}'
@@ -211,7 +220,7 @@ def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request
             if href is not None:
                 row["_links"][key] = href
         if request.group is not None:
-            row["_group"], row["_group_count"] = record["_g"], record["_gn"]
+            row["_group"], row["_group_count"], row["_group_before"] = record["_g"], record["_gn"], record["_gb"]
         rows.append(row)
     return ListResult(rows, total, page, request.page_size, pages, request.columns, request.group, (request.sort_key, request.direction))
 

@@ -91,7 +91,9 @@ def parse_request(catalog: Catalog, definition: ListDef, data: dict | None) -> L
 
     group = data.get("group")
     if group is not None:
-        catalog.resolve(base, group)
+        grouped = catalog.resolve(base, group)
+        if not grouped.groupable:
+            raise ValidationError(f"{grouped.labels[-1]} cannot be grouped.")
 
     page = _whole(data.get("page", 1), "page", 1)
     page_size = data.get("page_size", definition.page_size)

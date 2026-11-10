@@ -30,6 +30,7 @@ class ColumnOut(BaseModel):
     kind: str             # text, integer, number, decimal, date, timestamp, yes_no, choice or amount
     scale: int | None     # for a decimal stored as a whole number: its decimal places (2 for hundredths); otherwise none
     linked: bool          # does this column open a page for this person?
+    groupable: bool       # may the list be grouped by it? An amount may not: the same number in two currencies would be one group
 
 
 class SortOut(BaseModel):

@@ -57,6 +57,11 @@ class Kind:
         """The SQL expression that is sorted, grouped and filtered."""
         return view.plain(resolved)
 
+    def group_key(self, view, resolved) -> str:
+        """The SQL expression whose value is a row's group when the list is grouped by this column. It is what the rows are compared by
+        unless a kind groups more coarsely than it sorts."""
+        return self.compare(view, resolved)
+
     def read(self, operator: str, value):
         """The value as the SQL needs it, or a ValidationError that says what is wrong."""
         raise NotImplementedError
@@ -229,6 +234,10 @@ class Timestamp(Date):
     name = "timestamp"
     code = "timestamp"
     uses_date_part = True
+
+    def group_key(self, view, resolved) -> str:
+        """Grouped by the UTC date, which is what it is shown and filtered as: grouped by the instant, every row would be its own group."""
+        return f"substr({self.compare(view, resolved)}, 1, 10)"
 
 
 @dataclass(frozen=True)
