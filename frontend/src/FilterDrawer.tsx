@@ -1,9 +1,12 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   changeSavedFilter, type Choices, type Condition, deleteSavedFilter, fetchSavedFilters, type FieldNode, type FieldTree,
   type SavedFilter, type SavedFilters, saveSavedFilter,
 } from "./api";
+import { ColumnsPanel } from "./ColumnsPanel";
 import { ConfirmDialog } from "./Dialogs";
+import { FieldPicker } from "./FieldPicker";
+import { columnChoice, sameColumns } from "./listColumns";
 import {
   flatten, isDateKind, isNumberKind, isRange, problem, sameConditions, startCondition, takesNoValue, toWire, withOperator,
 } from "./listFilters";
@@ -15,7 +18,12 @@ export type FilterDrawerProps = {
   openedWith: number | null;                       // the saved filter the list opened with, so it shows as loaded
   isAdmin: boolean;                                // admins can save a filter for everyone
   choices: Map<string, Choices>; ensureChoices: (field: string) => void;
-  onApply: (conditions: Condition[]) => void; onClose: () => void;
+  columns: string[];                               // the keys of the columns the list shows now
+  defaultColumns: string[];                        // and of the ones it shows when a person has chosen none
+  skippedColumns: string[];                        // saved columns the list no longer offers, left out of `columns`
+  tab: "filters" | "columns";                      // the tab the drawer opens on
+  /** `columns` is what the server is to be told: nothing (undefined) when they are as they were, null to forget the choice. */
+  onApply: (conditions: Condition[], columns: string[] | null | undefined) => void; onClose: () => void;
 };
 
 /** One choice among a declared set or the records the list points at, with check boxes: several together mean "any of". */
@@ -92,50 +100,15 @@ function ConditionRow({ node, condition, error, choices, onChange, onRemove }: {
   );
 }
 
-/** The columns to add a filter on: the list's own, and under each relation the columns of what it points at. One condition per
- *  column, so a column already filtered is shown but cannot be added again. */
-function Picker({ tree, used, onPick }: { tree: FieldTree; used: Set<string>; onPick: (node: FieldNode) => void }) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const leaf = (node: FieldNode, branch?: ReactNode) => (
-    <li key={node.key}>
-      <span className="lf-pick-row">
-        {branch}
-        <button className="link" disabled={used.has(node.key) || node.operators.length === 0} onClick={() => onPick(node)}>{node.label}</button>
-        {used.has(node.key) && <span className="m"> · already filtered</span>}
-      </span>
-    </li>
-  );
-  const list = (level: FieldTree): ReactNode => (
-    <ul className="lf-pick">
-      {level.fields.map((node) => leaf(node))}
-      {level.relations.map((node) => {
-        const expandable = !!node.children;
-        const isOpen = open.has(node.key);
-        const toggle = expandable && (
-          <button className="lf-fold" aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} the columns of ${node.label}`}
-            onClick={() => setOpen((before) => { const next = new Set(before); if (isOpen) next.delete(node.key); else next.add(node.key); return next; })}>
-            {isOpen ? "▾" : "▸"}</button>
-        );
-        return (
-          <li key={node.key}>
-            <span className="lf-pick-row">
-              {toggle}
-              <button className="link" disabled={used.has(node.key)} onClick={() => onPick(node)}>{node.label}</button>
-              {used.has(node.key) && <span className="m"> · already filtered</span>}
-            </span>
-            {expandable && isOpen && list(node.children!)}
-          </li>
-        );
-      })}
-    </ul>
-  );
-  return <div className="lf-picker" aria-label="Columns to filter by">{list(tree)}</div>;
-}
-
 /** The drawer where a list's filters are made, applied and saved. What is typed here is a draft: nothing reaches the list until
  *  Apply changes, and Cancel throws it away. Choosing a saved filter only fills the draft, as if the conditions had been typed. */
 export function FilterDrawer(props: FilterDrawerProps) {
-  const { listKey, title, tree, applied, openedWith, isAdmin, choices, ensureChoices, onApply, onClose } = props;
+  const { listKey, title, tree, applied, openedWith, isAdmin, choices, ensureChoices, columns, defaultColumns, skippedColumns, onApply, onClose } = props;
+  const [tab, setTab] = useState(props.tab);
+  const [draftColumns, setColumns] = useState(columns);
+  const touched = useRef(false);                       // the person has changed the columns, so a later answer from the list must not undo it
+  const setDraftColumns = (next: string[]) => { touched.current = true; setColumns(next); };
+  useEffect(() => { if (!touched.current) setColumns(columns); }, [columns]);   // the list had not answered yet when the drawer opened
   const nodes = useMemo(() => new Map(flatten(tree).map((n) => [n.key, n])), [tree]);
   const [draft, setDraft] = useState<Condition[]>(applied);
   const [loadedId, setLoadedId] = useState<number | null>(openedWith);
@@ -208,8 +181,14 @@ export function FilterDrawer(props: FilterDrawerProps) {
   return (
     <div className="drawer" role="dialog" aria-modal="true" aria-label={`${title} filters`} tabIndex={-1} ref={box} onKeyDown={onKey}>
       <div className="drawer-head"><h2>{title} view</h2><button className="kebab" aria-label="Close" onClick={onClose}>✕</button></div>
-      <div className="ranges lf-tabs"><button className="on" aria-current="true">Filters ({draft.length})</button></div>
+      <div className="ranges lf-tabs">
+        <button className={tab === "filters" ? "on" : ""} aria-current={tab === "filters" ? "true" : undefined} onClick={() => setTab("filters")}>Filters ({draft.length})</button>
+        <button className={tab === "columns" ? "on" : ""} aria-current={tab === "columns" ? "true" : undefined} disabled={columns.length === 0}
+          onClick={() => setTab("columns")}>Columns ({draftColumns.length})</button>
+      </div>
       <div className="drawer-body">
+        {tab === "columns" && <ColumnsPanel tree={tree} keys={draftColumns} skipped={skippedColumns} onChange={setDraftColumns} />}
+        {tab === "filters" && <>
         <div className="lf-saved">
           <span className="m">Saved filter</span>
           <button className="btn ghost small lf-pickbtn" aria-haspopup="menu" aria-expanded={picking} disabled={saved.loading && !saved.data}
@@ -266,14 +245,18 @@ export function FilterDrawer(props: FilterDrawerProps) {
             onRemove={() => setDraft(draft.filter((_, j) => j !== i))} />
         ))}
         <button className="link" aria-expanded={adding} onClick={() => setAdding(!adding)}>+ Add filter</button>
-        {adding && <Picker tree={tree} used={used} onPick={(node) => { setDraft([...draft, startCondition(node)]); setAdding(false); }} />}
+        {adding && <FieldPicker tree={tree} used={used} label="Columns to filter by" usedNote="already filtered" unavailable={(node) => node.operators.length === 0}
+          onPick={(node) => { setDraft([...draft, startCondition(node)]); setAdding(false); }} />}
         <p className="hint lf-help">Conditions combine with AND; several choices in one condition mean any of them. “is after” leaves out the date itself; “is between” includes both ends. Amounts are compared in each row’s own currency, so filter by Currency too when comparing across currencies.</p>
+        </>}
       </div>
       <div className="drawer-foot">
-        <button className="link" onClick={() => { setDraft([]); setLoadedId(null); setSkipped(null); }}>Clear filters</button>
+        {tab === "filters"
+          ? <button className="link" onClick={() => { setDraft([]); setLoadedId(null); setSkipped(null); }}>Clear filters</button>
+          : <button className="link" disabled={sameColumns(draftColumns, defaultColumns)} onClick={() => setDraftColumns(defaultColumns)}>Reset to default columns</button>}
         <span className="grow" />
         <button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn" onClick={() => (valid ? onApply(wire()) : setAttempted(true))}>Apply changes</button>
+        <button className="btn" onClick={() => (valid ? onApply(wire(), columns.length === 0 ? undefined : columnChoice(draftColumns, columns, defaultColumns)) : (setAttempted(true), setTab("filters")))}>Apply changes</button>
       </div>
       {deleting && loaded && (
         <ConfirmDialog title={`Delete “${loaded.name}”?`} confirmLabel="Delete" danger

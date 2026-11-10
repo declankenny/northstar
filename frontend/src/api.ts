@@ -659,6 +659,9 @@ export type ListPage = {
   filters: Condition[];                               // the conditions applied: the request's, or the default filter's when it named none
   skipped: { field: string | null; reason: string }[]; // conditions of the default filter that no longer fit the list and were left out
   default_filter_id: number | null;                   // the saved filter the list opened with, when the request named no filters
+  default_columns: string[];                          // the keys of the columns the list shows when a person has chosen none
+  customised: boolean;                                // are the columns shown the person's own saved choice
+  skipped_columns: { field: string | null; reason: string }[]; // columns of the person's choice the list no longer offers, left out
 };
 
 /** What a view of a list asks for. Anything left out is the list's own default. */
@@ -676,6 +679,11 @@ export async function fetchList(key: string, request: ListRequest, signal?: Abor
 /** Remember how many rows a page of this list shows, for this person. */
 export async function saveListPageSize(key: string, pageSize: number): Promise<number> {
   return (await send<{ page_size: number }>("PUT", `/api/lists/${encodeURIComponent(key)}/page-size`, { page_size: pageSize }))!.page_size;
+}
+
+/** Remember which columns this person wants for this list, in this order, or (null) forget the choice so the list's own apply. */
+export async function saveListColumns(key: string, columns: string[] | null): Promise<{ columns: string[]; customised: boolean }> {
+  return (await send<{ columns: string[]; customised: boolean }>("PUT", `/api/lists/${encodeURIComponent(key)}/columns`, { columns }))!;
 }
 
 // -- filters: what a column can be filtered by, what to choose from, and the saved filters of a list --

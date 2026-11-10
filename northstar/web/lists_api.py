@@ -49,6 +49,9 @@ class ListPage(BaseModel):
     filters: list[dict[str, Any]]    # the conditions applied: the request's, or the default filter's when it named none
     skipped: list[SkippedOut]        # conditions of the default filter that no longer fit the list and were left out
     default_filter_id: int | None    # the saved filter the list opened with, if the request named none
+    default_columns: list[str]       # the keys of the columns the list shows when a person has chosen none
+    customised: bool                 # are the columns shown this person's own saved choice (so there is something to reset)
+    skipped_columns: list[SkippedOut]    # columns of the person's choice that the list no longer offers and were left out
 
 
 class SkippedOut(BaseModel):
@@ -87,6 +90,15 @@ class PageSize(BaseModel):
     page_size: StrictInt         # exactly a whole number: "25" and true are refused
 
 
+class ColumnChoice(BaseModel):
+    columns: list[str] | None    # the keys in the order to show them; null forgets the choice, so the list's own columns apply
+
+
+class ColumnsSaved(BaseModel):
+    columns: list[str]
+    customised: bool
+
+
 def _roles(user) -> frozenset[str]:
     return frozenset({"admin"}) if user["is_admin"] else frozenset()
 
@@ -109,6 +121,13 @@ def query_list(key: str, request: Request, body: dict = Body(default_factory=dic
         if "page_size" not in data:                 # the person's own choice, else the list's
             data["page_size"] = list_prefs.page_size(conn, user["id"], key, definition.page_size)
         skipped, opened_with = [], None
+        skipped_columns, customised = [], False
+        if "columns" not in data:                   # no columns named: the person's own choice, else the list's
+            stored = list_prefs.saved_columns(conn, user["id"], key)
+            if stored is not None:
+                kept, skipped_columns = list_prefs.usable_columns(catalog, definition, stored)
+                if kept:
+                    data["columns"], customised = kept, True
         if "filters" not in data:                   # no filter named: the person's default, else the shared one. An empty list is "none"
             opened_with = list_filters.default_id(conn, user["id"], key)
             if opened_with is not None:
@@ -118,7 +137,8 @@ def query_list(key: str, request: Request, body: dict = Body(default_factory=dic
         return {"columns": describe(catalog, definition, parsed.columns, _roles(user)), "rows": result.rows,
                 "total": result.total, "page": result.page, "pages": result.pages, "page_size": result.page_size,
                 "group": result.group, "sort": {"field": result.sort[0], "direction": result.sort[1]},
-                "filters": data.get("filters", []), "skipped": skipped, "default_filter_id": opened_with}
+                "filters": data.get("filters", []), "skipped": skipped, "default_filter_id": opened_with,
+                "default_columns": list(definition.columns), "customised": customised, "skipped_columns": skipped_columns}
 
     return run(request, action)
 
@@ -203,3 +223,15 @@ def list_choices(key: str, field: str, request: Request) -> dict[str, Any]:
 def set_page_size(key: str, body: PageSize, request: Request):
     _definition(key, current_user(request))
     return run(request, lambda conn: {"page_size": list_prefs.set_page_size(operation(request, conn), key, body.page_size)})
+
+
+@router.put("/{key}/columns", response_model=ColumnsSaved)
+def set_columns(key: str, body: ColumnChoice, request: Request):
+    """Save this person's columns for the list, in the order given, or forget them with null. Answers with the columns now in force."""
+    definition = _definition(key, current_user(request))
+
+    def action(conn):
+        columns = list_prefs.set_columns(operation(request, conn), household_catalog(conn), definition, body.columns)
+        return {"columns": columns, "customised": body.columns is not None}
+
+    return run(request, action)

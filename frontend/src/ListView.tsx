@@ -4,7 +4,8 @@ import {
 } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  type Choices, type Condition, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListPageSize,
+  type Choices, type Condition, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListColumns,
+  saveListPageSize,
 } from "./api";
 import { FilterDrawer } from "./FilterDrawer";
 import { describe, flatten } from "./listFilters";
@@ -30,6 +31,7 @@ const features = tableFeatures({ rowSortingFeature, rowPaginationFeature });
 const helper = createColumnHelper<typeof features, ListRow>();
 const NO_ROWS: ListRow[] = [];
 const NO_CONDITIONS: Condition[] = [];
+const NO_KEYS: string[] = [];
 const PAGE_SIZES = [10, 25, 50, 100];
 const SEARCH_DELAY = 300; // milliseconds after the last key before the server is asked
 
@@ -78,8 +80,9 @@ function cellContent(column: ListColumn, row: ListRow, page: ListPage, config: L
 
 /** One list, any list: the server does the sorting, searching and paging, and the address says which view this is. */
 export function ListView({ listKey, config = {} }: { listKey: string; config?: ListConfig }) {
-  const [drawer, setDrawer] = useState(false);
-  const opener = useRef<HTMLButtonElement>(null);
+  const [drawer, setDrawer] = useState<"filters" | "columns" | null>(null);   // which tab the open drawer starts on
+  const opener = useRef<HTMLButtonElement | null>(null);                    // the button that opened it, to give focus back to
+  const [columnsChanged, setColumnsChanged] = useState(0);                    // counts the person's changes to their columns, which are not in the address
   const [named, setNamed] = useState<Map<string, Choices>>(new Map()); // what a relation's records are called, for chips and the drawer
   const asked = useRef(new Set<string>());
   const path = usePath();
@@ -92,7 +95,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
 
   const { data: page, error, loading, reload } = useRequest(
     (signal) => fetchList(listKey, listRequest(view, size), signal),
-    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, size, JSON.stringify(view.filters)],
+    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, size, JSON.stringify(view.filters), columnsChanged],
   );
 
   const go = (next: typeof view) => { navigate(listAddress(path, next)); };
@@ -159,6 +162,8 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
   });
 
   const byKey = new Map(columnList.map((column) => [column.key, column]));
+  const shownKeys = useMemo(() => (page ? page.columns.map((c) => c.key) : NO_KEYS), [page]);
+  const skippedKeys = useMemo(() => (page ? page.skipped_columns.flatMap((s) => (s.field ? [s.field] : [])) : NO_KEYS), [page]);
   const first = page && page.rows.length > 0 ? (page.page - 1) * page.page_size + 1 : 0;
   const sizes = PAGE_SIZES.includes(pagination.pageSize) ? PAGE_SIZES : [...PAGE_SIZES, pagination.pageSize].sort((a, b) => a - b);
 
@@ -167,8 +172,10 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
       <div className="lf-bar">
         <input className="lf-search" aria-label="Search" placeholder="Search" value={text} maxLength={100}
           onChange={(e) => setText(e.target.value)} />
-        <button className="btn ghost small" ref={opener} disabled={!tree} aria-haspopup="dialog" onClick={() => setDrawer(true)}>
+        <button className="btn ghost small" disabled={!tree} aria-haspopup="dialog" onClick={(e) => { opener.current = e.currentTarget; setDrawer("filters"); }}>
           Filters{applied.length > 0 ? ` (${applied.length})` : ""}</button>
+        <button className="btn ghost small" disabled={!tree || !page} aria-haspopup="dialog" onClick={(e) => { opener.current = e.currentTarget; setDrawer("columns"); }}>
+          Columns</button>
         <span className="grow" />
         {page && <span className="m lf-count">{formatInteger(page.total)} matching</span>}
       </div>
@@ -189,6 +196,11 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
         <p className="notice warn" role="status">
           {page.skipped.length === 1 ? "1 condition of your default filter was" : `${page.skipped.length} conditions of your default filter were`} left
           out because the list does not offer {page.skipped.length === 1 ? "that column" : "those columns"} any more.</p>
+      )}
+      {page && page.skipped_columns.length > 0 && (
+        <p className="notice warn" role="status">
+          {page.skipped_columns.length === 1 ? "1 column of your choice was" : `${page.skipped_columns.length} columns of your choice were`} left
+          out because the list does not offer {page.skipped_columns.length === 1 ? "it" : "them"} any more.</p>
       )}
       {treeError && <p className="notice bad" role="alert">Could not load the columns to filter by. {treeError}</p>}
       {error && (
@@ -271,9 +283,20 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
       )}
       {drawer && tree && (
         <FilterDrawer listKey={listKey} title={config.title ?? "List"} tree={tree} applied={applied} openedWith={page?.default_filter_id ?? null}
-          isAdmin={config.isAdmin ?? false} choices={named} ensureChoices={ensureChoices}
-          onApply={(conditions) => { setDrawer(false); go(withFilters(view, conditions)); opener.current?.focus(); }}
-          onClose={() => { setDrawer(false); opener.current?.focus(); }} />
+          isAdmin={config.isAdmin ?? false} choices={named} ensureChoices={ensureChoices} tab={drawer}
+          columns={shownKeys} defaultColumns={page?.default_columns ?? NO_KEYS} skippedColumns={skippedKeys}
+          onApply={(conditions, chosen) => {
+            setDrawer(null); opener.current?.focus();
+            // Only when the filters changed: applying new columns must not turn the default filter into one written in the address.
+            if (JSON.stringify(conditions) !== JSON.stringify(applied)) go(withFilters(view, conditions));
+            if (chosen === undefined) return;
+            setProblem(null);
+            saveListColumns(listKey, chosen).then(
+              () => setColumnsChanged((n) => n + 1),
+              (e: Error) => setProblem(`The columns could not be saved. ${e.message}`),
+            );
+          }}
+          onClose={() => { setDrawer(null); opener.current?.focus(); }} />
       )}
     </div>
   );

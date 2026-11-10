@@ -36,7 +36,8 @@ const TREE: FieldTree = {
 
 const page = (over: Partial<ListPage> = {}): ListPage => ({
   columns: COLUMNS, rows: [{ _id: 1, _links: {}, account: "Test account 1", as_of_date: "2026-05-31" }], total: 1, page: 1, pages: 1, page_size: 25,
-  group: null, sort: { field: "as_of_date", direction: "desc" }, filters: [], skipped: [], default_filter_id: null, ...over,
+  group: null, sort: { field: "as_of_date", direction: "desc" }, filters: [], skipped: [], default_filter_id: null,
+  default_columns: COLUMNS.map((c) => c.key), customised: false, skipped_columns: [], ...over,
 });
 
 const filter = (id: number, name: string, over: Partial<SavedFilter> = {}): SavedFilter => ({

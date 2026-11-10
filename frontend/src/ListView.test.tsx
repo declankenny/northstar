@@ -26,7 +26,8 @@ const row = (id: number, over: Partial<ListRow> = {}): ListRow => ({
 
 const page = (over: Partial<ListPage> = {}): ListPage => ({
   columns: COLUMNS, rows: [row(1), row(2)], total: 138, page: 1, pages: 14, page_size: 10, group: null,
-  sort: { field: "as_of_date", direction: "desc" }, filters: [], skipped: [], default_filter_id: null, ...over,
+  sort: { field: "as_of_date", direction: "desc" }, filters: [], skipped: [], default_filter_id: null,
+  default_columns: COLUMNS.map((c) => c.key), customised: false, skipped_columns: [], ...over,
 });
 
 const requests = () => vi.mocked(fetchList).mock.calls.map((call) => call[1] as ListRequest);
