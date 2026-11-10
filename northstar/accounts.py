@@ -43,8 +43,7 @@ def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> d
         "SELECT MIN(as_of_date) FROM live_balances WHERE account_id = ?", (account_id,)
     ).fetchone()[0]
     latest = conn.execute(
-        "SELECT as_of_date, amount_cents FROM live_balances WHERE account_id = ? "
-        "ORDER BY as_of_date DESC LIMIT 1",
+        "SELECT as_of_date, amount_cents FROM last_balances WHERE account_id = ?",
         (account_id,),
     ).fetchone()
     summary["last_date"] = latest["as_of_date"] if latest else None
@@ -74,12 +73,9 @@ def account_rows(conn: sqlite3.Connection, today: date, closed: bool = False) ->
     rows = conn.execute(
         "SELECT a.id, a.name, c.name AS class_name, t.name AS type_name, t.stale_after_days, a.notes, a.is_open, "
         "  cu.code AS currency_code, cu.name AS currency_name, cu.minor_units AS currency_minor_units, "
-        "  (SELECT COUNT(*) FROM live_balances b WHERE b.account_id = a.id) AS balance_count, "
-        "  (SELECT b.as_of_date FROM live_balances b WHERE b.account_id = a.id "
-        "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_date, "
-        "  (SELECT b.amount_cents FROM live_balances b WHERE b.account_id = a.id "
-        "     ORDER BY b.as_of_date DESC LIMIT 1) AS last_cents "
+        "  s.balance_count, s.last_date, s.last_cents "
         "FROM live_accounts a "
+        "JOIN account_summaries s ON s.id = a.id "
         "JOIN account_types t ON t.id = a.type_id "
         "JOIN account_classes c ON c.id = t.class_id "
         "JOIN currencies cu ON cu.id = a.currency_id "
@@ -233,8 +229,7 @@ def close_account(op: Operation, account_id: int) -> None:
         if not account["is_open"]:
             raise ValidationError("That account is already closed.")
         latest = conn.execute(
-            "SELECT amount_cents FROM live_balances WHERE account_id = ? ORDER BY as_of_date DESC LIMIT 1",
-            (account_id,),
+            "SELECT amount_cents FROM last_balances WHERE account_id = ?", (account_id,),
         ).fetchone()
         if latest is not None and latest["amount_cents"] != 0:
             raise ValidationError(

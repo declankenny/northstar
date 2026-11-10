@@ -147,7 +147,7 @@ def test_existing_users_get_us_english_and_the_column_is_a_foreign_key(tmp_path)
                  f"VALUES ('a@example.com', 'Test A', '!', {system}, {system})")
     conn.commit()
     conn.close()
-    assert db.upgrade(path) == ["0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values", "0021_user_list_prefs", "0022_list_filters", "0023_user_list_columns"]
+    assert db.upgrade(path) == ["0011_locales", "0012_rename_stale_days_property", "0013_exchange_rates", "0014_system_timezone", "0015_scheduler", "0016_rate_fetch", "0017_oidc_settings", "0018_oidc_identities", "0019_account_class_from_type", "0020_live_balance_values", "0021_user_list_prefs", "0022_list_filters", "0023_user_list_columns", "0024_account_summaries"]
     conn = db.connect(path)
     assert [r[0] for r in conn.execute("SELECT locale FROM users WHERE is_system = 0")] == ["en-US"]
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1                            # enforcement is back on

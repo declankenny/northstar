@@ -65,6 +65,7 @@ def connect(path: str | Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conversion.register(conn)         # the functions the views call; only a view that uses one needs this
+    clock.register(conn)
     return conn
 
 
