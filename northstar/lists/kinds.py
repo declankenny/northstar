@@ -29,6 +29,14 @@ def fits(number: int) -> int:
     return number
 
 
+def plain_decimal(value: int, scale: int) -> str:
+    """An integer count of 10^-scale units as a plain decimal: no symbol, no separator, the sign in front, every place written.
+    -250 at scale 2 is -2.50 and 5 at scale 2 is 0.05."""
+    sign = "-" if value < 0 else ""
+    digits = str(abs(value)).rjust(scale + 1, "0")
+    return sign + (digits if scale == 0 else f"{digits[:-scale]}.{digits[-scale:]}")
+
+
 def escape_like(text: str) -> str:
     """The text with LIKE's wildcards made literal (used with ESCAPE '\\')."""
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -42,6 +50,11 @@ class Kind:
     operators: tuple[str, ...] = ()
     sorts_without_case = False          # text sorts and compares ignoring ASCII case, as everywhere in Northstar
     uses_date_part = False              # compares the first ten characters (a UTC timestamp's date)
+    exports_text = False                # its cells are text a person typed or named, which a spreadsheet might read as a formula
+
+    def export(self, value) -> str:
+        """A row's value of this column as a cell of an exported file: plain, and empty for no value. `value` is as `shape` made it."""
+        return "" if value is None else str(value)
 
     # How the engine reads and shows a column of this kind. The defaults read the column itself.
 
@@ -83,6 +96,7 @@ class Text(Kind):
     code = "text"
     operators = ("contains", "equals", "is_empty", "is_not_empty")
     sorts_without_case = True
+    exports_text = True
 
     def read(self, operator, value):
         self.check_operator(operator)
@@ -155,6 +169,9 @@ class Number(_Number):
     name = "number"
     code = "number"
 
+    def export(self, value) -> str:
+        return "" if value is None else format(Decimal(repr(value)), "f")           # 0.0000001, never 1e-07
+
     def number(self, text):
         if isinstance(text, bool) or not isinstance(text, (int, float, str)):
             raise ValidationError("Type a number.")
@@ -175,6 +192,9 @@ class Scaled(_Number):
     scale: int
     name = "decimal"
     code = "decimal"
+
+    def export(self, value) -> str:
+        return "" if value is None else plain_decimal(value, self.scale)
 
     def number(self, text):
         if isinstance(text, bool) or not isinstance(text, (int, str)):
@@ -235,6 +255,9 @@ class Timestamp(Date):
     code = "timestamp"
     uses_date_part = True
 
+    def export(self, value) -> str:
+        return "" if value is None else str(value)[:10]                                # as it is shown and filtered: its UTC date
+
     def group_key(self, view, resolved) -> str:
         """Grouped by the UTC date, which is what it is shown and filtered as: grouped by the instant, every row would be its own group."""
         return f"substr({self.compare(view, resolved)}, 1, 10)"
@@ -247,6 +270,9 @@ class YesNo(Kind):
     nullable: bool = False
     name = "Yes or No"
     code = "yes_no"
+
+    def export(self, value) -> str:
+        return "" if value is None else ("true" if value else "false")
 
     @property
     def operators(self):                                            # type: ignore[override]
@@ -268,6 +294,7 @@ class _Choice(Kind):
 
     name = "choice"
     code = "choice"
+    exports_text = True
     operators = ("is", "is_not", "is_any_of", "is_not_any_of", "is_empty", "is_not_empty")
 
     def one(self, item):
@@ -336,6 +363,12 @@ class Quantity(Kind):
     name = "amount"
     code = "amount"
     operators = ("equals", "at_least", "at_most", "between", "is_empty", "is_not_empty")
+
+    def export(self, value) -> str:
+        """The amount in its own scale, as a plain decimal: the unit is another column's business."""
+        if value is None:
+            return ""
+        return plain_decimal(value["value"], value["scale"]) if isinstance(value, dict) else str(value)
 
     def number(self, text) -> int:
         if isinstance(text, bool) or not isinstance(text, (int, str)):
