@@ -16,6 +16,7 @@ Track a household's financial position over time. Northstar records dated balanc
 - Dated balances per account, entered by hand, with one way to update many accounts at once.
 - Importing dated balance history from a CSV file into one existing account, with the columns and the date format chosen by the person and a review before anything is written.
 - Exporting one account's balances to a CSV file.
+- A list of every balance across all accounts, with its value in the account's currency and in the system currency, which a person searches, filters, sorts and pages, and for which they choose the columns and their order (see "user_list_prefs" and "list_filters" under Data model).
 - A register of past imports, for admins, with an undo of an import that nothing has changed since.
 - Net worth over time and per-account balance history, as charts and tables.
 - Closing an account to declutter, without losing its history.

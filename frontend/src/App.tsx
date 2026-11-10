@@ -4,6 +4,7 @@ import { fetchMe, fetchVersion, signOut, type Theme, updateMe } from "./api";
 import { AccountPage } from "./AccountPage";
 import { AccountsList } from "./AccountsList";
 import { AccountTypes } from "./AccountTypes";
+import { BalancesList } from "./BalancesList";
 import { Currencies } from "./Currencies";
 import { CurrencyPage } from "./CurrencyPage";
 import { Dashboard } from "./Dashboard";
@@ -110,6 +111,7 @@ function Shell() {
         <Brand />
         <Link className={route === "dashboard" ? "active" : ""} to={PATHS.dashboard}>Dashboard</Link>
         <Link className={route === "accounts" || route === "account" ? "active" : ""} to={PATHS.accounts}>Accounts</Link>
+        <Link className={route === "balances" ? "active" : ""} to={PATHS.balances}>Balances</Link>
         <Link className={route === "update" ? "active" : ""} to={PATHS.update}>Update balances</Link>
         {me?.is_admin && (
           <>
@@ -132,6 +134,8 @@ function Shell() {
           <Dashboard isAdmin={me?.is_admin ?? false} />
         ) : route === "accounts" ? (
           <AccountsList isAdmin={me?.is_admin ?? false} />
+        ) : route === "balances" ? (
+          <BalancesList isAdmin={me?.is_admin ?? false} />
         ) : route === "update" ? (
           <UpdateBalances />
         ) : route === "notfound" ? (

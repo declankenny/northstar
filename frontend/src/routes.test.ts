@@ -5,6 +5,7 @@ describe("routeFromPath", () => {
   it("opens each page at its own address", () => {
     expect(routeFromPath("/dashboard")).toBe("dashboard");
     expect(routeFromPath("/accounts")).toBe("accounts");
+    expect(routeFromPath("/balances")).toBe("balances");
     expect(routeFromPath("/balance-update")).toBe("update");
     expect(routeFromPath("/types")).toBe("types");
     expect(routeFromPath("/users")).toBe("users");

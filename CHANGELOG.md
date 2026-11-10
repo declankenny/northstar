@@ -6,6 +6,10 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Added
+
+- A Balances page (#203): every balance across all accounts in one list, newest first, with each balance's account, type, value and currency and its value in the system currency. Search it, filter it (and save a filter, private or for everyone), sort it by any column, and choose its columns and their order. Its Account links to the account, and its Currency to the currency page for admins. Editing and deleting a balance from the list, grouping and export come next.
+
 ### Changed
 
 - An account's class is now read from its type and is no longer stored on the account (#181). Nothing changes on any screen, and the rule that a type's class cannot change while an account uses it is kept, by a trigger.

@@ -1,5 +1,5 @@
 /** The app's pages. The page is chosen by the address path, so no router library is needed. */
-export type Route = "login" | "setup" | "dashboard" | "profile" | "users" | "accounts" | "account" | "import" | "types" | "imports" | "currencies" | "currency" | "properties" | "update" | "notfound";
+export type Route = "login" | "setup" | "dashboard" | "profile" | "users" | "accounts" | "account" | "balances" | "import" | "types" | "imports" | "currencies" | "currency" | "properties" | "update" | "notfound";
 
 /** Where each page without a parameter lives. Links use these, so an address is spelled in one place. */
 export const PATHS = {
@@ -7,6 +7,7 @@ export const PATHS = {
   setup: "/setup",
   dashboard: "/dashboard",
   accounts: "/accounts",
+  balances: "/balances",
   update: "/balance-update",
   types: "/types",
   users: "/users",
@@ -42,6 +43,7 @@ export function routeFromPath(path: string): Route {
   if (clean === PATHS.currencies) return "currencies";
   if (clean === PATHS.properties) return "properties";
   if (clean === PATHS.accounts) return "accounts";
+  if (clean === PATHS.balances) return "balances";
   if (clean === PATHS.types) return "types";
   if (clean === PATHS.update) return "update";
   if (ACCOUNT.test(clean)) return "account";
