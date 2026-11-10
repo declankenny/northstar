@@ -8,6 +8,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Added
 
+- The balance page's form has no empty line between the amount and the note (#214): how a changed amount was read now shows beside its label.
 - Links are easier to see (#212). A link in a table cell or a title is the accent colour, no longer the bold text colour, and is underlined when the mouse is over it. A link inside a sentence is the accent colour with a soft underline that firms up on hover.
 - A page for each balance (#210), opened from its date in the Balances list: its amount and note are edited, with Save, and it is deleted, with the same confirmation and conflict messages as the account page. It shows the balance's currency, its value in the system currency with the date of the rate used, and who entered and last changed it. The date is not changed there. A closed account's balance can be read but not changed. Leaving with unsaved changes asks first.
 - More ways to filter a choice column, such as an account's type (#206): is, is not, is one of (the old "is any of", relabelled), is not one of, is empty and is not empty. "Is not" and "is not one of" include rows that have no value. "Is not empty" is also offered beside "is empty" on number, date and amount columns, and on a Yes/No column that can be empty. A filter saved before the change keeps working.
