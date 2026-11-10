@@ -136,9 +136,51 @@ describe("the columns tab of the drawer", () => {
     expect((picker.getByRole("button", { name: "Currency" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(picker.getByRole("button", { name: "Currency" }));
     expect(order()).toEqual(["Date", "Account", "Value", "Currency"]);
-    expect(drawer().queryByLabelText("Columns to show")).toBeNull();                              // the picker closes
     apply();
     await waitFor(() => expect(saveListColumns).toHaveBeenCalledWith("balances", ["as_of_date", "account", "amount_cents", "account.currency"]));
+  });
+
+  it("stays open after a column is added, with its branches as they were, so several can be added in a row", async () => {
+    render(<ListView listKey="balances" />);
+    await open();
+    fireEvent.click(button("+ Add column"));
+    fireEvent.click(within(drawer().getByLabelText("Columns to show")).getByRole("button", { name: "Show the columns of Account" }));
+    fireEvent.click(within(drawer().getByLabelText("Columns to show")).getByRole("button", { name: "Currency" }));
+    const picker = within(drawer().getByLabelText("Columns to show"));                          // still there, still expanded
+    expect((picker.getByRole("button", { name: "Currency" }) as HTMLButtonElement).disabled).toBe(true);     // and greyed now
+    fireEvent.click(picker.getByRole("button", { name: "Name" }));
+    fireEvent.click(picker.getByRole("button", { name: "Note" }));
+    expect(order()).toEqual(["Date", "Account", "Value", "Currency", "Name", "Note"]);
+    expect(button("Columns (6)")).toBeTruthy();
+  });
+
+  it("says what was added, and shows its new row for a moment, until something else is done", async () => {
+    render(<ListView listKey="balances" />);
+    await open();
+    fireEvent.click(button("+ Add column"));
+    fireEvent.click(within(drawer().getByLabelText("Columns to show")).getByRole("button", { name: "Note" }));
+    expect(drawer().getByText("“Note” added at the end of the list.").getAttribute("role")).toBe("status");      // said to a screen reader too
+    const row = () => within(drawer().getByRole("list", { name: "Columns shown" })).getAllByRole("listitem").at(-1)!;
+    expect(row().className).toContain("added");
+    await waitFor(() => expect(row().className).not.toContain("added"), { timeout: 3000 });      // only for a moment
+    expect(drawer().getByText("“Note” added at the end of the list.")).toBeTruthy();                  // the words stay
+    fireEvent.click(button("Move Note up"));
+    expect(drawer().queryByText("“Note” added at the end of the list.")).toBeNull();                  // until something else is done
+  });
+
+  it("stops saying it when the picker is closed, and does not say it for a column that was removed again", async () => {
+    render(<ListView listKey="balances" />);
+    await open();
+    fireEvent.click(button("+ Add column"));
+    fireEvent.click(within(drawer().getByLabelText("Columns to show")).getByRole("button", { name: "Note" }));
+    fireEvent.click(button("Remove Note"));
+    expect(drawer().queryByText(/^“Note” added/)).toBeNull();
+    fireEvent.click(within(drawer().getByLabelText("Columns to show")).getByRole("button", { name: "Note" }));
+    expect(drawer().getByText(/^“Note” added/)).toBeTruthy();
+    fireEvent.click(button("+ Add column"));                                                        // closes the picker
+    expect(drawer().queryByText(/^“Note” added/)).toBeNull();
+    fireEvent.click(button("+ Add column"));                                                        // and it is not said again when it opens
+    expect(drawer().queryByText(/^“Note” added/)).toBeNull();
   });
 
   it("resets to the list's own columns: enabled only once they differ, and applying forgets the choice", async () => {

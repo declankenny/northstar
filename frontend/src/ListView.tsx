@@ -39,7 +39,7 @@ const SEARCH_DELAY = 300; // milliseconds after the last key before the server i
 function useSameColumns(next: ListColumn[] | undefined): ListColumn[] {
   const kept = useRef<ListColumn[]>([]);
   const same = next && next.length === kept.current.length
-    && next.every((column, i) => column.key === kept.current[i].key && column.label === kept.current[i].label);
+    && next.every((column, i) => column.key === kept.current[i].key && column.path_label === kept.current[i].path_label);
   if (next && !same) kept.current = next;
   return kept.current;
 }
@@ -67,6 +67,15 @@ function HeaderMenu({ label, onAscending, onDescending }: { label: string; onAsc
       )}
     </>
   );
+}
+
+const CAP = 40;       // the cells are capped at this many characters (the stylesheet says it in ch); more of a text shows on hover
+
+/** The whole text of a cell that is long enough to be cut off, for its tooltip. A cell drawn its own way has no such text. */
+function fullText(column: ListColumn, row: ListRow, config: ListConfig): string | undefined {
+  if (config.cell?.[column.key]) return undefined;
+  const text = formatCell(column, row[column.key]);
+  return text !== null && text.length > CAP ? text : undefined;
 }
 
 function cellContent(column: ListColumn, row: ListRow, page: ListPage, config: ListConfig): ReactNode {
@@ -141,7 +150,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
   const pagination: PaginationState = { pageIndex: (page?.page ?? view.page) - 1, pageSize: page?.page_size ?? size ?? 25 };
   const columnList = useSameColumns(page?.columns);
   const columns = useMemo(
-    () => columnList.map((column) => helper.accessor((row) => row[column.key] as unknown, { id: column.key, header: column.label })),
+    () => columnList.map((column) => helper.accessor((row) => row[column.key] as unknown, { id: column.key, header: column.path_label })),
     [columnList],
   );
   const table = useTable({
@@ -228,7 +237,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
                   <tr key={group.id}>
                     {group.headers.map((header) => {
                       const column = byKey.get(header.column.id);
-                      const label = column?.label ?? header.column.id;
+                      const label = column?.path_label ?? header.column.id;        // "Account › Updated by": a related column says where it comes from
                       const sorted = header.column.getIsSorted();
                       return (
                         <th key={header.id} className={column && isNumeric(column) ? "r" : ""}
@@ -251,7 +260,7 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
                     {row.getAllCells().map((cell) => {
                       const column = byKey.get(cell.column.id);
                       return column && (
-                        <td key={cell.id} className={isNumeric(column) ? "r" : ""}>
+                        <td key={cell.id} className={isNumeric(column) ? "r" : ""} title={fullText(column, row.original, config)}>
                           {cellContent(column, row.original, page, config)}
                         </td>
                       );
