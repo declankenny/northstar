@@ -503,5 +503,21 @@ a.btn { display: inline-block; text-decoration: none; }
 .lf-pick-row { display: inline-flex; gap: 6px; align-items: center; padding: 3px 0; }
 .lf-fold { background: none; border: 0; color: var(--muted); cursor: pointer; width: 18px; padding: 0; }
 .lf-help { margin-top: 14px; }
+
+/* The columns tab of the drawer: one row for each column shown, with a handle to drag it by and arrows for the keyboard. */
+.lc-add { margin: 0 0 8px; }
+.lc-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lc-item { display: grid; grid-template-columns: 24px 1fr auto auto auto; gap: 8px; align-items: center; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg); position: relative; }
+.lc-item.lifted { z-index: 2; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); border-color: var(--accent); background: var(--surface); }
+.lc-item:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lc-handle { cursor: grab; color: var(--muted); background: none; border: 0; font-size: 16px; letter-spacing: -2px; padding: 0; touch-action: none; }
+.lc-handle:hover { color: var(--text); }
+.lc-handle:focus-visible { outline: 2px solid var(--accent); border-radius: 4px; }
+.lc-name small { color: var(--muted); margin-left: 8px; font-size: 12px; }
+.lc-arrow { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; }
+.lc-arrow:hover:not(:disabled) { color: var(--text); background: var(--pill); }
+.lc-arrow:disabled, .lc-item .lf-x:disabled { opacity: .35; cursor: default; }
+.lc-item .lf-x:disabled:hover { color: var(--muted); }
 button.link:disabled { color: var(--muted); cursor: default; text-decoration: none; opacity: .6; }
 

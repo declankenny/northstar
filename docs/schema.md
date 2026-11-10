@@ -155,7 +155,8 @@ erDiagram
         integer id PK
         integer user_id FK "the person the choices are for"
         text list_key "which list, at most 100 characters"
-        integer page_size "10, 25, 50 or 100"
+        integer page_size "10, 25, 50 or 100; empty until chosen"
+        text columns "a JSON array of field keys in the order shown; empty until chosen"
         text created_at "UTC"
         integer created_by FK "who created it"
         text updated_at "UTC"
@@ -290,7 +291,7 @@ A person checks these against the migrations, because the test cannot read them 
 | `ref_property_lookups` | `UNIQUE (property_id, value)`. At most 20 rows per property, checked by a test. Deleting a property deletes its rows. |
 | `ref_property_validators` | `UNIQUE (property_id, validator)` and `UNIQUE (property_id, position)`. `validator` is a key of `VALIDATORS` in `northstar/system_properties.py`, checked by a test. Deleting a property deletes its rows. |
 | `list_filters` | `conditions` is valid JSON that is an array of at most 20,000 characters, `name` is 1 to 80 characters and `is_default` is 0 or 1 (`CHECK`s). The unique index `list_filters_name_unique` is on the owner (empty counting as 0), the list and the name ignoring ASCII case: a name is unique for one owner and list, and among the shared ones. The unique partial index `list_filters_one_default` is on the owner (empty counting as 0) and the list where `is_default = 1`: a person has at most one default for a list, and a list at most one shared default. Every logged field is logged, including who it belongs to. |
-| `user_list_prefs` | `UNIQUE (user_id, list_key)`: one row for each person and list. `page_size` is one of 10, 25, 50 and 100 (a `CHECK`). Only the row's creation is logged (`user_id`, `list_key` and who created it and when): the page size is not a logged field, so changing it leaves no operation, as for a theme. |
+| `user_list_prefs` | `UNIQUE (user_id, list_key)`: one row for each person and list. `page_size` is empty or one of 10, 25, 50 and 100, and `columns` is empty or valid JSON that is an array of at most 8,000 characters (`CHECK`s): a person may have chosen either without the other, and empty means the list's own. Only the row's creation is logged (`user_id`, `list_key` and who created it and when): the page size and the columns are not logged fields, so changing them leaves no operation, as for a theme. |
 | `user_identities` | `UNIQUE (issuer, subject)`: one binding per person at a provider. `UNIQUE (user_id, issuer)`: one binding per user per issuer, so a second subject is refused and never replaces the first. `issuer` is 1 to 256 characters and `subject` 1 to 255 (a `CHECK`). Triggers refuse deleting a row and changing `user_id`, `issuer` or `subject`. A user is only marked deleted, so a binding stays after the user is deleted. Logged fields: `user_id`, `issuer`, `subject` and who created it and when, never a token or a claim. |
 | `sys_sessions` | Deleting a user cascades to their sessions. Index `sys_sessions_user_id` on `user_id`. `auth_method` is `local` or `oidc` (a `CHECK`, `local` for every session that existed before 0.4) and `config_fingerprint` is a 64-character hash, set exactly when the method is `oidc` (the trigger `sys_sessions_method_and_fingerprint`, because a table check cannot be added to an existing table). |
 | `sys_login_transactions` | One row per sign-in in progress, used and removed once or removed when `expires_at` passes (index on it). The state and the binding value are kept only as hashes, both 64 characters. The nonce and the PKCE verifier are kept as they are, and never logged. |

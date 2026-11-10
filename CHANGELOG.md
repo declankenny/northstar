@@ -16,6 +16,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 - Migration: `0020_live_balance_values` adds a view of each live balance with its value in the system currency, for the list framework. It calls a SQL function that the application registers on every connection it opens, so the view can only be read through the application: opening the database file in the `sqlite3` shell cannot read that one view, while backups and checks are unaffected.
 - Migration: `0021_user_list_prefs` adds the table that holds a person's page size for each list, for the list framework. A checked backup is made first.
 - Migration: `0022_list_filters` adds the table that holds saved filters for the lists, for the list framework. A checked backup is made first.
+- Migration: `0023_user_list_columns` rebuilds `user_list_prefs` so that a person can save the columns they chose for a list, and so that its page size may be empty. Every saved page size is kept. A checked backup is made first.
 - Environment variables: nothing.
 - Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
 
