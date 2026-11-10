@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Choices, FieldNode, FieldTree } from "./api";
-import { describe as say, flatten, problem, readNumber, sameConditions, startCondition, toWire, withOperator } from "./listFilters";
+import { describe as say, flatten, isSingleChoice, problem, readNumber, sameConditions, startCondition, toWire, withOperator } from "./listFilters";
 import { setLocale, US_ENGLISH } from "./locale";
 
-const ops = (...names: string[]) => names.map((name) => ({ name, label: name.replaceAll("_", " ") }));
+const LABELS: Record<string, string> = { is_any_of: "is one of", is_not_any_of: "is not one of", is_not: "is not", is: "is" };   // as the server words them
+const ops = (...names: string[]) => names.map((name) => ({ name, label: LABELS[name] ?? name.replaceAll("_", " ") }));
 const NUMBER_OPS = ops("equals", "at_least", "at_most", "between", "is_empty");
 const node = (over: Partial<FieldNode>): FieldNode => ({
   key: "k", label: "K", path_label: "K", kind: "text", scale: null, operators: ops("contains", "equals", "is_empty", "is_not_empty"), choices: null, ...over,
@@ -157,7 +158,7 @@ describe("a condition in words, for a chip", () => {
   it("names the column, the operator and the value", () => {
     expect(say(TEXT, { field: "note", operator: "contains", value: "rent" })).toBe("Note contains rent");
     expect(say(FLAG, { field: "stale", operator: "is_yes" })).toBe("Stale is yes");
-    expect(say(STATUS, { field: "status", operator: "is_any_of", value: ["Open", "Closed"] })).toBe("Status is any of Open, Closed");
+    expect(say(STATUS, { field: "status", operator: "is_any_of", value: ["Open", "Closed"] })).toBe("Status is one of Open, Closed");
   });
 
   it("writes dates and numbers in the person's formats", () => {
@@ -168,12 +169,84 @@ describe("a condition in words, for a chip", () => {
   });
 
   it("names the records a relation's ids stand for, or says how many while they are not known yet", () => {
-    expect(say(ACCOUNT, { field: "account", operator: "is_any_of", value: [3, 4] }, choices)).toBe("Account is any of Test dollars, Test euros");
-    expect(say(ACCOUNT, { field: "account", operator: "is_any_of", value: [3, 4] })).toBe("Account is any of 2 selected");
-    expect(say(ACCOUNT, { field: "account", operator: "is_any_of", value: [3, 99] }, choices)).toBe("Account is any of 2 selected");   // one is not in the list
+    expect(say(ACCOUNT, { field: "account", operator: "is_any_of", value: [3, 4] }, choices)).toBe("Account is one of Test dollars, Test euros");
+    expect(say(ACCOUNT, { field: "account", operator: "is_any_of", value: [3, 4] })).toBe("Account is one of 2 selected");
+    expect(say(ACCOUNT, { field: "account", operator: "is_any_of", value: [3, 99] }, choices)).toBe("Account is one of 2 selected");   // one is not in the list
   });
 
   it("says what it can about a column the list no longer offers", () => {
     expect(say(undefined, { field: "region", operator: "equals", value: "x" })).toBe("region equals x");
+  });
+});
+
+describe("the operators of a choice column", () => {
+  const SIX = ops("is", "is_not", "is_any_of", "is_not_any_of", "is_empty", "is_not_empty");
+  const TYPE = node({ key: "status", path_label: "Status", kind: "choice", operators: SIX, choices: "values", values: ["Open", "Closed"] });
+  const WHO = node({ key: "account", path_label: "Account", kind: "choice", operators: SIX, choices: "records" });
+  const choices: Choices = { kind: "records", values: [], more: false, options: [{ id: 3, value: "Test dollars", detail: null }, { id: 4, value: "Test euros", detail: null }] };
+
+  it("starts a new condition at “is”, with no choice made yet", () => {
+    expect(startCondition(TYPE)).toEqual({ field: "status", operator: "is", value: "" });
+    expect(startCondition(WHO)).toEqual({ field: "account", operator: "is", value: "" });
+  });
+
+  it("tells which operators take one value", () => {
+    expect(isSingleChoice("is")).toBe(true);
+    expect(isSingleChoice("is_not")).toBe(true);
+    for (const other of ["is_any_of", "is_not_any_of", "is_empty", "is_not_empty", "equals"]) expect(isSingleChoice(other)).toBe(false);
+  });
+
+  it("carries a choice between one value and several: one becomes a list of one, and a list becomes its first value", () => {
+    expect(withOperator(WHO, { field: "account", operator: "is", value: 3 }, "is_any_of")).toEqual({ field: "account", operator: "is_any_of", value: [3] });
+    expect(withOperator(WHO, { field: "account", operator: "is_any_of", value: [4, 3] }, "is_not")).toEqual({ field: "account", operator: "is_not", value: 4 });
+    expect(withOperator(TYPE, { field: "status", operator: "is", value: "Open" }, "is_not_any_of")).toEqual({ field: "status", operator: "is_not_any_of", value: ["Open"] });
+    expect(withOperator(WHO, { field: "account", operator: "is", value: "" }, "is_any_of")).toEqual({ field: "account", operator: "is_any_of", value: [] });
+    expect(withOperator(WHO, { field: "account", operator: "is_any_of", value: [] }, "is")).toEqual({ field: "account", operator: "is", value: "" });
+  });
+
+  it("keeps the choice between the two of one kind, and drops it for “empty”, which starts afresh when left", () => {
+    expect(withOperator(WHO, { field: "account", operator: "is", value: 3 }, "is_not")).toEqual({ field: "account", operator: "is_not", value: 3 });
+    expect(withOperator(WHO, { field: "account", operator: "is_any_of", value: [3, 4] }, "is_not_any_of")).toEqual({ field: "account", operator: "is_not_any_of", value: [3, 4] });
+    expect(withOperator(WHO, { field: "account", operator: "is", value: 3 }, "is_empty")).toEqual({ field: "account", operator: "is_empty" });
+    expect(withOperator(WHO, { field: "account", operator: "is_empty" }, "is")).toEqual({ field: "account", operator: "is", value: "" });
+    expect(withOperator(WHO, { field: "account", operator: "is_not_empty" }, "is_any_of")).toEqual({ field: "account", operator: "is_any_of", value: [] });
+  });
+
+  it("is incomplete until one value is chosen for “is” and “is not”, and says so", () => {
+    for (const operator of ["is", "is_not"]) {
+      expect(problem(WHO, { field: "account", operator, value: "" })).toBe("Choose a value.");
+      expect(problem(WHO, { field: "account", operator })).toBe("Choose a value.");
+      expect(problem(WHO, { field: "account", operator, value: [3] })).toBe("Choose a value.");           // a list is not one value
+      expect(problem(WHO, { field: "account", operator, value: 3 })).toBeNull();
+      expect(problem(TYPE, { field: "status", operator, value: "Open" })).toBeNull();
+    }
+    expect(problem(WHO, { field: "account", operator: "is_not_any_of", value: [] })).toBe("Choose at least one value.");
+    expect(problem(WHO, { field: "account", operator: "is_not_any_of", value: [3] })).toBeNull();
+  });
+
+  it("is complete with no value for “is empty” and “is not empty”", () => {
+    expect(problem(WHO, { field: "account", operator: "is_empty" })).toBeNull();
+    expect(problem(TYPE, { field: "status", operator: "is_not_empty" })).toBeNull();
+  });
+
+  it("is sent as the value itself for one choice, and with no value for the empties", () => {
+    expect(toWire(WHO, { field: "account", operator: "is", value: 3 })).toEqual({ field: "account", operator: "is", value: 3 });
+    expect(toWire(TYPE, { field: "status", operator: "is_not", value: "Open" })).toEqual({ field: "status", operator: "is_not", value: "Open" });
+    expect(toWire(WHO, { field: "account", operator: "is_empty", value: 3 })).toEqual({ field: "account", operator: "is_empty" });
+  });
+
+  it("says a chip in words", () => {
+    expect(say(WHO, { field: "account", operator: "is", value: 3 }, choices)).toBe("Account is Test dollars");
+    expect(say(WHO, { field: "account", operator: "is_not", value: 4 }, choices)).toBe("Account is not Test euros");
+    expect(say(WHO, { field: "account", operator: "is", value: 3 })).toBe("Account is …");                  // the records are not known yet
+    expect(say(TYPE, { field: "status", operator: "is_not", value: "Open" })).toBe("Status is not Open");
+    expect(say(WHO, { field: "account", operator: "is_not_any_of", value: [3, 4] }, choices)).toBe("Account is not one of Test dollars, Test euros");
+    expect(say(WHO, { field: "account", operator: "is_empty" })).toBe("Account is empty");
+    expect(say(TYPE, { field: "status", operator: "is_not_empty" })).toBe("Status is not empty");
+  });
+
+  it("still reads a filter saved before the relabel, which called the stored name is_any_of", () => {
+    expect(problem(WHO, { field: "account", operator: "is_any_of", value: [3] })).toBeNull();
+    expect(say(WHO, { field: "account", operator: "is_any_of", value: [3] }, choices)).toBe("Account is one of Test dollars");
   });
 });

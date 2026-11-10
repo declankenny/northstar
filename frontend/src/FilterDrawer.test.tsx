@@ -17,7 +17,8 @@ const COLUMNS: ListColumn[] = [
   { key: "account", label: "Account", path_label: "Account", kind: "text", scale: null, linked: false },
   { key: "as_of_date", label: "Date", path_label: "Date", kind: "date", scale: null, linked: false },
 ];
-const ops = (...names: string[]) => names.map((name) => ({ name, label: name.replaceAll("_", " ") }));
+const LABELS: Record<string, string> = { is_any_of: "is one of", is_not_any_of: "is not one of", is_not: "is not", is: "is" };   // as the server words them
+const ops = (...names: string[]) => names.map((name) => ({ name, label: LABELS[name] ?? name.replaceAll("_", " ") }));
 const field = (over: Partial<FieldNode>): FieldNode => ({ key: "k", label: "K", path_label: "K", kind: "text", scale: null, operators: ops("equals"), choices: null, ...over });
 
 const TREE: FieldTree = {
@@ -171,7 +172,7 @@ describe("the filter drawer", () => {
     fireEvent.click(drawer().getByRole("checkbox", { name: "Test dollars" }));
     apply();
     await waitFor(() => expect(requests().at(-1)).toEqual({ page: 1, filters: [{ field: "account", operator: "is_any_of", value: [4, 3] }] }));
-    expect(await screen.findByText("Account is any of Test euros, Test dollars")).toBeTruthy();    // the chip names them
+    expect(await screen.findByText("Account is one of Test euros, Test dollars")).toBeTruthy();    // the chip names them
   });
 
   it("takes a range as two boxes and keeps Apply off until it is a real range", async () => {

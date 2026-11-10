@@ -14,7 +14,8 @@ from northstar.errors import ValidationError
 OPERATOR_NAMES = {
     "contains": "contains", "equals": "equals", "is_empty": "is empty", "is_not_empty": "is not empty",
     "at_least": "is at least", "at_most": "is at most", "between": "is between",
-    "before": "is before", "after": "is after", "is_yes": "is Yes", "is_no": "is No", "is_any_of": "is any of",
+    "before": "is before", "after": "is after", "is_yes": "is Yes", "is_no": "is No",
+    "is": "is", "is_not": "is not", "is_any_of": "is one of", "is_not_any_of": "is not one of",     # a choice (the stored name of "is one of" stays)
 }
 
 
@@ -101,14 +102,14 @@ class Text(Kind):
 class _Number(Kind):
     """Integers, decimals and scaled integers. Subclasses say how a typed number becomes the stored one."""
 
-    operators = ("equals", "at_least", "at_most", "between", "is_empty")
+    operators = ("equals", "at_least", "at_most", "between", "is_empty", "is_not_empty")
 
     def number(self, text):
         raise NotImplementedError
 
     def read(self, operator, value):
         self.check_operator(operator)
-        if operator == "is_empty":
+        if operator in ("is_empty", "is_not_empty"):
             return None
         if operator == "between":
             if not (isinstance(value, (list, tuple)) and len(value) == 2):
@@ -122,6 +123,8 @@ class _Number(Kind):
     def where(self, expression, operator, value):
         if operator == "is_empty":
             return f"{expression} IS NULL", []
+        if operator == "is_not_empty":
+            return f"{expression} IS NOT NULL", []
         if operator == "between":
             return f"{expression} BETWEEN ? AND ?", [value[0], value[1]]
         sign = {"equals": "=", "at_least": ">=", "at_most": "<="}[operator]
@@ -186,7 +189,7 @@ class Scaled(_Number):
 class Date(Kind):
     name = "date"
     code = "date"
-    operators = ("before", "after", "between", "is_empty")
+    operators = ("before", "after", "between", "is_empty", "is_not_empty")
 
     def day(self, text) -> str:
         if isinstance(text, str) and len(text) == 10:
@@ -198,7 +201,7 @@ class Date(Kind):
 
     def read(self, operator, value):
         self.check_operator(operator)
-        if operator == "is_empty":
+        if operator in ("is_empty", "is_not_empty"):
             return None
         if operator == "between":
             if not (isinstance(value, (list, tuple)) and len(value) == 2):
@@ -213,6 +216,8 @@ class Date(Kind):
         part = f"substr({expression}, 1, 10)" if self.uses_date_part else expression
         if operator == "is_empty":
             return f"{expression} IS NULL", []
+        if operator == "is_not_empty":
+            return f"{expression} IS NOT NULL", []
         if operator == "between":                                    # both ends included
             return f"{part} BETWEEN ? AND ?", [value[0], value[1]]
         return f"{part} {'<' if operator == 'before' else '>'} ?", [value]      # before and after exclude the day
@@ -228,7 +233,7 @@ class Timestamp(Date):
 
 @dataclass(frozen=True)
 class YesNo(Kind):
-    """A flag stored as 1 or 0. When the column can be empty (not yet known) it also offers “is empty”."""
+    """A flag stored as 1 or 0. When the column can be empty (not yet known) it also offers “is empty” and “is not empty”."""
 
     nullable: bool = False
     name = "Yes or No"
@@ -236,7 +241,7 @@ class YesNo(Kind):
 
     @property
     def operators(self):                                            # type: ignore[override]
-        return ("is_yes", "is_no", "is_empty") if self.nullable else ("is_yes", "is_no")
+        return ("is_yes", "is_no", "is_empty", "is_not_empty") if self.nullable else ("is_yes", "is_no")
 
     def read(self, operator, value):
         self.check_operator(operator)
@@ -244,51 +249,68 @@ class YesNo(Kind):
 
     def where(self, expression, operator, value):
         return {"is_yes": (f"{expression} = 1", []), "is_no": (f"{expression} = 0", []),
-                "is_empty": (f"{expression} IS NULL", [])}[operator]
+                "is_empty": (f"{expression} IS NULL", []), "is_not_empty": (f"{expression} IS NOT NULL", [])}[operator]
+
+
+class _Choice(Kind):
+    """A column whose value is one of a set of choices. It is filtered by one value (“is”, “is not”), by several (“is one of”, “is not
+    one of”) or by whether it has one (“is empty”, “is not empty”). The negatives include rows with no value: “is not Savings” lists
+    a row with no type too, which SQL's own `<>` and `NOT IN` would leave out."""
+
+    name = "choice"
+    code = "choice"
+    operators = ("is", "is_not", "is_any_of", "is_not_any_of", "is_empty", "is_not_empty")
+
+    def one(self, item):
+        """A single choice as the SQL needs it, or a ValidationError."""
+        raise NotImplementedError
+
+    def read(self, operator, value):
+        self.check_operator(operator)
+        if operator in ("is_empty", "is_not_empty"):
+            return None
+        if operator in ("is", "is_not"):
+            if isinstance(value, (list, tuple, dict)) or value is None:
+                raise ValidationError("Choose a value.")
+            return self.one(value)
+        if not (isinstance(value, (list, tuple)) and value):
+            raise ValidationError("Choose at least one value.")
+        return tuple(self.one(item) for item in value)
+
+    def where(self, expression, operator, value):
+        if operator == "is_empty":
+            return f"{expression} IS NULL", []
+        if operator == "is_not_empty":
+            return f"{expression} IS NOT NULL", []
+        if operator == "is":
+            return f"{expression} = ?", [value]
+        if operator == "is_not":
+            return f"({expression} IS NULL OR {expression} <> ?)", [value]
+        marks = ", ".join("?" * len(value))
+        if operator == "is_any_of":
+            return f"{expression} IN ({marks})", list(value)
+        return f"({expression} IS NULL OR {expression} NOT IN ({marks}))", list(value)
 
 
 @dataclass(frozen=True)
-class Category(Kind):
-    """One of a declared set of values (a status). Filtered with “is any of”."""
+class Category(_Choice):
+    """One of a declared set of values (a status)."""
 
     values: tuple[str, ...]
-    name = "choice"
-    code = "choice"
-    operators = ("is_any_of",)
 
-    def read(self, operator, value):
-        self.check_operator(operator)
-        if not (isinstance(value, (list, tuple)) and value):
-            raise ValidationError("Choose at least one value.")
-        for item in value:
-            if item not in self.values:
-                raise ValidationError(f"“{item}” is not one of the choices.")
-        return tuple(value)
-
-    def where(self, expression, operator, value):
-        return f"{expression} IN ({', '.join('?' * len(value))})", list(value)
+    def one(self, item):
+        if not isinstance(item, str) or item not in self.values:
+            raise ValidationError(f"“{item}” is not one of the choices.")
+        return item
 
 
-class Reference(Kind):
-    """The id of the record a relation points at. Filtered with “is any of”, by id, though shown by display value."""
+class Reference(_Choice):
+    """The id of the record a relation points at. Filtered by id, though shown by display value."""
 
-    name = "choice"
-    code = "choice"
-    operators = ("is_any_of",)
-
-    def read(self, operator, value):
-        self.check_operator(operator)
-        if not (isinstance(value, (list, tuple)) and value):
-            raise ValidationError("Choose at least one value.")
-        ids = []
-        for item in value:
-            if isinstance(item, bool) or not isinstance(item, int):
-                raise ValidationError("Choose from the list.")
-            ids.append(item)
-        return tuple(ids)
-
-    def where(self, expression, operator, value):
-        return f"{expression} IN ({', '.join('?' * len(value))})", list(value)
+    def one(self, item):
+        if isinstance(item, bool) or not isinstance(item, int):
+            raise ValidationError("Choose from the list.")
+        return item
 
 
 # -- amounts whose scale is not the column's own --
@@ -304,7 +326,7 @@ class Quantity(Kind):
 
     name = "amount"
     code = "amount"
-    operators = ("equals", "at_least", "at_most", "between", "is_empty")
+    operators = ("equals", "at_least", "at_most", "between", "is_empty", "is_not_empty")
 
     def number(self, text) -> int:
         if isinstance(text, bool) or not isinstance(text, (int, str)):

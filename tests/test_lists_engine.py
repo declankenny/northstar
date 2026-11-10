@@ -342,6 +342,55 @@ def test_a_choice_is_any_of_the_declared_values(conn, cat):
             parse_request(cat, TICKETS, {"filters": [{"field": "status", "operator": "is_any_of", "value": bad}]})
 
 
+def test_a_choice_is_or_is_not_one_value(conn, cat):
+    live = live_tickets(conn)
+    assert matching(conn, cat, "status", "is", "Open") == {t["id"] for t in live if t["status"] == "Open"}
+    assert matching(conn, cat, "status", "is_not", "Open") == {t["id"] for t in live if t["status"] != "Open"}
+    assert matching(conn, cat, "assignee", "is", 8) == {t["id"] for t in live if t["assignee_id"] == 8}
+    assert matching(conn, cat, "site.lead", "is", 3) == {t["id"] for t in live
+                                                         if {r["id"]: r["lead_id"] for r in conn.execute("SELECT id, lead_id FROM site")}[t["site_id"]] == 3}
+    for field, operator, bad in (("status", "is", ["Open"]), ("status", "is", None), ("status", "is", "Nope"), ("status", "is_not", 3),
+                                 ("assignee", "is", [8]), ("assignee", "is", "Avery Reed"), ("assignee", "is_not", True), ("assignee", "is", None)):
+        with pytest.raises(ValidationError):
+            parse_request(cat, TICKETS, {"filters": [{"field": field, "operator": operator, "value": bad}]})
+    with pytest.raises(ValidationError, match="Choose a value"):                       # several where one is wanted is said plainly
+        parse_request(cat, TICKETS, {"filters": [{"field": "status", "operator": "is", "value": ["Open", "Closed"]}]})
+
+
+def test_the_negatives_include_the_rows_that_have_no_value(conn, cat):
+    """SQL's own `<>` and `NOT IN` leave a row with no value out. A person who asks for everything but one value expects it back."""
+    live = live_tickets(conn)
+    assert any(t["assignee_id"] is None for t in live)                                  # there are rows with no assignee
+    assert matching(conn, cat, "assignee", "is_not", 8) == {t["id"] for t in live if t["assignee_id"] != 8}
+    assert matching(conn, cat, "assignee", "is_not_any_of", [1, 2]) == {t["id"] for t in live if t["assignee_id"] not in (1, 2)}
+    assert {t["id"] for t in live if t["assignee_id"] is None} <= matching(conn, cat, "assignee", "is_not_any_of", [1, 2])
+    assert matching(conn, cat, "status", "is_not_any_of", ["Open", "Closed"]) == {t["id"] for t in live if t["status"] not in ("Open", "Closed")}
+    for bad in ([], "Open", ["Nope"], [None]):
+        with pytest.raises(ValidationError):
+            parse_request(cat, TICKETS, {"filters": [{"field": "status", "operator": "is_not_any_of", "value": bad}]})
+
+
+def test_a_choice_is_empty_or_not_whether_or_not_it_can_be(conn, cat):
+    live = live_tickets(conn)
+    assert matching(conn, cat, "assignee", "is_empty") == {t["id"] for t in live if t["assignee_id"] is None}
+    assert matching(conn, cat, "assignee", "is_not_empty") == {t["id"] for t in live if t["assignee_id"] is not None}
+    assert matching(conn, cat, "status", "is_empty") == set()                          # a column that is never empty is offered, and matches nothing
+    assert matching(conn, cat, "status", "is_not_empty") == {t["id"] for t in live}
+
+
+def test_is_not_empty_goes_with_is_empty_on_every_kind_that_has_one(conn, cat):
+    live = live_tickets(conn)
+    assert matching(conn, cat, "items", "is_not_empty") == {t["id"] for t in live if t["items"] is not None}
+    assert matching(conn, cat, "weight", "is_not_empty") == {t["id"] for t in live if t["weight"] is not None}
+    assert matching(conn, cat, "score_x100", "is_not_empty") == {t["id"] for t in live if t["score_x100"] is not None}
+    assert matching(conn, cat, "opened_on", "is_not_empty") == {t["id"] for t in live if t["opened_on"] is not None}
+    assert matching(conn, cat, "closed_at", "is_not_empty") == {t["id"] for t in live if t["closed_at"] is not None}
+    assert matching(conn, cat, "passed", "is_not_empty") == {t["id"] for t in live if t["passed"] is not None}
+    assert any(t["closed_at"] is None for t in live) and any(t["closed_at"] is not None for t in live)
+    with pytest.raises(ValidationError, match="cannot be filtered with"):
+        parse_request(cat, TICKETS, {"filters": [{"field": "flagged", "operator": "is_not_empty"}]})      # it cannot be empty
+
+
 def test_a_relation_is_filtered_by_the_id_it_points_at_not_by_its_display_value(conn, cat):
     live = live_tickets(conn)
     names = [r[0] for r in conn.execute("SELECT name FROM person WHERE id IN (1, 8)")]

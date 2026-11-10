@@ -16,13 +16,15 @@ const NO_VALUE = new Set(["is_empty", "is_not_empty", "is_yes", "is_no"]);
 const RANGE = "between";
 export const takesNoValue = (operator: string) => NO_VALUE.has(operator);
 export const isRange = (operator: string) => operator === RANGE;
+/** A choice compared with one value ("is", "is not"), where the others take a list of them ("is one of", "is not one of"). */
+export const isSingleChoice = (operator: string) => operator === "is" || operator === "is_not";
 export const isNumberKind = (kind: FieldNode["kind"]) => ["integer", "number", "decimal", "amount"].includes(kind);
 export const isDateKind = (kind: FieldNode["kind"]) => kind === "date" || kind === "timestamp";
 
 /** The value a new or changed operator starts with: nothing, an empty box, two empty boxes, or no choices. */
 function startValue(node: FieldNode, operator: string): unknown {
   if (takesNoValue(operator)) return undefined;
-  if (node.choices !== null) return [];
+  if (node.choices !== null) return isSingleChoice(operator) ? "" : [];            // "" is no choice yet
   return isRange(operator) ? ["", ""] : "";
 }
 
@@ -35,9 +37,14 @@ function withValue(condition: Condition, value: unknown): Condition {
   return value === undefined ? { field: condition.field, operator: condition.operator } : { ...condition, value };
 }
 
-/** Changing the operator keeps what was typed when it still fits (a number stays a number) and starts afresh when it does not. */
+/** Changing the operator keeps what was typed when it still fits (a number stays a number) and starts afresh when it does not. A
+ *  choice carries over between one value and several: one becomes a list of one, and a list becomes its first value. */
 export function withOperator(node: FieldNode, condition: Condition, operator: string): Condition {
   const kept = condition.value;
+  if (node.choices !== null && !takesNoValue(condition.operator) && !takesNoValue(operator) && isSingleChoice(condition.operator) !== isSingleChoice(operator)) {
+    const was = Array.isArray(kept) ? kept : kept === "" || kept === undefined ? [] : [kept];
+    return withValue({ field: condition.field, operator }, isSingleChoice(operator) ? (was[0] ?? "") : was);
+  }
   const fits = (isRange(condition.operator) === isRange(operator)) && !takesNoValue(condition.operator) && !takesNoValue(operator);
   return withValue({ field: condition.field, operator }, fits ? kept : startValue(node, operator));
 }
@@ -86,7 +93,10 @@ export function problem(node: FieldNode, condition: Condition): string | null {
   const { operator, value } = condition;
   if (!node.operators.some((o) => o.name === operator)) return "Choose how to compare.";
   if (takesNoValue(operator)) return null;
-  if (node.choices !== null) return Array.isArray(value) && value.length > 0 ? null : "Choose at least one value.";
+  if (node.choices !== null) {
+    if (isSingleChoice(operator)) return value === "" || value === undefined || value === null || Array.isArray(value) ? "Choose a value." : null;
+    return Array.isArray(value) && value.length > 0 ? null : "Choose at least one value.";
+  }
   const parts = isRange(operator) ? (Array.isArray(value) && value.length === 2 ? value : null) : [value];
   if (parts === null) return "Give the two ends of the range.";
   if (isDateKind(node.kind)) {
@@ -134,6 +144,10 @@ export function describe(node: FieldNode | undefined, condition: Condition, choi
   const operator = node?.operators.find((o) => o.name === condition.operator)?.label ?? condition.operator;
   const { value } = condition;
   if (takesNoValue(condition.operator) || value === undefined) return `${name} ${operator}`;
+  if (node?.choices && !Array.isArray(value)) {                       // one choice: the record's name, or the declared value
+    const found = typeof value === "number" ? choices?.options.find((o) => o.id === value)?.value : String(value);
+    return `${name} ${operator} ${found ?? "…"}`;
+  }
   const show = (part: unknown) => {
     if (node && isDateKind(node.kind)) return formatDate(String(part).slice(0, 10));
     if (node && isNumberKind(node.kind)) return String(part).replace(".", getLocale().decimal_mark);

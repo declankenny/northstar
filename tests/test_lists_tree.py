@@ -56,7 +56,7 @@ def test_a_relation_is_a_column_that_shows_a_display_value_and_a_branch_to_the_r
     tree = field_tree(cat, TICKETS)
     assignee = find(tree, "assignee")
     assert (assignee["label"], assignee["path_label"], assignee["kind"], assignee["choices"]) == ("Assigned to", "Assigned to", "text", "records")
-    assert [o["name"] for o in assignee["operators"]] == ["is_any_of"]            # a relation is filtered by a choice of records
+    assert [o["name"] for o in assignee["operators"]] == ["is", "is_not", "is_any_of", "is_not_any_of", "is_empty", "is_not_empty"]            # a relation is filtered by a choice of records
     children = assignee["children"]
     assert [f["key"] for f in children["fields"]] == ["assignee.email"]           # not assignee.name: that is the relation itself
     assert [r["key"] for r in children["relations"]] == ["assignee.team"]
@@ -88,17 +88,24 @@ def test_the_depth_limit_and_a_table_that_cannot_be_entered_cut_the_tree(conn, m
     assert assignee["children"] is None and assignee["choices"] == "records"       # still a column, with nothing to enter
 
 
+def test_a_choice_names_its_operators_in_words_and_keeps_the_stored_name_of_is_one_of(cat):
+    status = find(field_tree(cat, TICKETS), "status")
+    assert [(o["name"], o["label"]) for o in status["operators"]] == [
+        ("is", "is"), ("is_not", "is not"), ("is_any_of", "is one of"), ("is_not_any_of", "is not one of"),
+        ("is_empty", "is empty"), ("is_not_empty", "is not empty")]
+
+
 def test_the_kind_of_each_column_decides_its_operators_and_choices(cat):
     tree = field_tree(cat, TICKETS)
     operators = lambda key: [o["name"] for o in find(tree, key)["operators"]]
     assert operators("title") == ["contains", "equals", "is_empty", "is_not_empty"]
-    assert operators("items") == ["equals", "at_least", "at_most", "between", "is_empty"]
-    assert operators("opened_on") == ["before", "after", "between", "is_empty"]
-    assert operators("closed_at") == ["before", "after", "between", "is_empty"]
-    assert operators("passed") == ["is_yes", "is_no", "is_empty"]                  # it can be empty
+    assert operators("items") == ["equals", "at_least", "at_most", "between", "is_empty", "is_not_empty"]
+    assert operators("opened_on") == ["before", "after", "between", "is_empty", "is_not_empty"]
+    assert operators("closed_at") == ["before", "after", "between", "is_empty", "is_not_empty"]
+    assert operators("passed") == ["is_yes", "is_no", "is_empty", "is_not_empty"]                  # it can be empty
     assert operators("flagged") == ["is_yes", "is_no"]                             # it cannot
     status = find(tree, "status")
-    assert (status["choices"], status["values"], operators("status")) == ("values", ["Open", "Active", "Closed"], ["is_any_of"])
+    assert (status["choices"], status["values"], operators("status")) == ("values", ["Open", "Active", "Closed"], ["is", "is_not", "is_any_of", "is_not_any_of", "is_empty", "is_not_empty"])
     assert find(tree, "title")["choices"] is None
     assert find(tree, "score_x100")["scale"] == 2 and find(tree, "items")["scale"] is None
     assert find(tree, "opened_on")["operators"][0] == {"name": "before", "label": "is before"}

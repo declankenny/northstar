@@ -348,6 +348,16 @@ button.btn.danger { background: var(--neg); color: var(--on-accent); }
 .signin .password-row { display: flex; gap: 8px; }
 .signin .password-row input { flex: 1; min-width: 0; }
 .signin button.quiet { margin-top: 0; color: var(--text); background: transparent; border: 1px solid var(--border); font-weight: 500; }
+/* The type-ahead (Combobox.tsx), wherever it is used. The currency search on the sign-in pages keeps its own copy below until it moves onto it. */
+.combo { position: relative; flex: 1; min-width: 0; }
+.combo-list { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none;
+  max-height: 240px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.combo-list li { display: flex; gap: 8px; padding: 8px 10px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+.combo-list li span { color: var(--muted); }
+.combo-list li.active { background: var(--accent-soft); }
+.combo-list li.combo-empty { color: var(--muted); cursor: default; }
+.lf-row .combo input { width: 100%; }
 .signin .combo { position: relative; }
 .signin .combo-list { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none;
   max-height: 240px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
