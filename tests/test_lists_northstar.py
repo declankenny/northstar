@@ -306,3 +306,16 @@ def test_users_are_listed_without_the_system_user_or_deleted_users_and_never_wit
     for key in ("password_hash", "is_system", "deleted"):
         with pytest.raises(ValidationError):
             parse_request(northstar_catalog(conn), USERS, {"columns": ["display_name", key]})
+
+
+@pytest.mark.parametrize("column", ["amount_cents", "reporting_value"])
+def test_an_amount_cannot_be_grouped_because_the_same_number_in_two_currencies_would_be_one_group(conn, column):
+    cat = northstar_catalog(conn)
+    with pytest.raises(ValidationError, match="cannot be grouped"):
+        parse_request(cat, BALANCES, {"group": column})
+
+
+def test_a_balance_list_can_be_grouped_by_the_account_and_its_type(conn):
+    cat = northstar_catalog(conn)
+    for column in ("account", "account.type", "account.currency", "as_of_date"):
+        parse_request(cat, BALANCES, {"group": column})

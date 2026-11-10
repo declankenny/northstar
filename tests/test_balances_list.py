@@ -57,6 +57,8 @@ def test_it_opens_with_the_columns_in_the_order_the_design_gives_and_no_filter(c
         ("as_of_date", "Date"), ("account", "Account"), ("account.type", "Type"), ("amount_cents", "Value"),
         ("account.currency", "Currency"), ("reporting_value", "Reporting value"), ("note", "Note")]
     assert body["default_columns"] == [c["key"] for c in body["columns"]]
+    assert {c["key"]: c["groupable"] for c in body["columns"]} == {                      # the page leaves Group by off an amount's menu
+        "as_of_date": True, "account": True, "account.type": True, "amount_cents": False, "account.currency": True, "reporting_value": False, "note": True}
     assert (body["filters"], body["default_filter_id"], body["customised"], body["group"]) == ([], None, False, None)
     assert body["sort"] == {"field": "as_of_date", "direction": "desc"}
 
