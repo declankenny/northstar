@@ -462,3 +462,46 @@ a.btn { display: inline-block; text-decoration: none; }
 .lf-foot { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px 0 0; color: var(--muted); font-size: 13px; }
 .lf-foot select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; }
 .lf-foot button:disabled { opacity: .45; cursor: default; }
+
+/* The filter drawer, the chips of what is applied, and the saved-filter box. */
+.lf-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.lf-chip { display: inline-flex; gap: 6px; align-items: center; padding: 3px 4px 3px 10px; border-radius: 999px; font-size: 13px;
+  background: var(--accent-soft); color: var(--text); border: 1px solid var(--border); }
+.lf-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; padding: 0 6px; }
+.lf-chip button:hover { color: var(--text); }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 660px; max-width: 100vw; background: var(--surface); border-left: 1px solid var(--border);
+  box-shadow: -16px 0 48px rgba(0, 0, 0, .35); z-index: 15; display: flex; flex-direction: column; }
+.drawer:focus { outline: none; }
+.drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 0; }
+.drawer-head h2 { margin: 0; font-size: 18px; }
+.drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.drawer-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
+.drawer-foot .grow { flex: 1; }
+.lf-tabs { margin: 12px 20px 0; align-self: flex-start; }
+.lf-saved { position: relative; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.lf-row select, .lf-row input:not([type=checkbox]), .lf-form input:not([type=checkbox]) { font: inherit; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; }
+.lf-pickbtn { min-width: 220px; text-align: left; }
+.lf-menu { top: 50px; left: 12px; right: auto; width: 360px; z-index: 9; }
+.lf-group { padding: 6px 12px; }
+.lf-default { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.lf-warn { flex-basis: 100%; margin: 0; color: var(--warn); }
+.lf-wide { flex-basis: 100%; margin: 0; }
+.lf-form { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.lf-form input[type=text], .lf-form input:not([type]) { width: 100%; max-width: 360px; }
+.lf-cond { margin-bottom: 8px; }
+.lf-row { display: grid; grid-template-columns: 170px 150px 1fr 28px; gap: 8px; align-items: start; }
+.lf-row .vals { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.lf-row .vals input:not([type=checkbox]) { width: 100%; min-width: 0; }
+.lf-err { margin: 4px 0 0; font-size: 13px; }
+.lf-x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; }
+.lf-x:hover { color: var(--neg); }
+.lf-choices { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; width: 100%; padding: 4px 2px; }
+.lf-choices .check { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.lf-picker { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 8px 0; max-height: 280px; overflow-y: auto; }
+.lf-pick { list-style: none; margin: 0; padding-left: 14px; }
+.lf-picker > .lf-pick { padding-left: 0; }
+.lf-pick-row { display: inline-flex; gap: 6px; align-items: center; padding: 3px 0; }
+.lf-fold { background: none; border: 0; color: var(--muted); cursor: pointer; width: 18px; padding: 0; }
+.lf-help { margin-top: 14px; }
+button.link:disabled { color: var(--muted); cursor: default; text-decoration: none; opacity: .6; }
+

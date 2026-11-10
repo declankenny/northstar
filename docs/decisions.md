@@ -537,3 +537,13 @@ The default is applied by the list's own endpoint, and only when the request nam
 
 Every change is logged, the default mark included, because a shared filter is configuration that admins change; a private filter is the same table and so logged too. Rejected: a separate table for shared filters (the same columns, and the one-default rule is one index), and ids of saved filters in the page address (a copied link must mean only its conditions; see the list view's decision).
 
+
+### The filter drawer edits a draft, and a saved filter only fills it (#186, step 3c)
+
+A list's filters are made in one drawer opened from a Filters button. What is typed there is a draft: nothing reaches the list until Apply changes, and Cancel or Escape throws it away. Applying writes the conditions into the page address (`filters=<JSON>`, and `filters=[]` for a filter cleared on purpose, so the default does not return by itself), goes back to page 1 and shows each condition as a chip. Removing a chip applies at once. A saved filter's id is never in the address: a copied link means only its conditions, and what a saved filter later becomes cannot change it.
+
+Choosing a saved filter only fills the draft, exactly as if the conditions had been typed, so it can be adjusted before it is applied. A filter that has been changed since it was loaded says so. Save replaces the loaded filter's conditions, Save as new keeps it and asks for a name, and neither applies or closes the drawer. Making a filter the default is a property of the saved filter and is saved at once. Someone who cannot change a shared filter can use it and save a private copy. A condition a saved filter has that the list no longer offers is left out of the draft with a message, and saving drops it.
+
+Add filter offers every column the list's field tree gives, shown or not, as the same tree the column drawer will use, and one column takes one condition. The value controls follow the column's kind and operator, and a typed number is read in the person's own decimal and group marks and sent with a point. A mistake is not said on a row nobody has touched yet; it is said once something is typed, and for every row when Apply is pressed with something incomplete, which then applies nothing. The server still checks every condition.
+
+The saved-filter picker is the drawer's own, so the page needs no list of filters to draw; a page passes only a title and whether the person is an admin, which decides whether "for everyone" is offered. Rejected: applying a saved filter by name straight from the toolbar (it would be a second way to filter that skips the draft), and an id in the address.

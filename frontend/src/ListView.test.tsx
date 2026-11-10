@@ -5,9 +5,12 @@ import type { ListColumn, ListPage, ListRequest, ListRow } from "./api";
 import { ListView } from "./ListView";
 import { deferred } from "./testing";
 
-vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchList: vi.fn(), saveListPageSize: vi.fn() }));
+vi.mock("./api", async (original) => ({
+  ...(await original<typeof import("./api")>()), fetchList: vi.fn(), saveListPageSize: vi.fn(), fetchListFields: vi.fn(), fetchListChoices: vi.fn(),
+  fetchSavedFilters: vi.fn(), saveSavedFilter: vi.fn(), changeSavedFilter: vi.fn(), deleteSavedFilter: vi.fn(),
+}));
 
-import { fetchList, saveListPageSize } from "./api";
+import { fetchList, fetchListFields, saveListPageSize } from "./api";
 
 const COLUMNS: ListColumn[] = [
   { key: "as_of_date", label: "Date", path_label: "Date", kind: "date", scale: null, linked: false },
@@ -23,7 +26,7 @@ const row = (id: number, over: Partial<ListRow> = {}): ListRow => ({
 
 const page = (over: Partial<ListPage> = {}): ListPage => ({
   columns: COLUMNS, rows: [row(1), row(2)], total: 138, page: 1, pages: 14, page_size: 10, group: null,
-  sort: { field: "as_of_date", direction: "desc" }, ...over,
+  sort: { field: "as_of_date", direction: "desc" }, filters: [], skipped: [], default_filter_id: null, ...over,
 });
 
 const requests = () => vi.mocked(fetchList).mock.calls.map((call) => call[1] as ListRequest);
@@ -35,6 +38,7 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/balances");
   vi.mocked(fetchList).mockResolvedValue(page());
   vi.mocked(saveListPageSize).mockImplementation(async (_key, size) => size);
+  vi.mocked(fetchListFields).mockResolvedValue({ fields: [], relations: [] });
 });
 afterEach(() => {
   cleanup();
