@@ -1,8 +1,8 @@
 import {
   createColumnHelper, rowPaginationFeature, rowSortingFeature, tableFeatures, useTable,
-  type PaginationState, type SortingState,
+  type PaginationState, type Row, type SortingState,
 } from "@tanstack/react-table";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type Choices, type Condition, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListColumns,
   saveListPageSize,
@@ -10,7 +10,8 @@ import {
 import { FilterDrawer } from "./FilterDrawer";
 import { describe, flatten } from "./listFilters";
 import { formatCell, isNumeric } from "./listFormat";
-import { listAddress, listRequest, parseListView, sortedBy, withFilters, withPage, withSearch } from "./listState";
+import { COLLAPSED, type Collapsing, groupLabel, groupSummary, isCollapsed, OPEN, sections, toggled } from "./listGroups";
+import { listAddress, listRequest, parseListView, sortedBy, withFilters, withGroup, withPage, withSearch } from "./listState";
 import { formatInteger } from "./locale";
 import { RowMenu, type MenuItem } from "./RowMenu";
 import { Link, navigate, replaceAddress, usePath, useSearch } from "./router";
@@ -44,8 +45,12 @@ function useSameColumns(next: ListColumn[] | undefined): ListColumn[] {
   return kept.current;
 }
 
-/** The column's menu: the ways to sort that are not a click. Group by, Filter and Hide join it in later steps. */
-function HeaderMenu({ label, onAscending, onDescending }: { label: string; onAscending: () => void; onDescending: () => void }) {
+/** The column's menu: the ways to sort that are not a click, and Group by. On the column the list is grouped by it offers Expand all,
+ *  Collapse all and Ungroup instead; on a column that cannot be grouped (an amount) there is no Group by. Filter and Hide join it later. */
+function HeaderMenu({ label, grouped, groupable, onAscending, onDescending, onGroup, onUngroup, onExpandAll, onCollapseAll }: {
+  label: string; grouped: boolean; groupable: boolean; onAscending: () => void; onDescending: () => void;
+  onGroup: () => void; onUngroup: () => void; onExpandAll: () => void; onCollapseAll: () => void;
+}) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -63,6 +68,13 @@ function HeaderMenu({ label, onAscending, onDescending }: { label: string; onAsc
         <div className="menu" role="menu">
           <button role="menuitem" onClick={onAscending}>Sort ascending</button>
           <button role="menuitem" onClick={onDescending}>Sort descending</button>
+          {grouped ? (
+            <>
+              <button role="menuitem" onClick={onExpandAll}>Expand all</button>
+              <button role="menuitem" onClick={onCollapseAll}>Collapse all</button>
+              <button role="menuitem" onClick={onUngroup}>Ungroup</button>
+            </>
+          ) : groupable && <button role="menuitem" onClick={onGroup}>Group by {label}</button>}
         </div>
       )}
     </>
@@ -101,10 +113,12 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
   const [text, setText] = useState(view.search);
   const [problem, setProblem] = useState<string | null>(null);
   const written = useRef(view.search);                              // the search text this page last put in the address
+  const [collapsing, setCollapsing] = useState<Collapsing>(OPEN);     // which groups are collapsed: kept for the visit, not in the address
+  useEffect(() => { setCollapsing(OPEN); }, [view.group]);            // another grouping is a new set of groups
 
   const { data: page, error, loading, reload } = useRequest(
     (signal) => fetchList(listKey, listRequest(view, size), signal),
-    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, size, JSON.stringify(view.filters), columnsChanged],
+    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, view.group, size, JSON.stringify(view.filters), columnsChanged],
   );
 
   const go = (next: typeof view) => { navigate(listAddress(path, next)); };
@@ -171,8 +185,37 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
   });
 
   const byKey = new Map(columnList.map((column) => [column.key, column]));
+  const rowsById = new Map(table.getRowModel().rows.map((row) => [row.original._id, row]));
+  /** One row of the table: its cells, and its menu when the list has row actions. */
+  const bodyRow = (row: Row<typeof features, ListRow> | undefined) => {
+    if (!row || !page) return null;
+    return (
+      <tr key={row.id} className="row">
+        {row.getAllCells().map((cell) => {
+          const column = byKey.get(cell.column.id);
+          return column && (
+            <td key={cell.id} className={isNumeric(column) ? "r" : ""} title={fullText(column, row.original, config)}>
+              {cellContent(column, row.original, page, config)}
+            </td>
+          );
+        })}
+        {config.actions && (
+          <td className="k">
+            <RowMenu label={`Actions for ${config.rowLabel?.(row.original) ?? `row ${row.original._id}`}`}
+              items={config.actions(row.original)} />
+          </td>
+        )}
+      </tr>
+    );
+  };
   const shownKeys = useMemo(() => (page ? page.columns.map((c) => c.key) : NO_KEYS), [page]);
   const skippedKeys = useMemo(() => (page ? page.skipped_columns.flatMap((s) => (s.field ? [s.field] : [])) : NO_KEYS), [page]);
+  const groupColumn = view.group ? byKey.get(view.group) : undefined;
+  const groupNode = view.group ? nodes.get(view.group) : undefined;
+  const groupName = groupColumn?.path_label ?? groupNode?.path_label ?? view.group;
+  const groupKind = groupColumn?.kind ?? groupNode?.kind;
+  const groupScale = groupColumn?.scale ?? groupNode?.scale ?? null;
+  const columnCount = columnList.length + (config.actions ? 1 : 0);
   const first = page && page.rows.length > 0 ? (page.page - 1) * page.page_size + 1 : 0;
   const sizes = PAGE_SIZES.includes(pagination.pageSize) ? PAGE_SIZES : [...PAGE_SIZES, pagination.pageSize].sort((a, b) => a - b);
 
@@ -189,6 +232,12 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
         {page && <span className="m lf-count">{formatInteger(page.total)} matching</span>}
       </div>
 
+      {view.group && (
+        <div className="lf-chips">
+          <span className="lf-chip">Grouped by {groupName}
+            <button aria-label="Ungroup" onClick={() => go(withGroup(view, null))}>✕</button></span>
+        </div>
+      )}
       {applied.length > 0 && (
         <div className="lf-chips" role="list" aria-label="Filters applied">
           {applied.map((condition, i) => (
@@ -245,8 +294,10 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
                           <button className="th-btn" onClick={header.column.getToggleSortingHandler()}>
                             {label}{sorted && <span className="sort" aria-hidden="true">{sorted === "asc" ? "▲" : "▼"}</span>}
                           </button>
-                          <HeaderMenu label={label} onAscending={() => header.column.toggleSorting(false)}
-                            onDescending={() => header.column.toggleSorting(true)} />
+                          <HeaderMenu label={label} grouped={view.group === header.column.id} groupable={column?.groupable ?? false}
+                            onAscending={() => header.column.toggleSorting(false)} onDescending={() => header.column.toggleSorting(true)}
+                            onGroup={() => go(withGroup(view, header.column.id))} onUngroup={() => go(withGroup(view, null))}
+                            onExpandAll={() => setCollapsing(OPEN)} onCollapseAll={() => setCollapsing(COLLAPSED)} />
                         </th>
                       );
                     })}
@@ -255,24 +306,27 @@ export function ListView({ listKey, config = {} }: { listKey: string; config?: L
                 ))}
               </thead>
               <tbody>
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="row">
-                    {row.getAllCells().map((cell) => {
-                      const column = byKey.get(cell.column.id);
-                      return column && (
-                        <td key={cell.id} className={isNumeric(column) ? "r" : ""} title={fullText(column, row.original, config)}>
-                          {cellContent(column, row.original, page, config)}
-                        </td>
+                {view.group
+                  ? sections(page.rows).map((section) => {
+                      const open = !isCollapsed(collapsing, section.id);
+                      const name = groupLabel(groupKind, groupScale, section.value);
+                      return (
+                        <Fragment key={`${section.id}-${section.rows[0]._id}`}>
+                          <tr className="grp">
+                            <td colSpan={columnCount}>
+                              <button className="grp-btn" aria-expanded={open} onClick={() => setCollapsing(toggled(collapsing, section.id))}>
+                                <span className="caret" aria-hidden="true">{open ? "▾" : "▸"}</span>
+                                {name === null ? <span className="none">No value</span> : <span className="name">{name}</span>}
+                                <span className="n">{groupSummary(section)}</span>
+                                {section.continued && <span className="cont">continued</span>}
+                              </button>
+                            </td>
+                          </tr>
+                          {open && section.rows.map((record) => bodyRow(rowsById.get(record._id)))}
+                        </Fragment>
                       );
-                    })}
-                    {config.actions && (
-                      <td className="k">
-                        <RowMenu label={`Actions for ${config.rowLabel?.(row.original) ?? `row ${row.original._id}`}`}
-                          items={config.actions(row.original)} />
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                    })
+                  : table.getRowModel().rows.map((row) => bodyRow(row))}
               </tbody>
             </table>
           </div>

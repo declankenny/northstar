@@ -6,7 +6,7 @@ import type { Condition, ListRequest } from "./api";
 export type ListSort = { field: string; direction: "asc" | "desc" };
 /** `filters` is null when the address names none, so the list opens with the person's default filter; an empty list is a filter that
  *  was cleared on purpose, so the default does not come back by itself. */
-export type ListView = { page: number; sort: ListSort | null; search: string; filters: Condition[] | null };
+export type ListView = { page: number; sort: ListSort | null; search: string; filters: Condition[] | null; group: string | null };
 
 export const MAX_SEARCH = 100;
 const MAX_FIELD = 200;
@@ -30,12 +30,14 @@ export function parseListView(search: string): ListView {
   const params = new URLSearchParams(search);
   const page = Number(params.get("page"));
   const sort = params.get("sort") ?? "";
+  const group = params.get("group") ?? "";
   const field = sort.startsWith("-") ? sort.slice(1) : sort;
   return {
     page: Number.isInteger(page) && page >= 1 ? page : 1,
     sort: field !== "" && field.length <= MAX_FIELD ? { field, direction: sort.startsWith("-") ? "desc" : "asc" } : null,
     search: (params.get("q") ?? "").slice(0, MAX_SEARCH),
     filters: parseFilters(params.get("filters")),
+    group: group !== "" && group.length <= MAX_FIELD ? group : null,
   };
 }
 
@@ -46,6 +48,7 @@ export function listQuery(view: ListView): string {
   if (view.page > 1) params.set("page", String(view.page));
   if (view.search !== "") params.set("q", view.search);
   if (view.filters !== null) params.set("filters", JSON.stringify(view.filters));
+  if (view.group) params.set("group", view.group);
   const text = params.toString();
   return text === "" ? "" : `?${text}`;
 }
@@ -66,12 +69,16 @@ export const withSearch = (view: ListView, search: string): ListView => ({ ...vi
 /** New conditions (or null for the person's default), back on the first page. */
 export const withFilters = (view: ListView, filters: Condition[] | null): ListView => ({ ...view, page: 1, filters });
 
+/** Group by a column (or, with null, ungroup), back on the first page. */
+export const withGroup = (view: ListView, group: string | null): ListView => ({ ...view, page: 1, group });
+
 /** The request that asks the server for this view. `pageSize` is only sent once the person has chosen one on this page. */
 export function listRequest(view: ListView, pageSize?: number): ListRequest {
   const request: ListRequest = { page: view.page };
   if (view.sort) request.sort = view.sort;
   if (view.search !== "") request.search = view.search;
   if (view.filters !== null) request.filters = view.filters;
+  if (view.group) request.group = view.group;
   if (pageSize !== undefined) request.page_size = pageSize;
   return request;
 }

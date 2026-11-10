@@ -11,7 +11,7 @@ vi.mock("./api", async (original) => ({
 
 import { fetchList, fetchListChoices, fetchListFields, fetchSavedFilters } from "./api";
 
-const COLUMNS: ListColumn[] = [{ key: "account", label: "Account", path_label: "Account", kind: "text", scale: null, linked: false }];
+const COLUMNS: ListColumn[] = [{ key: "account", label: "Account", path_label: "Account", kind: "text", scale: null, linked: false, groupable: true }];
 const LABELS: Record<string, string> = { is: "is", is_not: "is not", is_any_of: "is one of", is_not_any_of: "is not one of", is_empty: "is empty", is_not_empty: "is not empty" };
 const SIX = Object.keys(LABELS).map((name) => ({ name, label: LABELS[name] }));
 const field = (over: Partial<FieldNode>): FieldNode => ({ key: "k", label: "K", path_label: "K", kind: "text", scale: null, operators: [], choices: null, ...over });

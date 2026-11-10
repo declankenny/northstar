@@ -654,11 +654,14 @@ export async function correctRate(code: string, id: number, rate: string): Promi
  *  and unit are in the row (`amount`), a UTC timestamp shown as its date, and so on. */
 export type ListColumn = {
   key: string; label: string; path_label: string; linked: boolean;
+  groupable: boolean; // may the list be grouped by it? Not an amount: the same number in two currencies would be one group
   kind: "text" | "integer" | "number" | "decimal" | "date" | "timestamp" | "yes_no" | "choice" | "amount";
   scale: number | null;
 };
 
 /** One row: its values by column key, `_id`, and the route each linked column opens. An amount is {value, scale, unit}, or null. */
+/** When the list is grouped a row also has `_group` (the value it is grouped by), `_group_count` (the size of its group across all pages) and
+ *  `_group_before` (how many rows of its group come before it, so a page can tell that it opens on a group continued from the page before). */
 export type ListRow = { _id: number; _links: Record<string, string>; [key: string]: unknown };
 
 /** One condition of a filter: a column by key, an operator, and a value whose shape the operator decides (none, text, a number or
