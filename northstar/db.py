@@ -65,18 +65,19 @@ def read_transaction(conn: sqlite3.Connection):
 
     SQLite gives a transaction a snapshot at its first read, so every query inside the block sees the same data even if another
     request commits meanwhile. Nothing can be written inside it: the connection is read-only for the length of the block, so an
-    attempt to write fails instead of changing household data from a calculation. Inside an open transaction this joins it.
+    attempt to write fails instead of changing household data from a calculation. Inside an open transaction it joins that
+    transaction, which stays the outer block's to commit or roll back, and the connection is read-only for the length of this block
+    all the same; the outer block's own writes are allowed again when this one ends.
     """
-    if conn.in_transaction:
-        yield conn
-        return
     before = conn.execute("PRAGMA query_only").fetchone()[0]
     conn.execute("PRAGMA query_only = ON")
-    conn.execute("BEGIN")
+    opened = not conn.in_transaction
+    if opened:
+        conn.execute("BEGIN")
     try:
         yield conn
     finally:
-        if conn.in_transaction:
+        if opened and conn.in_transaction:
             conn.execute("ROLLBACK")      # nothing was written, so ending the snapshot is all there is to do
         conn.execute(f"PRAGMA query_only = {int(before)}")
 

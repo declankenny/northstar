@@ -85,6 +85,14 @@ def test_the_definition_carries_resolved_defaults_and_nothing_private(client):
     assert not {"calculate", "population_ids", "query", "sql"} & set(body)
 
 
+def test_the_definition_carries_the_named_date_rules(client):
+    body = client.get("/api/reports/synthetic_pair").json()
+    assert {p["key"]: p["rules"] for p in body["parameters"]} == {
+        "opening": [{"rule": "not_future"}], "closing": [{"rule": "not_future"}, {"rule": "after", "other": "opening"}]}
+    body = client.get("/api/reports/synthetic_range").json()
+    assert {p["key"]: p["rules"] for p in body["parameters"]}["end"] == [{"rule": "not_future"}, {"rule": "on_or_after", "other": "start"}]
+
+
 def test_the_defaults_are_the_servers_not_the_browsers(client, monkeypatch):
     monkeypatch.setattr(clock, "today", lambda: date(2028, 2, 29))
     body = client.get("/api/reports/synthetic_pair").json()
@@ -119,6 +127,25 @@ def test_a_bad_value_is_a_422_with_a_path_and_a_message_to_show(client):
     assert body["path"] == ["parameters", "as_at"] and "future" in body["detail"]
 
 
+@pytest.mark.parametrize("content", [b"[]", b'"text"', b"5", b"null", b"true", b"[1, 2]", b"{", b"not json"])
+def test_a_body_that_is_not_a_json_object_is_the_report_error_contract_not_fastapis(client, content):
+    response = client.post("/api/reports/synthetic_none", content=content, headers={"Content-Type": "application/json"})
+    assert response.status_code == 422, content
+    body = response.json()
+    assert body["code"] == "invalid_input" and body["path"] == [] and isinstance(body["detail"], str)
+    assert "loc" not in str(body) and "msg" not in body
+
+
+def test_an_empty_body_is_an_empty_request_that_must_still_name_the_parameters(client):
+    response = client.post("/api/reports/synthetic_none", content=b"", headers={"Content-Type": "application/json"})
+    assert response.status_code == 422 and response.json()["code"] == "invalid_input" and response.json()["path"] == ["parameters"]
+
+
+def test_an_unreadable_body_is_fastapis_own_answer_outside_reports(client):
+    response = client.put("/api/lists/balances/page-size", content=b"{", headers={"Content-Type": "application/json"})
+    assert response.status_code == 422 and "code" not in response.json()
+
+
 def test_a_filter_is_a_422_until_filtering_exists(client):
     response = post(client, "synthetic_as_of", {"parameters": {"as_at": "2026-11-11"}, "filters": [{"field": "x", "operator": "is", "value": 1}]})
     assert response.status_code == 422 and response.json()["path"] == ["filters"] and response.json()["code"] == "invalid_input"
@@ -140,6 +167,15 @@ def test_a_broken_report_is_a_500_with_no_result_and_no_detail_of_the_fault(clie
     assert body["code"] == "calculation_error" and "sections" not in body
     assert "123456" not in response.text and "Secret" not in response.text and "RuntimeError" not in response.text
     assert any("probe_explode" in record.getMessage() for record in caplog.records)            # the diagnostic is in the log
+
+
+def test_the_log_says_where_a_calculation_failed_and_never_what_it_said(client, broken, caplog):
+    with caplog.at_level(logging.DEBUG):
+        post(client, "probe_explode", {"parameters": {}})
+    logged = caplog.text
+    assert "123456" not in logged and "Secret Account" not in logged           # the exception's own message and traceback text
+    assert not any(record.exc_info for record in caplog.records)             # no exception chain is attached to any record
+    assert "probe_explode" in logged and "RuntimeError at" in logged and "explode" in logged     # where it happened is there
 
 
 def test_a_wrong_result_is_the_same_safe_500(client, broken):

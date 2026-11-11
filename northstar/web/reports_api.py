@@ -7,6 +7,8 @@ body says `code: "invalid_input"` and the `path` to the field, or `code: "unavai
 broken is a 500 with `code: "calculation_error"` and no result.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Body, Request
 
 from northstar import clock
@@ -37,7 +39,9 @@ def describe_report(key: str, request: Request):
 
 
 @router.post("/{key}")
-def calculate_report(key: str, request: Request, body: dict = Body(default_factory=dict)):
+def calculate_report(key: str, request: Request, body: Any = Body(default_factory=dict)):
+    # `Any`, not `dict`: a body that is not an object (an array, a string) must reach the framework, which refuses it with the
+    # report error contract instead of FastAPI's own 422.
     user = current_user(request)
     definition = _report(key, user)
     today = clock.today()                        # read once: the calculation and what it echoes use the same day

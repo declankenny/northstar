@@ -7,6 +7,10 @@ export type ReportListItem = { key: string; title: string; description: string }
 
 export type ParameterKind = "date" | "choice" | "integer";
 
+/** A date parameter's rules, by name. `after` is strictly after the other parameter (an ordered pair of endpoints); `on_or_after`
+ *  allows the same day (an inclusive range). The page can validate with these and needs no knowledge of any one report. */
+export type ParameterRule = { rule: "not_future" } | { rule: "after"; other: string } | { rule: "on_or_after"; other: string };
+
 export type ReportParameter = {
   key: string;
   label: string;
@@ -16,6 +20,7 @@ export type ReportParameter = {
   choices: { value: string; label: string }[];
   minimum: number | null;
   maximum: number | null;
+  rules: ParameterRule[]; // a date's rules; empty for any other kind
 };
 
 export type ReportSectionDeclaration = {

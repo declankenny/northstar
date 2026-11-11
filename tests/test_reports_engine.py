@@ -2,6 +2,7 @@
 Synthetic data only."""
 
 import ast
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -95,6 +96,16 @@ def test_a_description_is_public_metadata_only():
     assert "calculate" not in str(described) and "function" not in str(described)
     interval = [p for p in described["parameters"] if p["key"] == "interval"][0]
     assert interval["choices"] == [{"value": "month", "label": "Month"}, {"value": "week", "label": "Week"}]
+
+
+def test_the_date_rules_are_public_so_the_page_can_tell_a_strict_pair_from_an_inclusive_range():
+    def rules(definition):
+        return {p["key"]: p["rules"] for p in engine.describe(definition, TODAY)["parameters"]}
+
+    assert rules(AS_OF) == {"as_at": [{"rule": "not_future"}]}
+    assert rules(PAIR) == {"opening": [{"rule": "not_future"}], "closing": [{"rule": "not_future"}, {"rule": "after", "other": "opening"}]}
+    assert rules(RANGE) == {"start": [{"rule": "not_future"}], "end": [{"rule": "not_future"}, {"rule": "on_or_after", "other": "start"}],
+                            "interval": []}
 
 
 def test_a_report_with_no_parameters_has_none_to_describe():
@@ -195,12 +206,17 @@ def test_a_calculation_reads_inside_one_consistent_read_and_cannot_write(conn, h
     assert conn.execute("SELECT name FROM accounts WHERE id = ?", (household[0],)).fetchone()["name"] == "One"
 
 
-def test_a_read_transaction_joins_one_that_is_open_and_restores_the_connection(conn):
+def test_a_read_transaction_joins_one_that_is_open_but_is_still_read_only_and_restores_the_connection(conn, household):
     with db.write_transaction(conn):
         with db.read_transaction(conn):
             assert conn.in_transaction
+            with pytest.raises(sqlite3.OperationalError):             # the outer transaction is writable, this block is not
+                conn.execute("UPDATE accounts SET name = 'changed' WHERE id = ?", (household[0],))
         assert conn.in_transaction                                  # the outer block is still open
+        assert conn.execute("PRAGMA query_only").fetchone()[0] == 0
+        conn.execute("UPDATE accounts SET name = 'by the outer block' WHERE id = ?", (household[0],))     # and may write again
     assert not conn.in_transaction
+    assert conn.execute("SELECT name FROM accounts WHERE id = ?", (household[0],)).fetchone()["name"] == "by the outer block"
 
 
 # -- the three kinds of failure --

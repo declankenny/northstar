@@ -38,7 +38,7 @@ def describe(definition: ReportDef, today: date) -> dict:
         "parameters": [
             {"key": p.key, "label": p.label, "kind": p.kind, "default": defaults[p.key],
              "choices": [{"value": value, "label": label} for value, label in p.choices],
-             "minimum": p.minimum, "maximum": p.maximum}
+             "minimum": p.minimum, "maximum": p.maximum, "rules": params_module.describe_rules(p)}
             for p in definition.params],
         "sections": [{"key": s.key, "kind": s.kind, "view": s.view, "title": s.title, "sized": s.sized} for s in definition.sections],
         "filters": {"enabled": False},               # filters arrive with the filter capabilities; until then none is accepted

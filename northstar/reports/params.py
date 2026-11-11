@@ -273,6 +273,13 @@ def _read_one(p: ParamDef, raw: object) -> object:
     return raw
 
 
+def describe_rules(p: ParamDef) -> list[dict]:
+    """A parameter's rules as public metadata, so the page can tell a strict ordering from an inclusive one and check a date before it
+    asks, without knowing anything about the report. `after` is strictly after the other parameter; `on_or_after` allows the same day."""
+    names = {NotFuture: "not_future", After: "after", OnOrAfter: "on_or_after"}
+    return [{"rule": names[type(rule)], **({"other": rule.other} if hasattr(rule, "other") else {})} for rule in p.rules]
+
+
 def serialise(params: tuple[ParamDef, ...], values: dict[str, object]) -> dict[str, object]:
     """Typed values back to what a request carries, for echoing the effective parameters."""
     return {p.key: (values[p.key].isoformat() if p.kind == "date" else values[p.key]) for p in params}
