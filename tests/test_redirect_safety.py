@@ -23,6 +23,12 @@ def test_a_path_on_this_site_is_kept(target):
     assert safe_next(target) == target
 
 
+@pytest.mark.parametrize("target", ["/a//b", "/a/b/", "/a?next=//evil.com", "/a#//b", "/x/../y"])
+def test_slashes_after_the_first_character_are_kept_exactly(target):
+    """The result is built on a fixed "/", so everything after the first character must come through untouched."""
+    assert safe_next(target) == target and safe_next(target).startswith("/") and not safe_next(target).startswith("//")
+
+
 @pytest.mark.parametrize("target", [
     "", "/", "evil.com", "http://evil.com", "https://evil.com/x", "javascript:alert(1)", "//evil.com", "///evil.com",
     "/\evil.com", "\\evil.com", "/\t/evil.com", "/\n/evil.com", "/\r\nSet-Cookie: x=1", "/\x00", "/\x7f", "/\x1b[0m",
