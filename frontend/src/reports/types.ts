@@ -1,0 +1,107 @@
+import type { SectionKind, View } from "./views";
+
+/** The contracts of the report endpoints (`/api/reports`). Money is integer minor units, dates are `YYYY-MM-DD` text, and nothing
+ *  here is a chart configuration: a section names a view and the page decides how to draw it. */
+
+export type ReportListItem = { key: string; title: string; description: string };
+
+export type ParameterKind = "date" | "choice" | "integer";
+
+/** A date parameter's rules, by name. `after` is strictly after the other parameter (an ordered pair of endpoints); `on_or_after`
+ *  allows the same day (an inclusive range). The page can validate with these and needs no knowledge of any one report. */
+export type ParameterRule = { rule: "not_future" } | { rule: "after"; other: string } | { rule: "on_or_after"; other: string };
+
+export type ReportParameter = {
+  key: string;
+  label: string;
+  kind: ParameterKind;
+  /** Resolved by the server with its own `today`. The page sends every parameter explicitly; the server never fills one in. */
+  default: string | number;
+  choices: { value: string; label: string }[];
+  minimum: number | null;
+  maximum: number | null;
+  rules: ParameterRule[]; // a date's rules; empty for any other kind
+};
+
+export type ReportSectionDeclaration = {
+  key: string;
+  kind: SectionKind;
+  view: View;
+  title: string;
+  /** A hierarchy only: its leaves carry a size, and the server adds each parent's. */
+  sized: boolean;
+};
+
+/** `GET /api/reports/{key}`: public metadata only. */
+export type ReportDefinition = {
+  key: string;
+  title: string;
+  description: string;
+  today: string; // the server's today(), so the page never reads the browser's clock
+  parameters: ReportParameter[];
+  sections: ReportSectionDeclaration[];
+  filters: { enabled: false }; // filled in when filters arrive
+};
+
+/** What a drill target points at. The page maps it to a route. */
+export type ReportLink =
+  | { to: "account"; id: number }
+  | { to: "balance"; id: number }
+  | { to: "list"; list: string; filters: { field: string; operator: string; value?: unknown }[] };
+
+export type SummaryItem =
+  | { key: string; label: string; kind: "money"; value: number; currency?: string; note?: string }
+  | { key: string; label: string; kind: "count"; value: number; note?: string }
+  | { key: string; label: string; kind: "date" | "text"; value: string; note?: string };
+
+export type SummaryData = { items: SummaryItem[] };
+
+export type SeriesData = {
+  series: { key: string; label: string; kind: "money" | "count"; points: { x: string; value: number }[] }[];
+};
+
+/** `value` is signed financial value and adds up: a parent equals the sum of its children. `size` is separate, non-negative and
+ *  present only in a sized section: a leaf's is the report's, a parent's is the sum of its leaves', added by the server. */
+export type HierarchyNode = {
+  id: string;
+  label: string;
+  value: number;
+  size?: number;
+  link?: ReportLink;
+  children?: HierarchyNode[];
+};
+
+export type HierarchyData = { nodes: HierarchyNode[] };
+
+export type ColumnKind = "text" | "money" | "native_money" | "date" | "count";
+export type RowCell = string | number | { minor: number; currency: string } | null;
+
+export type RowsData = {
+  columns: { key: string; label: string; kind: ColumnKind }[];
+  rows: { id: string; cells: Record<string, RowCell>; link?: ReportLink }[];
+};
+
+/** Which payload each kind of section carries. A renderer for a kind takes `SectionPayload<kind>`, so no renderer narrows an untagged
+ *  union: the definition says what kind a section is, and this says what its data is. */
+export type SectionPayloads = { summary: SummaryData; series: SeriesData; hierarchy: HierarchyData; rows: RowsData };
+export type SectionPayload<K extends SectionKind> = SectionPayloads[K];
+export type SectionData = SectionPayloads[SectionKind];
+
+export type ReportNote = { code: string; text: string; section?: string };
+
+/** `POST /api/reports/{key}` with `{ parameters, filters }`. Every section is the one the report declared, checked. */
+export type ReportResult = {
+  report: string;
+  today: string;
+  parameters: Record<string, string | number>;
+  filters: never[];
+  currency: { code: string; minor_units: number };
+  sections: Record<string, SectionData>;
+  notes: ReportNote[];
+};
+
+/** What a failed request says. Classify by `code`, never by the status alone or the words of `detail`. */
+export type ReportError =
+  | { code: "invalid_input"; detail: string; path: string[] }
+  | { code: "unavailable_data"; detail: string; reason: "missing_rates" | "no_system_currency"; missing_rates?: string[] }
+  | { code: "calculation_error"; detail: string };
