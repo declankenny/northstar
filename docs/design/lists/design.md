@@ -1,6 +1,6 @@
 # Managing lists: design
 
-Status: agreed in discussion on November 9, 2026, not implemented. It replaces the draft of November 2. It is not the spec or the decisions log: each step's pull request changes those. Which existing pages move onto the framework is decided after this design, list by list. Anything marked TODO is unresolved: do not guess it.
+Status: agreed in discussion on November 9, 2026 and built in v0.5. It replaces the draft of November 2. It is not the spec or the decisions log: each step's pull request changed those, and where the build differs from what was agreed this text says how it was built. Which other existing pages move onto the framework is decided list by list. Anything marked TODO is unresolved: do not guess it.
 
 Northstar lists share sorting, grouping, filtering, configurable columns, pagination and CSV export, processed on the server and tailored per user. A list is a read-only display of records. Row actions open a record page or a dialog, and a list is never a data-entry screen. Lists are navigation, not reporting: they show no totals.
 
@@ -8,11 +8,11 @@ Northstar lists share sorting, grouping, filtering, configurable columns, pagina
 
 - **A list is data, not code.** Lists differ only by what is in their definition: base source, scope, default columns, default sort, default filter, row actions and searchable flags. All behaviour is shared, and a list never gets behaviour of its own. A question that begins "should this list behave differently" is answered no unless the framework gives it to every list.
 - **The framework is built before any list.** It is developed and checked against a synthetic dataset that is not in the repository, and Balances is the first real list, as a small pull request that adds a definition, a route and a navigation entry and edits no framework file.
-- One server-side contract, validated against a registry in code. No definitions in the database. Making defaults admin-configurable later is done through shared filters, not through the registry.
+- One server-side contract, validated against a registry in code. Capability and wiring stay in code, and only choices (columns, page size, saved filters) are in the database. The framework reads a definition through one loader (`get_list_definition(key)`) and never imports a definition directly, so where definitions come from can change later. Admin-editable default columns and sort are a possible later addition: one small table, with the code's values as the fallback.
 - Two stored things per user: list preferences (columns, page size) and saved filters, private or shared.
 - Filters are conditions only. Sort and group live in the address only.
 - Defaults are shared filters that an admin owns, first inserted by a migration. There is no separate class of shipped default, and the framework has no rule against them: each list decides.
-- Every list has the same controls: search, Filters, Columns, Export CSV, a footer with the page range, page navigation and page size.
+- Every list has the same controls: search, Filters, Columns, Export CSV, a footer with the page range, page navigation and page size. The one exception is a fixed list, which has none of them (see "Fixed lists").
 - The column picker is a tree generated from the tables' many-to-one relations.
 - A relation column shows the target's display value, never its id.
 - Money: Value is in the account's currency and Reporting value is in the system currency. No totals.
@@ -25,17 +25,17 @@ A Python module holds one entry per table. A list is a base source plus its scop
 - **Source**: a table, or a view that applies the hard exclusions (`live_accounts`, or a view that leaves out soft-deleted rows).
 - **Display column**: the one column an FK to the table shows (Account: Name, Account type: Name, Class: Name, Currency: Code, User: Display name).
 - **Tell-apart column**: optional, what the picker adds when two display values are the same (two people with one name). It falls back to the id.
-- **Fields**: the other columns that may be offered, with their kind and the code that sorts, filters, groups and exports each. The kinds are text, integer, decimal, scaled integer (an integer with a scale, such as hundredths of a degree), money, converted money, date, timestamp, Yes or No (which may also be empty) and category (a declared set of values, such as a status).
+- **Fields**: the other columns that may be offered, with their kind and the code that sorts, filters, groups and exports each. The kinds are text, integer, decimal, scaled integer (an integer with a scale, such as hundredths of a degree), an amount (an integer whose scale and unit are columns of the row or of a related record, such as an amount in its account's currency), date, timestamp, Yes or No (which may also be empty) and category (a declared set of values, such as a status).
 - **Relations**: the many-to-one relations, read from the database's foreign keys at startup. One-to-many is never offered, because it multiplies rows. A relation's label comes from its FK column ("Inspector" from `inspector_id`) unless the entry overrides it, so one table reached in several roles has a separate label and a separate join for each path.
 - **Walkable**: whether a person can expand into the table to reach more of its columns. Users are leaf-only.
 - **Denied columns**: never offered, searched, filtered or exported. Password hashes, tokens and emails (as a related field), the deleted flag.
 - **Searchable**: a flag on a text column. Search matches the flagged columns of the list's source and the display values of its relations.
 - **Record page**: the route of the table's single-record page, if any, and who may open it.
-- **Row actions**: a list's actions (label, the dialog or call it opens, and when it is disabled and why), drawn in the shared menu. A row carries its version when its table has one, for the conflict check.
+- **Row actions**: a list's actions (label, the dialog or call it opens, and when it is disabled and why), drawn in the shared menu. A row carries its version when its table has one, for the conflict check. None of the lists built in v0.5 has a row menu: each opens a record page instead, and whether a menu is also wanted is backlog [#222](https://github.com/declankenny/northstar/issues/222).
 
 The entry belongs to the table, not to a list. A test fails if a table has no entry, if a denied column can be reached, or if a request names a field outside the registry. Unknown lists, fields, operators, sort and group keys are refused with a clear message. Values are parameterised, and the registry holds no executable SQL a client can influence.
 
-Derived fields are columns computed in code from views: the latest balance and its date, days since it, whether the account is stale, the balance count. A converted-money field is declared in data (the column that holds the amount, the path to its currency and the date to convert on), and the conversion itself is framework code. They behave like any other column. There are no user-defined fields, no formulas and no unrestricted traversal.
+Derived fields (the latest balance and its date, days since it, whether the account is stale, the balance count, the number of accounts in a currency, a balance's change from the one before it) are columns of a view that has an entry of its own and is based on the table, so it has that table's key and relations. The engine has no computed kind: it reads columns, and a view works a value out. A value in the system currency is a column of such a view (`live_balance_values`) that calls the SQL function `northstar_convert`, which is `northstar/conversion.py` registered on every connection, the same conversion net worth uses. A test fails if an engine module imports a Northstar module or names a currency. They behave like any other column. There are no user-defined fields, no formulas and no unrestricted traversal.
 
 ## Columns and the picker
 
@@ -63,31 +63,31 @@ Moving a column never changes its link. A list with no record page, such as Bala
 ## Money
 
 - **Value** is the amount in the account's currency, and its cell carries the currency (`$1,234.56`, `JPY 1,234`), so it reads correctly when the Currency column is hidden or moved. Currency is an ordinary column.
-- **Reporting value** is the amount in the system currency, with the code in its header. A balance converts at the latest rate on or before its own date. An account's latest balance converts at today's latest rate, so the column agrees with the Dashboard. Conversion is the spec's rule (exact decimal arithmetic, in Python).
-- A row with no usable rate shows "No CHF rate" (the currency named) in the cell. The cell is empty, not zero: it sorts last, a blank-value filter finds it, and an export leaves it blank. The list never refuses.
-- Reporting value is the converted-money kind. Value is the money kind, whose scale comes from the account's currency. A scaled integer outside money (hundredths of a degree) takes its scale from the definition instead.
-- Sorting or filtering by Value compares amounts in each account's own currency, so across currencies it is only meaningful together with a Currency filter. The filter's help text says so. Reporting value compares converted amounts.
+- **Reporting value** is the amount in the system currency. A balance converts at the latest rate on or before its own date, the spec's rule (exact decimal arithmetic), written once in the view `live_balance_values`. An account's last balance converts the same way, at the rate of its own date, so the Accounts list shows the value of that balance. As built this differs from the draft, which converted it at today's rate to agree with the Dashboard: the Dashboard carries a balance forward at each day's rate, so the two can differ for an account whose last balance is old.
+- A row with no usable rate has an empty value, shown as a plain dash (there is no "No CHF rate" cell). It is empty, not zero: it sorts last, a blank-value filter finds it, and an export leaves it blank. The list never refuses.
+- Both are one generic kind, `ScaledBy`: an integer whose scale (and unit) are columns, of a related record (Value: the account's currency) or of the same row (Reporting value: the system currency's, carried by the view). It is shown as value, scale and unit. A scaled integer outside money (hundredths of a degree) takes its scale from the definition instead.
+- Sorting or filtering by Value compares amounts in each account's own currency, so across currencies it is only meaningful together with a Currency filter. The filter's help text says so. Reporting value compares converted amounts. Money filters and sorts compare the number shown, exactly, normalised to thousandths.
 - **No totals or aggregates.** Counts are not totals: the footer range, the match count beside Export CSV and a group's row count stay.
 
 ## Sorting, grouping and pagination
 
 - Every column sorts. Clicking a header selects it and clicking again reverses it. One user-chosen sort at a time. Empty values sort last in either direction. Text sorts without case, numbers by value, dates in order. The record id is the final ascending tie-breaker.
-- **Group by** and **Ungroup** are on every column's header menu. One level. Rows are ordered by the group value, then the active sort. A group header shows the value and a row count, never a sum, and groups collapse. Pages cut through groups, and a group that continues on the next page repeats its header marked as continued, with the group's total and how many rows are on this page ("Savings · 14 rows (4 on this page)"). A collapsed group stays collapsed across pages during a visit. The footer range still counts rows, so it reads as it does for a flat list.
+- **Group by** and **Ungroup** are on every column's header menu. One level. Rows are ordered by the group value, then the active sort. A group header shows the value and a row count, never a sum, and groups collapse. An amount cannot be grouped (the same number in two currencies would be one group), and the server refuses it; a timestamp is grouped by its UTC date. Groups follow the sort direction when the list is sorted by the grouped column, and a group with no value comes last either way, labelled "No value". The server gives each row `_group_before` (how many rows of its group come before it), so a page can mark a group that continues. A grouped column's header menu offers Expand all and Collapse all before Ungroup; they cover the groups on other pages too and are kept for the visit, not in the address. A "Grouped by Account › Type ✕" chip sits with the filter chips. Pages cut through groups, and a group that continues on the next page repeats its header marked as continued, with the group's total and how many rows are on this page ("Savings · 14 rows (4 on this page)"). A collapsed group stays collapsed across pages during a visit. The footer range still counts rows, so it reads as it does for a flat list.
 - Page sizes are 10, 25, 50 and 100, default 25, saved per user and list. Any change of filter, search, sort, group or page size returns to page 1, and a page beyond the end shows the last. Counts describe all matching rows.
-- Sort, group, filters, search and page are in the address, so refresh, Back and returning from a record restore the view (this also delivers #68). An explicitly cleared filter is carried in the address so a default does not return by itself. Keep filter values out of logs.
+- Sort, group, filters, search and page are in the address, so refresh, Back and returning from a record restore the view (this also delivers #68). A fixed list on a page of its own keeps its sort and page in the page and not in the address. An explicitly cleared filter is carried in the address so a default does not return by itself. Keep filter values out of logs.
 - States are kept apart: loading, a failed request with retry (the last good view stays), an empty list and no matches. A response that has been overtaken by a newer request is ignored.
 
 ## Filters and saved filters
 
-The Filters tab has one row per condition: a field, an operator for its type and the value controls. One condition per field. Conditions combine with AND, and several chosen values within one category combine with OR. Add filter offers every column the registry exposes, shown or not, using the same relation tree as Columns.
+The Filters tab has one row per condition: a field, an operator for its type and the value controls. One condition per field. Conditions combine with AND, and several chosen values within one category combine with OR. "Is one of" is stored as `is_any_of`, and the negatives ("is not", "is not one of") include rows with no value. Add filter offers every column the registry exposes, shown or not, using the same relation tree as Columns.
 
 | Field type | Operators |
 | --- | --- |
 | Text | contains, equals, is empty, is not empty |
-| Category | is any of |
-| Number, scaled integer or money | equals, at least, at most, between, is empty |
-| Date or timestamp | before, after, between, is empty |
-| Yes or No | is Yes, is No, is empty (offered only when the column can be empty) |
+| Category, or a relation (a choice) | is, is not, is one of, is not one of, is empty, is not empty |
+| Number, scaled integer or amount | equals, at least, at most, between, is empty, is not empty |
+| Date or timestamp | before, after, between, is empty, is not empty |
+| Yes or No | is Yes, is No, and is empty and is not empty (offered only when the column can be empty) |
 
 A timestamp is shown and filtered as its UTC date, the way the Users page shows when someone was added. Between includes both ends. Before and after exclude the date. An invalid range prevents Apply. Empty is distinct from zero and never matches a numeric range. Search matches the columns flagged searchable, and the display values of the relations, whether or not those columns are shown. It combines with the filters by AND and is applied on the server after a short pause. Relative dates ("in the last 12 months") are not in this release; they are in the backlog as [#191](https://github.com/declankenny/northstar/issues/191).
 
@@ -105,14 +105,23 @@ A timestamp is shown and filtered as its UTC date, the way the Users page shows 
 
 Export CSV is a view export, distinct from the per-account Export CSV, which stays the canonical format that round-trips on import. It writes every row that matches, in the applied order, with the included columns in their order, read by the server through the same registry. A page, a page size and an unapplied draft never limit it, and an empty result gives the headers alone. The match count is shown beside the button.
 
-- UTF-8, dates (and timestamps, as their UTC date) as `YYYY-MM-DD`, amounts and scaled integers as plain decimals with no symbol or separator (money in its own currency, Reporting value in the system currency), empty cells for missing values, and `true` or `false` for Yes or No.
+- UTF-8 with a byte-order mark, so that Excel reads it as UTF-8, dates (and timestamps, as their UTC date) as `YYYY-MM-DD`, amounts and scaled integers as plain decimals with no symbol or separator (money in its own currency, Reporting value in the system currency), empty cells for missing values, and `true` or `false` for Yes or No.
 - A relation column writes its display value.
-- Text that starts like a formula is neutralised, and the policy is checked with spreadsheet programs. The serializer handles quotes, commas and line breaks.
-- The response streams, from one consistent read, with a name that contains the list and the date. It changes no saved preference.
+- Text that starts like a formula (`=`, `+`, `-`, `@`, a tab or a carriage return) gets an apostrophe in front, and never a number, an amount or a date. The policy is checked with spreadsheet programs. The serializer handles quotes, commas and line breaks. The header is each column's whole label as on screen ("Account › Type").
+- The response streams, from one consistent read, named `northstar-<list>-<date>.csv`. It changes no saved preference. The request is a POST body, so a filter's values are in no address or log; the page and page size are ignored, and a request that names no columns or filters uses the person's saved columns and default filter. The Export CSV button sits in the footer to the right of Previous and Next with the match count beside it, and stays enabled for an empty result.
+
+## Fixed lists
+
+A list can be fixed (`ListDef.customisable = False`), for a table that sits on a page of its own and is not a screen to be shaped, such as the balance history on an account's page.
+
+- It takes only a sort of its own columns and a page. A request that names columns, filters, a search, a group or a page size is refused (422), and so is every endpoint that keeps or offers a person's choice (saved filters, fields, choices, page size, columns, export). It reads and writes nothing of a person's own for its key, and its page size may be one that no person can choose (12).
+- A list can declare `params` (a key of `PARAM_TABLES`, today only `account`) and write its scope with `:account`. The request names the id as a whole number, it is bound as a value and never as SQL text, an unknown or deleted record is a 404, and a scope and its parameters must match when the list is registered. The scope is invisible to the person, cannot be removed, and applies before the count.
+- `ListView` takes a `fixed` prop with the parameters. It keeps the sort and page in React state, and draws no search, Filters, Columns, group, export or rows per page.
+- A fixed list has its own key, so nothing a person saves for the list it resembles touches it.
 
 ## Storage
 
-Two tables, in one migration, with the usual audit columns. The exact DDL follows the schema conventions when the step is built.
+Two tables, with the usual audit columns, each shipped with the code that uses it: `user_list_prefs` (migration 0021 for the page size, 0023 for the columns) and `list_filters` (0022, with the partial unique index).
 
 - **user_list_prefs**: user, list key, page size, columns as validated JSON.
 - **list_filters**: owner (empty means shared), list key, name, conditions as validated JSON, whether it is the owner's default or the shared default.
@@ -122,9 +131,8 @@ Preferences hold only keys the registry accepts, and invalid ones fall back to t
 ## Processing
 
 1. Enforce the scope and hard exclusions, and resolve the approved relations without multiplying rows.
-2. Apply search and filters on native fields in SQL.
-3. If the request touches a converted field (Reporting value), convert the scoped rows in Python, then filter, sort, group and page that result. Household data is small, and the conversion rule stays in one place.
-4. Count, sort with the id tie-breaker, group and return the page, or stream every row for an export.
+2. Apply search and filters in SQL. A worked-out column (a converted amount, an age) is a column of a view, so it is filtered, sorted and grouped like any other and nothing is converted in Python.
+3. Count, sort with the id tie-breaker, group and return the page, or stream every row for an export.
 
 Supporting indexes are checked against synthetic data with long balance histories.
 
@@ -142,17 +150,19 @@ The framework is built before any list. A synthetic dataset that is not in the r
 
 - **Balances** is the first list, with its own navigation entry across all accounts, built after the framework as a small pull request: a definition, a route and a navigation entry, and no change to a framework file. If it needs something the framework lacks, that is a framework pull request first.
   - Source: the live balances. Default columns, in order: Date, Account, Account type, Value, Currency, Reporting value, Note. Default sort: Date, newest first. No default filter.
-  - Row actions: Edit and Delete, using the existing dialogs. They are disabled, with the reason, on a closed account's balances, and conflicts are checked as today.
-  - Account links to the account, and Currency to the currency page for admins. There is no balance page, so there is no row link.
-  - It is the proof of concept for related fields, Value and Reporting value. The balance history on an account's page is a report of that account, not a list, and is outside this epic.
-- **Accounts** becomes one table with Class and Stale as columns, replacing the Assets and Liabilities cards, their totals and the Open and Closed buttons. Whether it ships a default filter is decided with its page.
-- Update balances is a data-entry screen and is not a list. Which other pages move over is decided after this design.
+  - As built, a balance is opened from its date, on a page of its own at `/balances/{id}` (#210), where its amount and note are changed or it is deleted, with the conflict checks of the account page's old dialogs. This replaced the row menu with Edit and Delete that the draft had.
+  - Account links to the account, and Currency to the currency page for admins.
+  - It is the proof of concept for related fields, Value and Reporting value.
+- **Accounts** is one table (`accounts`, over the view `account_summaries`, migrations 0024 and 0025). As built: the columns are Account, Type › Class, Type, Currency, Last balance, Reporting value, Balance date, Balance age (days), Stale and Balances, sorted by Account; the shared default filter "Open accounts" is seeded by migration 0025; there are no totals, no Stale badge, no Open and Closed buttons and no row menu (#222); the class header reads "Type › Class" by the framework's rule for a related column; and after Add account the list reads again in place (`ListView`'s `refreshKey`).
+- **Currencies** (admins) is a list over the view `currency_summaries` (migration 0026): code, name, decimal places, enabled and how many accounts use it, 100 to a page, a currency's code opening its page. "All", "In use" and "Enabled" are filters a person makes.
+- **Account balances** is the first fixed list: one account's balances on its page, newest first, 12 to a page, with the date, the balance and its change from the one before (`account_balances`, migration 0027).
+- Update balances is a data-entry screen and is not a list. Which other pages move over (Account types, Imports and Users have not) is decided list by list.
 
 ## Acceptance
 
 - The framework works on a schema it has never seen: the same table reached by several roles (separate labels and joins), paths up to the safety limit, a view as a source, nullable Yes or No columns, scaled integers and timestamps, with one row per base record.
 - A list is data: adding Balances changes no framework file.
-- Balances and Accounts share the controls and the server-side contract. Update balances is unchanged.
+- Balances, Accounts and Currencies share the controls and the server-side contract. Update balances is unchanged.
 - Every column sorts across the full result, with nulls last and a stable tie-breaker.
 - Filters work across all pages, with the operators above, and applied conditions are visible. A hidden column keeps its filter.
 - The relation tree is generated from the registry, shows no table twice in a path, never offers a denied column and has one row per base record.
