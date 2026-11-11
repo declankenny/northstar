@@ -186,7 +186,7 @@ def before(tmp_path):
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith(("0023", "0024", "0025", "0026", "0027")):
+        if not file.name.startswith(("0023", "0024", "0025", "0026", "0027", "0028")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -198,7 +198,7 @@ def before(tmp_path):
 
 
 def test_the_upgrade_keeps_every_saved_page_size_and_adds_columns_that_are_empty(before):
-    assert db.upgrade(before) == ["0023_user_list_columns", "0024_account_summaries", "0025_accounts_list", "0026_currency_summaries", "0027_account_balances"]
+    assert db.upgrade(before) == ["0023_user_list_columns", "0024_account_summaries", "0025_accounts_list", "0026_currency_summaries", "0027_account_balances", "0028_account_days_provenance"]
     conn = db.connect(before)
     row = conn.execute("SELECT list_key, page_size, columns FROM user_list_prefs").fetchone()
     assert tuple(row) == ("test_list", 50, None)
