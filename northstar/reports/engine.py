@@ -33,7 +33,7 @@ def describe(definition: ReportDef, today: date) -> dict:
     except ReportInputError as error:
         raise ReportDefectError(f"report {definition.key}: its defaults do not hold today: {error}") from None
     return {
-        "key": definition.key, "title": definition.title, "description": definition.description, "population": definition.population,
+        "key": definition.key, "title": definition.title, "description": definition.description,
         "today": today.isoformat(),
         "parameters": [
             {"key": p.key, "label": p.label, "kind": p.kind, "default": defaults[p.key],
@@ -66,12 +66,12 @@ def calculate(conn: sqlite3.Connection, definition: ReportDef, user, data: objec
     """The report for this request, as the answer the page shows: the effective parameters and filters, the currency, every declared
     section checked, and the notes. `today` is read once by the caller."""
     values = _read_request(definition, data, today)
-    system = currencies.system_currency(conn)
-    if system is None:
-        raise ReportUnavailable("An administrator has not chosen the system currency yet, so reports cannot be worked out.",
-                                "no_system_currency")
-    with db.read_transaction(conn):
-        context = ReportContext(conn, user, today, values, visible_accounts(conn, user), system)
+    with db.read_transaction(conn):                # everything read from the database below shares this one snapshot
+        system = currencies.system_currency(conn)
+        if system is None:
+            raise ReportUnavailable("An administrator has not chosen the system currency yet, so reports cannot be worked out.",
+                                    "no_system_currency")
+        context = ReportContext(conn, today, values, visible_accounts(conn, user), system)
         try:
             result = definition.calculate(context)
         except NoRate as error:

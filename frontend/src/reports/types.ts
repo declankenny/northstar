@@ -37,7 +37,6 @@ export type ReportDefinition = {
   key: string;
   title: string;
   description: string;
-  population: "accounts";
   today: string; // the server's today(), so the page never reads the browser's clock
   parameters: ReportParameter[];
   sections: ReportSectionDeclaration[];
@@ -82,7 +81,11 @@ export type RowsData = {
   rows: { id: string; cells: Record<string, RowCell>; link?: ReportLink }[];
 };
 
-export type SectionData = SummaryData | SeriesData | HierarchyData | RowsData;
+/** Which payload each kind of section carries. A renderer for a kind takes `SectionPayload<kind>`, so no renderer narrows an untagged
+ *  union: the definition says what kind a section is, and this says what its data is. */
+export type SectionPayloads = { summary: SummaryData; series: SeriesData; hierarchy: HierarchyData; rows: RowsData };
+export type SectionPayload<K extends SectionKind> = SectionPayloads[K];
+export type SectionData = SectionPayloads[SectionKind];
 
 export type ReportNote = { code: string; text: string; section?: string };
 

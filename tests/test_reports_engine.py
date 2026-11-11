@@ -61,6 +61,16 @@ def test_registering_checks_the_definition_and_refuses_a_repeat():
     assert "a" not in loader._DEFINITIONS and "probe" not in loader._DEFINITIONS
 
 
+def test_a_default_filter_cannot_be_declared_until_it_can_be_enforced():
+    """The engine counts every live account until step 4, so a default filter would promise a restricted report and give an unrestricted one."""
+    for bad in (FilterDecl("accounts", defaults=({"field": "type", "operator": "is", "value": 1},)), FilterDecl("accounts", defaults=("x",))):
+        with pytest.raises(ReportDefinitionError, match="default filters cannot be enforced"):
+            loader.register(simple(ok, filters=bad))
+    assert "probe" not in loader._DEFINITIONS
+    loader.register(simple(ok, filters=FilterDecl("accounts")))                  # a preset alone declares the place and restricts nothing
+    loader._DEFINITIONS.pop("probe")
+
+
 def test_an_unknown_report_is_not_found_and_an_admin_only_report_is_hidden_from_others():
     with pytest.raises(NotFoundError):
         loader.get_report("nothing")
@@ -84,7 +94,7 @@ def test_the_framework_never_imports_a_definition():
 
 def test_a_report_is_described_with_its_defaults_resolved_for_the_servers_today():
     described = engine.describe(PAIR, TODAY)
-    assert described["today"] == "2026-11-11" and described["population"] == "accounts"
+    assert described["today"] == "2026-11-11"
     assert {p["key"]: p["default"] for p in described["parameters"]} == {"opening": "2025-11-11", "closing": "2026-11-11"}
     assert described["sections"] == [{"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False}]
     assert described["filters"] == {"enabled": False}
@@ -92,7 +102,7 @@ def test_a_report_is_described_with_its_defaults_resolved_for_the_servers_today(
 
 def test_a_description_is_public_metadata_only():
     described = engine.describe(RANGE, TODAY)
-    assert set(described) == {"key", "title", "description", "population", "today", "parameters", "sections", "filters"}
+    assert set(described) == {"key", "title", "description", "today", "parameters", "sections", "filters"}      # the population stays internal
     assert "calculate" not in str(described) and "function" not in str(described)
     interval = [p for p in described["parameters"] if p["key"] == "interval"][0]
     assert interval["choices"] == [{"value": "month", "label": "Month"}, {"value": "week", "label": "Week"}]
@@ -168,7 +178,7 @@ def test_the_calculation_gets_a_population_the_framework_built_and_not_the_filte
 
     engine.calculate(conn, simple(spy), ADMIN, {"parameters": {}}, TODAY)
     assert seen["population"] == tuple(sorted(household))
-    assert seen["fields"] == {"conn", "user", "today", "parameters", "population", "currency"}
+    assert seen["fields"] == {"conn", "today", "parameters", "population", "currency"}      # no user: authorization is the population's
 
 
 def test_a_deleted_account_is_not_in_the_population(conn, household):
@@ -176,6 +186,20 @@ def test_a_deleted_account_is_not_in_the_population(conn, household):
     seen = {}
     engine.calculate(conn, simple(lambda ctx: seen.update(ids=ctx.population.account_ids()) or ok(ctx)), ADMIN, {"parameters": {}}, TODAY)
     assert household[0] not in seen["ids"] and len(seen["ids"]) == 2
+
+
+def test_who_asks_decides_the_population_and_goes_no_further(conn, household, monkeypatch):
+    """The user reaches the framework's population builder and never the calculation."""
+    asked = []
+
+    def narrowed(connection, user):
+        asked.append(user["id"])
+        return FixedPopulation(household[:1])
+
+    monkeypatch.setattr(engine, "visible_accounts", narrowed)
+    seen = {}
+    engine.calculate(conn, simple(lambda ctx: seen.update(ids=ctx.population.account_ids()) or ok(ctx)), MEMBER, {"parameters": {}}, TODAY)
+    assert asked == [MEMBER["id"]] and seen["ids"] == (household[0],)
 
 
 def test_the_fixed_population_is_sorted_without_repeats_and_refuses_what_is_not_an_account_id():
@@ -221,11 +245,27 @@ def test_a_read_transaction_joins_one_that_is_open_but_is_still_read_only_and_re
 
 # -- the three kinds of failure --
 
+def test_the_currency_is_read_inside_the_same_snapshot_as_the_population_and_the_calculation(conn, household, monkeypatch):
+    """Every database-derived input shares one consistency boundary: the currency is read after the snapshot has begun."""
+    inside = {}
+    real = engine.currencies.system_currency
+
+    def spy(connection):
+        inside["currency"] = connection.in_transaction and connection.execute("PRAGMA query_only").fetchone()[0] == 1
+        return real(connection)
+
+    monkeypatch.setattr(engine.currencies, "system_currency", spy)
+    engine.calculate(conn, simple(ok), ADMIN, {"parameters": {}}, TODAY)
+    assert inside["currency"] is True
+    assert not conn.in_transaction and conn.execute("PRAGMA query_only").fetchone()[0] == 0
+
+
 def test_an_unset_system_currency_is_unavailable_data_not_a_mistake(conn):
     conn.execute("UPDATE system_properties SET value = NULL, read_only = 0 WHERE name = 'system.currency'")
     with pytest.raises(ReportUnavailable) as error:
         engine.calculate(conn, NONE, ADMIN, {"parameters": {}}, TODAY)
     assert error.value.details["code"] == "unavailable_data" and error.value.reason == "no_system_currency"
+    assert not conn.in_transaction and conn.execute("PRAGMA query_only").fetchone()[0] == 0      # the snapshot ended with the refusal
 
 
 def test_a_missing_exchange_rate_is_unavailable_data_with_a_stable_reason(conn):
