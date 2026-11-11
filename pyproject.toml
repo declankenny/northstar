@@ -26,7 +26,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["northstar", "northstar.web", "northstar.lists", "northstar.listdefs"]
+packages = ["northstar", "northstar.web", "northstar.lists", "northstar.listdefs", "northstar.reports", "northstar.reportdefs"]
 
 [tool.setuptools.package-data]
 northstar = ["migrations/*.sql"]

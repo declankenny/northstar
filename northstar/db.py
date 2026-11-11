@@ -59,6 +59,28 @@ def write_transaction(conn: sqlite3.Connection):
     conn.execute("COMMIT")
 
 
+@contextmanager
+def read_transaction(conn: sqlite3.Connection):
+    """Read everything a calculation needs from one consistent view of the database.
+
+    SQLite gives a transaction a snapshot at its first read, so every query inside the block sees the same data even if another
+    request commits meanwhile. Nothing can be written inside it: the connection is read-only for the length of the block, so an
+    attempt to write fails instead of changing household data from a calculation. Inside an open transaction this joins it.
+    """
+    if conn.in_transaction:
+        yield conn
+        return
+    before = conn.execute("PRAGMA query_only").fetchone()[0]
+    conn.execute("PRAGMA query_only = ON")
+    conn.execute("BEGIN")
+    try:
+        yield conn
+    finally:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")      # nothing was written, so ending the snapshot is all there is to do
+        conn.execute(f"PRAGMA query_only = {int(before)}")
+
+
 def connect(path: str | Path) -> sqlite3.Connection:
     """Open the database with foreign keys on (SQLite has them off by default) and the application's SQL functions registered."""
     conn = sqlite3.connect(path, isolation_level=None)
