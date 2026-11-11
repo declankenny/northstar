@@ -30,6 +30,15 @@ CURRENCIES = ListDef(
     ("code", "asc"), page_size=100, admin_only=True,
 )
 
+# One account's balances, newest first, twelve to a page: the account page's history. A fixed list: a person cannot filter, search,
+# group, choose its columns or its page size, or export it, and nothing is saved for it. The page names the account, and the list
+# is only that account's live balances. The date opens the balance's page, where it is changed or deleted.
+ACCOUNT_BALANCES = ListDef(
+    "account_balances", "account_balances", ("as_of_date", "amount_cents", "change_cents"), ("as_of_date", "desc"),
+    scope="b.account_id = :account", params=("account",), page_size=12, customisable=False,
+)
+
 loader.register(BALANCES)
+loader.register(ACCOUNT_BALANCES)
 loader.register(ACCOUNTS)
 loader.register(CURRENCIES)

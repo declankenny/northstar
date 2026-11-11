@@ -20,6 +20,13 @@ class ListDef:
     scope: str | None = None                        # a fixed condition on the table (alias `b`), written in code
     page_size: int = 25
     admin_only: bool = False                        # only a viewer with the role "admin" may see the list
+    customisable: bool = True                       # False: a fixed view. No filters, search, grouping, columns, page size or export, and nothing saved
+    params: tuple[str, ...] = ()                    # what a request must name for the scope, written `:name` in it (a key of PARAM_TABLES)
+
+
+# A parameter of a list is the id of a record of one of these tables, which a request names and the server checks exists.
+PARAM_TABLES = {"account": "live_accounts"}
+_PARAM = re.compile(r":([a-z_]+)")
 
 
 def check(catalog: Catalog, definition: ListDef) -> None:
@@ -30,8 +37,15 @@ def check(catalog: Catalog, definition: ListDef) -> None:
     for name in (definition.source,):
         if name is not None and not _IDENTIFIER.match(name):
             problems.append(f"{definition.key}: {name} is not a plain name")
-    if definition.page_size not in PAGE_SIZES:
+    if definition.customisable and definition.page_size not in PAGE_SIZES:
         problems.append(f"{definition.key}: the page size {definition.page_size} is not one of {PAGE_SIZES}")
+    if not definition.customisable and definition.page_size < 1:
+        problems.append(f"{definition.key}: the page size must be at least 1")
+    for name in definition.params:
+        if name not in PARAM_TABLES:
+            problems.append(f"{definition.key}: {name} is not a parameter a list can take")
+    if set(_PARAM.findall(definition.scope or "")) != set(definition.params):
+        problems.append(f"{definition.key}: the scope names {sorted(set(_PARAM.findall(definition.scope or '')))} and the list declares {sorted(definition.params)}")
     if definition.sort[1] not in ("asc", "desc"):
         problems.append(f"{definition.key}: the sort direction must be asc or desc")
     if not definition.columns:

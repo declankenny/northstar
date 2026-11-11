@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  type AccountPage as Account, addBalance, type BalanceRow, changeClass, closeAccount, deleteAccount,
-  deleteBalance, downloadExport, editAccount, editBalance, fetchAccount, fetchNetWorth, reopenAccount,
+  type AccountPage as Account, addBalance, changeClass, closeAccount, deleteAccount, downloadExport, editAccount, fetchAccount,
+  fetchNetWorth, type ListRow, reopenAccount,
 } from "./api";
 import { BalanceDialog, ChangeClassDialog, EditAccountDialog } from "./AccountDialogs";
-import { deleteConsequence } from "./balanceText";
 import { formatDate } from "./dates";
-import { conflictText } from "./conflicts";
 import { ConfirmDialog } from "./Dialogs";
+import { ListView } from "./ListView";
 import { formatCents, percentChange } from "./money";
 import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
@@ -18,12 +17,11 @@ import { useRequest } from "./useRequest";
 import { formatInteger } from "./locale";
 
 type Dialog =
-  | { kind: "balance"; editing: BalanceRow | null }
+  | { kind: "balance" }
   | { kind: "edit" }
   | { kind: "class" }
   | { kind: "close" }
-  | { kind: "delete-account" }
-  | { kind: "delete-balance"; index: number };
+  | { kind: "delete-account" };
 
 /** An account's balance on a date: the server puts it in assets or liabilities by class, and one of them is zero. */
 const balanceOf = (point: { assets: number; liabilities: number }) => point.assets + point.liabilities;
@@ -35,12 +33,22 @@ function ago(days: number | null): string {
   return days === 0 ? "today" : `${plural(days, "day")} ago`;
 }
 
-/** What deleting a balance does to the account's history, from where that entry sits in the list (newest first). */
+/** A balance's change from the one before it, signed, and green or red by whether it helps (a liability that grows does not). */
+function changeCell(row: ListRow, liability: boolean, currency: Account["currency"]) {
+  const change = row.change_cents as { value: number } | null;
+  if (change === null) return <span className="m">—</span>;
+  const step = change.value;
+  const tone = step === 0 ? "m" : step > 0 === !liability ? "p" : "n";
+  return <span className={tone}>{`${step >= 0 ? "+" : "-"}${formatCents(Math.abs(step), currency)}`}</span>;
+}
+
+/** The account page: its figures, its chart, and its balance history, a fixed list whose dates open each balance's page. */
 export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const [range, setRange] = useState<Range>("1Y");
   const [failure, setFailure] = useState<string | null>(null); // a change that was refused (reopening)
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [menu, setMenu] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);              // raised when the account's balances change, so the history reads again
 
   // An answer for an account that is no longer the one in the address is ignored, and the old account is not shown meanwhile.
   const loaded = useRequest((signal) => fetchAccount(id, signal), [id], { reset: true });
@@ -72,13 +80,14 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   /** After a balance was found to have changed since the page loaded it, show the account as it now is behind the dialog. A reload
    *  would blank the page and close the dialog, so the answer is put in place instead; if it fails the page stays as it was. */
   const refresh = () => {
-    void fetchAccount(id).then((page) => loaded.setData(page), () => undefined);
+    void fetchAccount(id).then((page) => { loaded.setData(page); setHistoryKey((key) => key + 1); }, () => undefined);
   };
 
   /** Every change answers with the account as it now is. */
   const apply = (page: Account) => {
     loaded.setData(page);
     chart.reload();    // every change is asked of the chart again
+    setHistoryKey((key) => key + 1);
     setFailure(null);
     setDialog(null);
   };
@@ -111,7 +120,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
           </div>
         </div>
         <div className="actions-bar">
-          <button className="btn" disabled={!open} onClick={() => setDialog({ kind: "balance", editing: null })}>Add balance</button>
+          <button className="btn" disabled={!open} onClick={() => setDialog({ kind: "balance" })}>Add balance</button>
           {open && <button className="btn ghost" onClick={() => { navigate(importPath(id)); }}>Import CSV…</button>}
           <button className="btn ghost" onClick={() => { downloadExport(id); }}>Export CSV</button>
           <button className="btn ghost" aria-label="More actions" aria-haspopup="menu" aria-expanded={menu}
@@ -201,48 +210,18 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
             <span className="label">Entries</span>
             {hasBalances && <span className="label num">{formatInteger(account.balance_count)} total</span>}
           </div>
-          <div className="hist">
-            {hasBalances && (
-              <table className="num">
-                <thead>
-                  <tr><th>Date</th><th className="r">Balance</th><th className="r">Change</th><th /></tr>
-                </thead>
-                <tbody>
-                  {account.balances.map((b, i) => {
-                    const older = account.balances[i + 1];
-                    const step = older ? b.amount_cents - older.amount_cents : null;
-                    const stepGood = step === null || step === 0 ? "m" : step > 0 === !liability ? "p" : "n";
-                    return (
-                      <tr key={b.id}>
-                        <td>
-                          {formatDate(b.as_of_date)}
-                          {b.note && <div className="rownote" title={b.note}>{b.note}</div>}
-                        </td>
-                        <td className="r">{formatCents(b.amount_cents, account.currency)}</td>
-                        <td className={`r ${stepGood}`}>
-                          {step === null ? "—" : `${step >= 0 ? "+" : "-"}${formatCents(Math.abs(step), account.currency)}`}
-                        </td>
-                        <td className="row-actions">
-                          {open && (
-                            <span>
-                              <button aria-label={`Edit balance of ${formatDate(b.as_of_date)}`} onClick={() => setDialog({ kind: "balance", editing: b })}>Edit</button>
-                              <button className="bad" aria-label={`Delete balance of ${formatDate(b.as_of_date)}`} onClick={() => setDialog({ kind: "delete-balance", index: i })}>Delete</button>
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {hasBalances ? (
+            <ListView listKey="account_balances" fixed={{ params: { account: id } }} refreshKey={historyKey}
+              config={{ cell: { change_cents: (row) => changeCell(row, liability, account.currency) } }} />
+          ) : (
+            <p className="empty pad">No balances yet.</p>
+          )}
         </div>
       </div>
 
       {dialog?.kind === "balance" && (
-        <BalanceDialog account={account} editing={dialog.editing} onClose={() => setDialog(null)} onConflict={refresh}
-          onSave={async (entry, version) => apply(dialog.editing ? await editBalance(dialog.editing.id, entry, version!) : await addBalance(id, entry))} />
+        <BalanceDialog account={account} editing={null} onClose={() => setDialog(null)} onConflict={refresh}
+          onSave={async (entry) => apply(await addBalance(id, entry))} />
       )}
       {dialog?.kind === "edit" && (
         <EditAccountDialog account={account} onClose={() => setDialog(null)}
@@ -256,12 +235,6 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
         <ConfirmDialog title={`Close ${account.name}?`} confirmLabel="Close account" onClose={() => setDialog(null)}
           text="A closed account leaves Update balances and the open accounts list, and its balances can't be changed. Its history stays in net worth. You can reopen it later. Its latest balance must be zero."
           onConfirm={async () => apply(await closeAccount(id))} />
-      )}
-      {dialog?.kind === "delete-balance" && (
-        <ConfirmDialog title="Delete this balance?" confirmLabel="Delete" danger onClose={() => setDialog(null)}
-          text={deleteConsequence(account.balances, dialog.index, account.currency)} onConflict={refresh}
-          conflict={{ lead: "Nothing was deleted.", text: (c) => conflictText(c, account.balances[dialog.index]?.amount_cents) }}
-          onConfirm={async () => apply(await deleteBalance(account.balances[dialog.index].id, account.balances[dialog.index].version))} />
       )}
       {dialog?.kind === "delete-account" && (
         <ConfirmDialog title={`Delete ${account.name}?`} confirmLabel="Delete account" danger onClose={() => setDialog(null)}

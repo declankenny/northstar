@@ -34,8 +34,11 @@ ACCOUNT_SUMMARIES = (_LAST[_LAST.index("CREATE VIEW last_balances"):_LAST.index(
                      + _LIST[_LIST.index("CREATE VIEW account_summaries"):_LIST.index("INSERT INTO list_filters")])
 _CURRENCIES = (_MIGRATIONS / "0026_currency_summaries.sql").read_text(encoding="utf-8")
 CURRENCY_SUMMARIES = _CURRENCIES[_CURRENCIES.index("CREATE VIEW currency_summaries"):]       # reads live_accounts
+_BALANCES = (_MIGRATIONS / "0027_account_balances.sql").read_text(encoding="utf-8")
+ACCOUNT_BALANCES = _BALANCES[_BALANCES.index("CREATE VIEW account_balances"):]               # reads live_balances
 VIEWS = "CREATE VIEW live_accounts AS SELECT * FROM accounts WHERE deleted = 0;\n" + LIVE_BALANCES
 REBUILD_ACCOUNTS = """-- northstar: rebuild
+DROP VIEW account_balances;
 DROP VIEW currency_summaries;
 DROP VIEW account_summaries;
 DROP VIEW last_balances;
@@ -73,7 +76,7 @@ WHEN NEW.class_id IS NOT OLD.class_id AND EXISTS (SELECT 1 FROM accounts WHERE t
 BEGIN
     SELECT RAISE(ABORT, 'The class of a type that accounts use cannot be changed.');
 END;
-""" + VIEWS + ACCOUNT_DAYS + LIVE_BALANCE_VALUES + ACCOUNT_SUMMARIES + CURRENCY_SUMMARIES
+""" + VIEWS + ACCOUNT_DAYS + LIVE_BALANCE_VALUES + ACCOUNT_SUMMARIES + CURRENCY_SUMMARIES + ACCOUNT_BALANCES
 
 
 def folder_with(tmp_path, **extra):
@@ -223,6 +226,7 @@ def test_migrations_cannot_start_inside_a_transaction(tmp_path, migrated):
 INDEX_AND_VIEW = ("CREATE INDEX balances_note ON balances (note);\n"
                   "CREATE VIEW big_balances AS SELECT id FROM balances WHERE amount_cents > 100;")
 REBUILD_BALANCES = """-- northstar: rebuild
+DROP VIEW account_balances;
 DROP VIEW currency_summaries;
 DROP VIEW account_summaries;
 DROP VIEW last_balances;
@@ -242,7 +246,7 @@ CREATE TABLE balances_new (
 INSERT INTO balances_new SELECT * FROM balances;
 DROP TABLE balances;
 ALTER TABLE balances_new RENAME TO balances;
-""" + LIVE_BALANCES + ACCOUNT_DAYS + LIVE_BALANCE_VALUES + ACCOUNT_SUMMARIES + CURRENCY_SUMMARIES
+""" + LIVE_BALANCES + ACCOUNT_DAYS + LIVE_BALANCE_VALUES + ACCOUNT_SUMMARIES + CURRENCY_SUMMARIES + ACCOUNT_BALANCES
 
 
 def test_a_rebuild_that_keeps_its_indexes_and_views_is_accepted(tmp_path, migrated):

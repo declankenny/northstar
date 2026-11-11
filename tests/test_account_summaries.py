@@ -201,7 +201,7 @@ def before(tmp_path):
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith(("0024", "0025", "0026")):
+        if not file.name.startswith(("0024", "0025", "0026", "0027")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -223,7 +223,7 @@ def use_dollars_and_accounts(conn):
 
 
 def test_the_upgrade_adds_the_two_views_and_changes_no_data(before):
-    assert db.upgrade(before) == ["0024_account_summaries", "0025_accounts_list", "0026_currency_summaries"]
+    assert db.upgrade(before) == ["0024_account_summaries", "0025_accounts_list", "0026_currency_summaries", "0027_account_balances"]
     conn = db.connect(before)
     assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 2
     assert conn.execute("SELECT COUNT(*) FROM balances").fetchone()[0] == 3
@@ -240,7 +240,7 @@ def before_0025(tmp_path):
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith(("0025", "0026")):
+        if not file.name.startswith(("0025", "0026", "0027")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -257,7 +257,7 @@ def test_the_view_gains_the_accounts_own_columns_and_keeps_its_figures(before_00
     old = [tuple(r) for r in conn.execute(f"SELECT id, {figures} FROM account_summaries")]
     assert "name" not in [r[1] for r in conn.execute("PRAGMA table_info(account_summaries)")]
     conn.close()
-    assert db.upgrade(before_0025) == ["0025_accounts_list", "0026_currency_summaries"]
+    assert db.upgrade(before_0025) == ["0025_accounts_list", "0026_currency_summaries", "0027_account_balances"]
     conn = db.connect(before_0025)
     columns = [r[1] for r in conn.execute("PRAGMA table_info(account_summaries)")]
     assert columns[:len(accounts_columns(conn))] == accounts_columns(conn)                 # the account's own, then the figures

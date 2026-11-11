@@ -12,13 +12,14 @@ database's own work like any other.
 """
 
 import math
+import re
 import sqlite3
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from northstar.errors import ValidationError
+from northstar.errors import NotFoundError, ValidationError
 from northstar.lists.kinds import Category, Reference, Scaled, Text, escape_like
-from northstar.lists.listdef import ListDef
+from northstar.lists.listdef import PARAM_TABLES, ListDef
 from northstar.lists.registry import Catalog, Resolved
 from northstar.lists.request import ListRequest
 
@@ -81,7 +82,9 @@ class _View:
         definition, request, catalog = self.definition, self.request, self.catalog
         parts = []
         if definition.scope:
-            parts.append(f"({definition.scope})")
+            values = dict(request.params)
+            self.params += [values[name] for name in re.findall(r":([a-z_]+)", definition.scope)]
+            parts.append("(" + re.sub(r":[a-z_]+", "?", definition.scope) + ")")
         if request.search:
             parts.append(self._search())
         for condition in request.filters:
@@ -234,12 +237,21 @@ def _plan(catalog: Catalog, definition: ListDef, request: ListRequest, viewer, *
     return _Plan(view, source, where_sql, where_joins, where_params, selected, shaped, linked, order, request.group if group_columns else None)
 
 
+def ensure_params(conn: sqlite3.Connection, request: ListRequest) -> None:
+    """A record a request names for a list's scope must exist (an account that is not deleted): otherwise the list is empty for the
+    wrong reason, so it is a 404."""
+    for name, record_id in request.params:
+        if conn.execute(f'SELECT 1 FROM "{PARAM_TABLES[name]}" WHERE id = ?', (record_id,)).fetchone() is None:
+            raise NotFoundError(f"That {name} does not exist.")
+
+
 def run(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, request: ListRequest,
         viewer=frozenset()) -> ListResult:
     """The page of rows the request asks for, with the count of every matching row. Rows are dicts by key, with the record's
     id as `_id`, `_links` (the route each linked column opens, for this viewer) and, when grouped, `_group`, `_group_count` (the
     group's size across all pages) and `_group_before` (how many rows of the group come before this one in the order, so a page can
     tell that its first rows continue a group from the page before)."""
+    ensure_params(conn, request)
     plan = _plan(catalog, definition, request, viewer)
     count_sql = f'SELECT COUNT(*) FROM "{plan.source}" AS b {" ".join(plan.where_joins)}{plan.where_sql}'
     total = conn.execute(count_sql, plan.where_params).fetchone()[0]
@@ -284,6 +296,8 @@ def choices(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, key
             return {"kind": "values", "values": list(resolved.kind.values), "options": [], "more": False}
         raise ValidationError("That column has no list of choices.")
 
+    if definition.params:
+        raise ValidationError("That list has no choices to filter by.")
     request = ListRequest((), (), "", definition.sort[0], "asc", None, 1, 10)
     view = _View(catalog, definition, request)
     identity, display = view.identity(resolved), view.plain(resolved)

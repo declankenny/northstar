@@ -100,8 +100,13 @@ function cellContent(column: ListColumn, row: ListRow, page: ListPage, config: L
 }
 
 /** One list, any list: the server does the sorting, searching and paging, and the address says which view this is. A page that changes
- *  what the list holds (an Add button) raises `refreshKey`, and the rows are read again in place: the sort, filters, page and drawer stay. */
-export function ListView({ listKey, config = {}, refreshKey = 0 }: { listKey: string; config?: ListConfig; refreshKey?: number }) {
+ *  what the list holds (an Add button) raises `refreshKey`, and the rows are read again in place: the sort, filters, page and drawer stay.
+ *
+ *  A fixed list (`fixed`) is one a person cannot change, on a page that has its own address: it has no search, Filters, Columns, groups
+ *  or export, and its sort and page are kept in the page (React state) and not in the address. `params` are what its scope needs. */
+export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
+  listKey: string; config?: ListConfig; refreshKey?: number; fixed?: { params: Record<string, number> };
+}) {
   const [drawer, setDrawer] = useState<"filters" | "columns" | null>(null);   // which tab the open drawer starts on
   const opener = useRef<HTMLButtonElement | null>(null);                    // the button that opened it, to give focus back to
   const [columnsChanged, setColumnsChanged] = useState(0);                    // counts the person's changes to their columns, which are not in the address
@@ -109,7 +114,8 @@ export function ListView({ listKey, config = {}, refreshKey = 0 }: { listKey: st
   const asked = useRef(new Set<string>());
   const path = usePath();
   const address = useSearch();
-  const view = useMemo(() => parseListView(address), [address]);
+  const [kept, setKept] = useState(() => parseListView(""));                  // a fixed list's sort and page
+  const view = useMemo(() => (fixed ? kept : parseListView(address)), [fixed, kept, address]);
   const [size, setSize] = useState<number | undefined>(undefined); // chosen on this page; before that the server uses the person's own
   const [text, setText] = useState(view.search);
   const [problem, setProblem] = useState<string | null>(null);
@@ -119,14 +125,15 @@ export function ListView({ listKey, config = {}, refreshKey = 0 }: { listKey: st
   useEffect(() => { setCollapsing(OPEN); }, [view.group]);            // another grouping is a new set of groups
 
   const { data: page, error, loading, reload } = useRequest(
-    (signal) => fetchList(listKey, listRequest(view, size), signal),
-    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, view.group, size, JSON.stringify(view.filters), columnsChanged, refreshKey],
+    (signal) => fetchList(listKey, fixed ? { ...listRequest(view), params: fixed.params } : listRequest(view, size), signal),
+    [listKey, view.page, view.sort?.field, view.sort?.direction, view.search, view.group, size, JSON.stringify(view.filters), columnsChanged, refreshKey,
+      JSON.stringify(fixed?.params)],
   );
 
-  const go = (next: typeof view) => { navigate(listAddress(path, next)); };
+  const go = (next: typeof view) => { if (fixed) setKept(next); else navigate(listAddress(path, next)); };
 
   // The columns that can be filtered by: needed to say a filter in words and to build one.
-  const { data: tree, error: treeError } = useRequest((signal) => fetchListFields(listKey, signal), [listKey]);
+  const { data: tree, error: treeError } = useRequest((signal) => fetchListFields(listKey, signal), [listKey], { skip: !!fixed });
   const nodes = useMemo(() => new Map(flatten(tree).map((n) => [n.key, n])), [tree]);
   const ensureChoices = useCallback((field: string) => {
     const id = `${listKey}/${field}`;
@@ -236,6 +243,58 @@ export function ListView({ listKey, config = {}, refreshKey = 0 }: { listKey: st
   );
   const first = page && page.rows.length > 0 ? (page.page - 1) * page.page_size + 1 : 0;
   const sizes = PAGE_SIZES.includes(pagination.pageSize) ? PAGE_SIZES : [...PAGE_SIZES, pagination.pageSize].sort((a, b) => a - b);
+
+  if (fixed) {
+    const sortedKey = shown?.field;
+    return (
+      <>
+        {error && (
+          <p className="notice bad" role="alert">Could not load the list. {error}{" "}
+            <button className="link" onClick={reload}>Try again</button></p>
+        )}
+        {!page ? (
+          !error && <p className="empty pad">Loading…</p>
+        ) : page.total === 0 ? (
+          <p className="empty pad">{config.emptyText ?? "There is nothing to show yet."}</p>
+        ) : (
+          <>
+            <div className="hist" aria-busy={loading}>
+              <table className={loading ? "num lf-busy" : "num"}>
+                <thead>
+                  {table.getHeaderGroups().map((group) => (
+                    <tr key={group.id}>
+                      {group.headers.map((header) => {
+                        const column = byKey.get(header.column.id);
+                        const sorted = header.column.getIsSorted();
+                        return (
+                          <th key={header.id} className={column && isNumeric(column) ? "r" : ""}
+                            aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}>
+                            <button className="th-btn" onClick={header.column.getToggleSortingHandler()}>
+                              {column?.path_label ?? header.column.id}
+                              {header.column.id === sortedKey && <span className="sort" aria-hidden="true">{sorted === "asc" ? "▲" : "▼"}</span>}
+                            </button>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>{table.getRowModel().rows.map((row) => bodyRow(row))}</tbody>
+              </table>
+            </div>
+            {page.pages > 1 && (
+              <div className="lf-foot">
+                <span>{formatInteger(first)}–{formatInteger(first + page.rows.length - 1)} of {formatInteger(page.total)}</span>
+                <span>Page {formatInteger(page.page)} of {formatInteger(page.pages)}</span>
+                <button className="btn ghost small" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>Previous</button>
+                <button className="btn ghost small" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>Next</button>
+              </div>
+            )}
+          </>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="lf">
