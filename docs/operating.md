@@ -165,6 +165,20 @@ Version 0.4 adds sign-in through one OpenID Connect (OIDC) identity provider, su
 - **Northstar makes no new outbound request** until you turn OIDC on. With it on, Northstar also calls your identity provider and only that. See "Signing in through an identity provider" below.
 - **`python -m northstar.signin enable-local`** is a new command, the way back in if you switch password sign-in off and the provider fails.
 
+### Upgrading from 0.4 to 0.5
+
+Version 0.5 turns the main tables of Northstar into lists you can search, filter, sort, group, export and choose the columns of. What an upgrade does to an installation that already runs 0.4:
+
+- **A checked backup is made first**, as for any database change (see above). Nine migrations run (`0019` to `0027`). The first rebuilds the `accounts` table without its stored class, because an account's class is now read from its type, and recreates the views over it. The rest add views for the lists, two tables (a person's page size and columns for each list, and saved filters) and one shared saved filter, "Open accounts". No account, balance or user is changed, and a person's accounts keep their class.
+- **Nothing to change in your settings**, and nobody is signed out.
+- **Balances** is a new page in the menu: every balance across all accounts, with its value in the system currency. A balance opens on a page of its own, where its amount and note are changed or it is deleted.
+- **The Accounts page is a list.** It opens on the filter "Open accounts" and no longer has the Assets and Liabilities totals, the Open and Closed buttons, the Stale badge or the menu on each row (the Dashboard has the totals, closed accounts are the filter Open is No, and an account's name opens its page). People who used those will look for them: tell them.
+- **An account's page** lists its balances twelve at a time, with the change from the one before. Edit and Delete for a balance are on the balance's own page, opened from its date.
+- **Currencies** (admins) is a list too, and a currency's code, not its name, opens its page.
+- **Export CSV** appears in each list's footer and downloads what the list shows. The per-account Export CSV that import reads back is unchanged.
+- **Reading the database yourself.** The views the lists use call functions that Northstar registers when it opens the database, so they can only be read through Northstar. Opening the file in the `sqlite3` shell and querying them fails; the tables are still readable.
+- To go back, restore the backup the upgrade made, under the 0.4 image (see below).
+
 ### Rolling back
 
 You can't just start the old image on an upgraded database, because it doesn't understand the new schema. Restore the backup the upgrade made, under the old image. The file name has the version that made it and the UTC time, so take the newest one from the list:
