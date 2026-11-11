@@ -57,6 +57,16 @@ TABLES = {
                                     label="Reporting value", groupable=False),       # the same number in two currencies would be one group
         "note": _text(True), "source": _text(), **_audit()},
         denied=frozenset({"version"}), based_on="balances", record_page="/balances/{id}"),
+    # One account's balances with how much each changed from the one before (migration 0027), for the account page. It is a view of
+    # `balances`, so it has that table's key and relations. Its list is fixed, so the labels are only the three columns it shows.
+    "account_balances": TableDef("account_balances", "as_of_date", {
+        "as_of_date": FieldDef(Date(), label="Date"),
+        "amount_cents": FieldDef(ScaledBy(scale_from=("account", "currency", "minor_units"),
+                                          unit_from=("account", "currency", "code")), label="Balance", groupable=False),
+        "change_cents": FieldDef(ScaledBy(scale_from=("account", "currency", "minor_units"),
+                                          unit_from=("account", "currency", "code")), label="Change", groupable=False),
+        "note": _text(True), "source": _text(), **_audit()},
+        denied=frozenset({"version"}), based_on="balances", record_page="/balances/{id}"),
     # The currency catalog with how many live accounts use each (migration 0026), for the admin Currencies list. It is a view of
     # `currencies`, so it has that table's key and relations; it does not know which currency is the system currency.
     "currency_summaries": TableDef("currency_summaries", "code", {

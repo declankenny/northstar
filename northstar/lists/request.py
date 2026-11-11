@@ -7,7 +7,9 @@ from northstar.lists.kinds import Reference
 from northstar.lists.listdef import PAGE_SIZES, ListDef
 from northstar.lists.registry import Catalog
 
-_ALLOWED = {"columns", "filters", "search", "sort", "group", "page", "page_size"}
+_ALLOWED = {"columns", "filters", "search", "sort", "group", "page", "page_size", "params"}
+# A fixed list (not customisable) takes only a sort, a page and what its scope needs.
+_CUSTOM = {"columns", "filters", "search", "group", "page_size"}
 MAX_COLUMNS = 60
 MAX_FILTERS = 30
 MAX_SEARCH = 100
@@ -30,6 +32,7 @@ class ListRequest:
     group: str | None
     page: int
     page_size: int
+    params: tuple[tuple[str, int], ...] = ()          # what the list's scope needs, by name: the id of a record
 
 
 def _whole(value, name: str, low: int) -> int:
@@ -47,6 +50,13 @@ def parse_request(catalog: Catalog, definition: ListDef, data: dict | None) -> L
     if unknown:
         raise ValidationError(f"Unknown request field: {', '.join(map(str, unknown))}.")
     base = definition.table
+    if not definition.customisable and _CUSTOM & set(data):
+        raise ValidationError("That list cannot be changed.")
+
+    raw_params = data.get("params", {})
+    if not isinstance(raw_params, dict) or set(raw_params) != set(definition.params):
+        raise ValidationError(f"That list needs: {', '.join(definition.params) or 'nothing'}.")
+    params = tuple((name, _whole(raw_params[name], name, 1)) for name in definition.params)
 
     columns = data.get("columns", definition.columns)
     if not isinstance(columns, (list, tuple)) or not columns or len(columns) > MAX_COLUMNS:
@@ -86,6 +96,8 @@ def parse_request(catalog: Catalog, definition: ListDef, data: dict | None) -> L
             raise ValidationError("Sort by a column, ascending or descending.")
         sort_key, direction = sort["field"], sort.get("direction", "asc")
     catalog.resolve(base, sort_key)
+    if not definition.customisable and sort_key not in definition.columns:
+        raise ValidationError("Sort by one of the columns.")
     if direction not in ("asc", "desc"):
         raise ValidationError("Sort ascending or descending.")
 
@@ -97,6 +109,6 @@ def parse_request(catalog: Catalog, definition: ListDef, data: dict | None) -> L
 
     page = _whole(data.get("page", 1), "page", 1)
     page_size = data.get("page_size", definition.page_size)
-    if page_size not in PAGE_SIZES:
+    if definition.customisable and page_size not in PAGE_SIZES:     # a fixed list has its own size, which is not one a person chooses
         raise ValidationError(f"Show {', '.join(map(str, PAGE_SIZES))} rows per page.")
-    return ListRequest(tuple(columns), tuple(filters), search.strip(), sort_key, direction, group, page, page_size)
+    return ListRequest(tuple(columns), tuple(filters), search.strip(), sort_key, direction, group, page, page_size, params)

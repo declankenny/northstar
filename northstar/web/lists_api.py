@@ -55,6 +55,7 @@ class ListPage(BaseModel):
     default_columns: list[str]       # the keys of the columns the list shows when a person has chosen none
     customised: bool                 # are the columns shown this person's own saved choice (so there is something to reset)
     skipped_columns: list[SkippedOut]    # columns of the person's choice that the list no longer offers and were left out
+    customisable: bool       # false for a fixed list: no filters, search, grouping, columns, page size or export
 
 
 class SkippedOut(BaseModel):
@@ -106,10 +107,14 @@ def _roles(user) -> frozenset[str]:
     return frozenset({"admin"}) if user["is_admin"] else frozenset()
 
 
-def _definition(key: str, user):
+def _definition(key: str, user, *, customised: bool = True):
+    """The list, if this person may see it. `customised` is for the endpoints that keep or use a person's own choices: a fixed list has
+    none, so they refuse it."""
     definition = loader.get_list_definition(key)
     if definition.admin_only and not user["is_admin"]:
         raise HTTPException(status_code=403, detail="Only admins can see that list.")
+    if customised and not definition.customisable:
+        raise HTTPException(status_code=422, detail="That list cannot be changed.")
     return definition
 
 
@@ -134,21 +139,25 @@ def _with_choices(conn, catalog, definition, user, key, data) -> tuple[list, int
 @router.post("/{key}", response_model=ListPage)
 def query_list(key: str, request: Request, body: dict = Body(default_factory=dict)):
     user = current_user(request)
-    definition = _definition(key, user)
+    definition = _definition(key, user, customised=False)
 
     def action(conn):
         catalog = household_catalog(conn)
         data = dict(body)
-        if "page_size" not in data:                 # the person's own choice, else the list's
-            data["page_size"] = list_prefs.page_size(conn, user["id"], key, definition.page_size)
-        skipped, opened_with, skipped_columns, customised = _with_choices(conn, catalog, definition, user, key, data)
+        if definition.customisable:                 # a fixed list reads and keeps nothing of a person's own
+            if "page_size" not in data:             # the person's own choice, else the list's
+                data["page_size"] = list_prefs.page_size(conn, user["id"], key, definition.page_size)
+            skipped, opened_with, skipped_columns, customised = _with_choices(conn, catalog, definition, user, key, data)
+        else:
+            skipped, opened_with, skipped_columns, customised = [], None, [], False
         parsed = parse_request(catalog, definition, data)
         result = run_list(conn, catalog, definition, parsed, _roles(user))
         return {"columns": describe(catalog, definition, parsed.columns, _roles(user)), "rows": result.rows,
                 "total": result.total, "page": result.page, "pages": result.pages, "page_size": result.page_size,
                 "group": result.group, "sort": {"field": result.sort[0], "direction": result.sort[1]},
                 "filters": data.get("filters", []), "skipped": skipped, "default_filter_id": opened_with,
-                "default_columns": list(definition.columns), "customised": customised, "skipped_columns": skipped_columns}
+                "default_columns": list(definition.columns), "customised": customised, "skipped_columns": skipped_columns,
+                "customisable": definition.customisable}
 
     return run(request, action)
 

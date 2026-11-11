@@ -142,6 +142,14 @@ describe("an account page for an account in another currency", () => {
       today: "2026-06-03", start: "2026-04-30", end: "2026-06-03", period: "month", limited: null,
       series: [{ date: "2026-04-30", assets: 940000, liabilities: 0, net_worth: 940000 }, { date: "2026-05-12", assets: 1000000, liabilities: 0, net_worth: 1000000 }],
     });
+    const col = (key: string, label: string, kind: ListColumn["kind"]): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: false, groupable: false });
+    vi.mocked(fetchList).mockResolvedValue({
+      columns: [col("as_of_date", "Date", "date"), col("amount_cents", "Balance", "amount"), col("change_cents", "Change", "amount")],
+      rows: [{ _id: 2, _links: { as_of_date: "/balances/2" }, as_of_date: "2026-05-12", amount_cents: { value: 1000000, scale: 2, unit: "EUR" }, change_cents: { value: 60000, scale: 2, unit: "EUR" } },
+             { _id: 1, _links: { as_of_date: "/balances/1" }, as_of_date: "2026-04-30", amount_cents: { value: 940000, scale: 2, unit: "EUR" }, change_cents: null }],
+      total: 2, page: 1, pages: 1, page_size: 12, group: null, sort: { field: "as_of_date", direction: "desc" }, filters: [], skipped: [], default_filter_id: null,
+      default_columns: ["as_of_date", "amount_cents", "change_cents"], customised: false, skipped_columns: [],
+    });
     render(<AccountPage id={7} isAdmin />);
     await screen.findByRole("heading", { name: "Test euros" });
     const tile = screen.getByText("Currency").closest(".tile") as HTMLElement;
@@ -150,8 +158,10 @@ describe("an account page for an account in another currency", () => {
     expect(screen.getByRole("heading", { name: "Test euros" }).textContent).not.toContain("EUR");        // the header does not name it
     const latest = screen.getByText("Latest balance").closest(".tile") as HTMLElement;
     expect(latest.textContent).toContain("EUR 10,000.00");
-    const table = screen.getByRole("table");
-    expect([...table.querySelectorAll("tbody tr")].map((r) => r.querySelectorAll("td")[1].textContent)).toEqual(["EUR 10,000.00", "EUR 9,400.00"]);
+    const table = await screen.findByRole("table");
+    const cells = (n: number) => [...table.querySelectorAll("tbody tr")].map((r) => r.querySelectorAll("td")[n].textContent);
+    expect(cells(1)).toEqual(["EUR 10,000.00", "EUR 9,400.00"]);
+    expect(cells(2)).toEqual(["+EUR 600.00", "—"]);                    // the change is in the account's own currency too
   });
 });
 

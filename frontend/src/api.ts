@@ -663,6 +663,7 @@ export type ListRequest = {
   columns?: string[]; search?: string; page?: number; page_size?: number; group?: string | null;
   filters?: Condition[]; // none at all means the person's default filter; an empty list means no filter
   sort?: { field: string; direction: "asc" | "desc" } | null;
+  params?: Record<string, number>;                  // what a list's scope needs: the id of the account whose balances it lists
 };
 
 export async function fetchList(key: string, request: ListRequest, signal?: AbortSignal): Promise<ListPage> {
