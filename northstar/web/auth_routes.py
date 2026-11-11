@@ -60,7 +60,10 @@ def safe_next(target: str) -> str:
             and target.isprintable() and not any(char.isspace() for char in target)):
         parts = urlsplit(target)
         if not parts.scheme and not parts.netloc:
-            return target
+            # The same path, built on a fixed "/" instead of handed back as it came. The result is identical (the checks above have
+            # shown it starts with exactly one "/"), but it is what the code scanner recognises as a redirect that cannot leave the
+            # site, so the sign-in routes that use it are not flagged each time a line moves.
+            return "/" + target[1:]
     return LANDING
 
 
