@@ -234,17 +234,27 @@ describe("the Add account dialog", () => {
 describe("the balance dialog", () => {
   const account = { id: 7, name: "Test savings", today: "2026-11-05" } as AccountPage;
 
-  it("says how the balance reads, as it is typed, and starts an edit in the format of the person", () => {
+  it("says how the balance reads, as it is typed, in the format of the person", () => {
     setLocale(GERMAN);
     setCurrency({ code: "EUR", name: "Euro", minor_units: 2 });
-    render(<BalanceDialog account={account} editing={{ id: 1, as_of_date: "2026-10-31", amount_cents: 123456, note: null, version: 3 }}
-      onSave={vi.fn()} onClose={vi.fn()} />);
+    render(<BalanceDialog account={{ ...account, currency: { code: "EUR", name: "Euro", minor_units: 2 } }} onSave={vi.fn()} onClose={vi.fn()} />);
     const box = screen.getByLabelText("Balance") as HTMLInputElement;
-    expect(box.value).toBe("1234,56");                                              // the locale's decimal mark, no grouping
+    expect(box.value).toBe("");
+    fireEvent.change(box, { target: { value: "1.234,56" } });
     expect(document.querySelector(".reads")!.textContent).toBe("Reads as 1.234,56\u00a0EUR");
     fireEvent.change(box, { target: { value: "1,234.56" } });
     expect(document.querySelector(".reads")!.textContent).toContain("Enter an amount like 1234,56");
     expect(box.placeholder).toBe("0,00");
+  });
+
+  it("only adds: it has no edit mode, and sends the date, amount and note", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<BalanceDialog account={{ ...account, currency: { code: "USD", name: "US Dollar", minor_units: 2 } }} onSave={onSave} onClose={vi.fn()} />);
+    expect(screen.getByRole("dialog", { name: "Add balance" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Balance"), { target: { value: "10.50" } });
+    fireEvent.change(screen.getByLabelText("Note (optional)"), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ date: "2026-11-05", amount: "10.50", note: "x" }));
   });
 });
 

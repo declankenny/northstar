@@ -58,17 +58,9 @@ def test_summary_of_missing_account(conn):
         accounts.account_summary(conn, 9999, TODAY)
 
 
-def test_history_is_newest_first_and_only_this_accounts(conn):
-    a = add_account(conn, "A", ASSET, "Checking")
-    b = add_account(conn, "B", ASSET, "Savings")
-    for d, c in [("2026-03-01", 3), ("2026-10-01", 10), ("2026-05-01", 5)]:
-        add_balance(conn, a, d, c)
-    add_balance(conn, b, "2026-07-01", 999)
-    rows = accounts.balance_history(conn, a)
-    assert [(r["as_of_date"], r["amount_cents"]) for r in rows] == [
-        ("2026-10-01", 10), ("2026-05-01", 5), ("2026-03-01", 3)]
-    assert all(r["source"] == "manual" for r in rows)
-
-
-def test_history_of_account_with_no_balances_is_empty(conn):
-    assert accounts.balance_history(conn, add_account(conn, "A", ASSET, "Checking")) == []
+def test_the_account_page_carries_no_balances(conn):
+    """The balances are a list of their own, so the page of an account holds none of them, however many it has."""
+    acct = add_account(conn, "A", ASSET, "Checking")
+    add_balance(conn, acct, "2026-10-01", 100)
+    page = accounts.account_page(conn, acct, TODAY)
+    assert "balances" not in page and page["balance_count"] == 1

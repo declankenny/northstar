@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { type BalancePageData, deleteBalance, editBalance, fetchBalance, RequestError } from "./api";
+import { type BalancePageData, deleteBalance, editBalance, fetchBalance, fetchNeighbours, RequestError } from "./api";
 import { AmountReading } from "./AmountReading";
 import { deleteConsequence } from "./balanceText";
 import { conflictText } from "./conflicts";
@@ -42,7 +42,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const [openedAt, setOpenedAt] = useState(balance.amount_cents);    // what the person was looking at, for a conflict message
   const [shown, setShown] = useState<string | null>(null);           // who changed the balance now on show, after Use the current value
   const [saved, setSaved] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [consequence, setConsequence] = useState<string | null>(null);   // what deleting does, asked of the server when Delete… is pressed; the dialog is open while it is set
   const [gone, setGone] = useState<string | null>(null);             // the balance was deleted, here or by someone else
   const { busy, error, conflict, run, clear } = useAction();
   const dirty = amount !== base.amount || note !== base.note;
@@ -58,6 +58,11 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   /** Show who changed it and what it is now in the details, leaving what was typed alone. A balance deleted meanwhile says so. */
   const refreshDetails = () => {
     fetchBalance(id).then(setData, (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
+  };
+
+  /** One small question to the server, and the confirmation opens with its answer. A refusal (the balance is gone) shows beside the form. */
+  const askDelete = () => {
+    run(async () => { setConsequence(deleteConsequence(balance, await fetchNeighbours(id), account.currency)); });
   };
 
   const submit = (event: FormEvent) => {
@@ -89,7 +94,6 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const deletedBySomeoneElse = conflict?.kind === "deleted";
   const locked = !open || gone !== null || deletedBySomeoneElse;
   const date = formatDate(balance.as_of_date);
-  const index = account.balances.findIndex((b) => b.id === id);
   const rate = reporting && (reporting.value === null
     ? <span className="m">No {account.currency.code} rate on or before this date</span>
     : <>{formatCents(reporting.value, { code: reporting.unit, name: reporting.unit, minor_units: reporting.scale })}{reporting.rate_date && ` (at the rate of ${formatDate(reporting.rate_date)})`}</>);
@@ -156,7 +160,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
               )}
               <span className="notice ok" role="status">{saved ? "Saved" : ""}</span>
               <span className="spacer" />
-              <button type="button" className="btn ghost danger-text" disabled={locked || busy} onClick={() => setDeleting(true)}>Delete…</button>
+              <button type="button" className="btn ghost danger-text" disabled={locked || busy} onClick={askDelete}>Delete…</button>
             </div>
           </form>
         </div>
@@ -174,11 +178,11 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
         </div>
       </div>
 
-      {deleting && index >= 0 && (
-        <ConfirmDialog title="Delete this balance?" confirmLabel="Delete" danger onClose={() => setDeleting(false)}
-          text={deleteConsequence(account.balances, index, account.currency)} onConflict={refreshDetails}
+      {consequence !== null && (
+        <ConfirmDialog title="Delete this balance?" confirmLabel="Delete" danger onClose={() => setConsequence(null)}
+          text={consequence} onConflict={refreshDetails}
           conflict={{ lead: "Nothing was deleted.", text: (c) => conflictText(c, openedAt) }}
-          onConfirm={async () => { await deleteBalance(id, version); setDeleting(false); setGone("The balance was deleted."); }} />
+          onConfirm={async () => { await deleteBalance(id, version); setConsequence(null); setGone("The balance was deleted."); }} />
       )}
     </div>
   );

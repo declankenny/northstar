@@ -55,7 +55,6 @@ class AccountOut(BaseModel):
     last_cents: int | None
     days_since: int | None
     stale: bool
-    balances: list[BalanceOut]
     types: list[TypeOut]     # the types an edit may choose from (same class)
     other_class: OtherClass  # the class a class change would move the account to
     today: str               # the server's today(), so the browser never needs its own clock
@@ -199,8 +198,28 @@ class ReportingOut(BaseModel):
     rate_date: str | None    # the date of the rate used; empty with no value
 
 
+class BalanceAccountOut(BaseModel):
+    """What a balance's own page needs of its account, and no more."""
+    id: int
+    name: str
+    currency: CurrencyOut
+    class_name: str
+    type_name: str
+    is_open: bool
+
+
+class NeighbourOut(BaseModel):
+    as_of_date: str
+    amount_cents: int
+
+
+class NeighboursOut(BaseModel):
+    older: NeighbourOut | None    # the balance before this one on the account, if any
+    newer: NeighbourOut | None    # the balance after it
+
+
 class BalancePageOut(BaseModel):
-    account: AccountOut      # the whole page of the balance's account, whose balances hold the version of each
+    account: BalanceAccountOut
     balance: BalanceOut
     reporting: ReportingOut | None    # empty when the account is in the system currency, or there is none yet
     entered_by: str
@@ -211,13 +230,19 @@ class BalancePageOut(BaseModel):
 
 @router.get("/balances/{balance_id:int}", response_model=BalancePageOut)         # not "/balances/update", which is the Update balances page
 def read_balance(balance_id: int, request: Request):
-    """One balance for its own page: the balance, its account's page and the details. A balance that is gone is a 404."""
+    """One balance for its own page: the balance, a few facts about its account and the details. A balance that is gone is a 404."""
     def action(conn):
-        account_id = balances.get_balance(conn, balance_id)["account_id"]
-        page = _page(conn, account_id)
-        balance = next(b for b in page["balances"] if b["id"] == balance_id)
-        return {"account": page, "balance": balance, **balances.balance_details(conn, balance_id, page["currency"]["code"])}
+        balance = balances.get_balance(conn, balance_id)
+        account = accounts.account_summary(conn, balance["account_id"], clock.today())
+        return {"account": account, "balance": balance,
+                **balances.balance_details(conn, balance_id, account["currency"]["code"])}
     return run(request, action)
+
+
+@router.get("/balances/{balance_id:int}/neighbours", response_model=NeighboursOut)
+def read_neighbours(balance_id: int, request: Request):
+    """The balances either side of this one, for the sentence that says what deleting it does. A balance that is gone is a 404."""
+    return run(request, lambda conn: balances.neighbours(conn, balance_id))
 
 
 @router.post("/accounts/{account_id}/balances", response_model=AccountOut)

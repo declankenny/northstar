@@ -132,14 +132,12 @@ describe("an account page for an account in another currency", () => {
     id: 7, name: "Test euros", currency: EUR, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null,
     stale_after_days: 35, balance_count: 2, earliest_date: "2026-04-30", last_date: "2026-05-12", last_cents: 1000000, days_since: 22,
     stale: false, today: "2026-06-03", types: [], other_class: { id: 2, name: "Liability", types: [] },
-    balances: [{ id: 2, as_of_date: "2026-05-12", amount_cents: 1000000, note: null, version: 2 },
-               { id: 1, as_of_date: "2026-04-30", amount_cents: 940000, note: null, version: 1 }],
   });
 
   it("has a Currency tile and writes every amount in the account's currency", async () => {
     vi.mocked(fetchAccount).mockResolvedValue(euros());
     vi.mocked(fetchNetWorth).mockResolvedValue({
-      today: "2026-06-03", start: "2026-04-30", end: "2026-06-03", period: "month", limited: null,
+      today: "2026-06-03", start: "2026-04-30", end: "2026-06-03", period: "month", limited: null, balance_count: 2,
       series: [{ date: "2026-04-30", assets: 940000, liabilities: 0, net_worth: 940000 }, { date: "2026-05-12", assets: 1000000, liabilities: 0, net_worth: 1000000 }],
     });
     const col = (key: string, label: string, kind: ListColumn["kind"]): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: false, groupable: false });

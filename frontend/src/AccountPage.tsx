@@ -77,12 +77,6 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   if (error) return <p className="empty">Could not load this account. {error} <Link to={PATHS.accounts}>Back to Accounts</Link></p>;
   if (!account) return <p className="empty">Loading…</p>;
 
-  /** After a balance was found to have changed since the page loaded it, show the account as it now is behind the dialog. A reload
-   *  would blank the page and close the dialog, so the answer is put in place instead; if it fails the page stays as it was. */
-  const refresh = () => {
-    void fetchAccount(id).then((page) => { loaded.setData(page); setHistoryKey((key) => key + 1); }, () => undefined);
-  };
-
   /** Every change answers with the account as it now is. */
   const apply = (page: Account) => {
     loaded.setData(page);
@@ -100,7 +94,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const pct = percentChange(diff, first);
   const good = diff === 0 ? null : diff > 0 === !liability;
   const sign = diff >= 0 ? "+" : "-";
-  const inRange = view ? account.balances.filter((b) => b.as_of_date >= view.data.start).length : 0;
+  const inRange = view?.data.balance_count ?? 0;           // the account's balances inside the chart's dates, counted by the server
 
   return (
     <div className="acct">
@@ -220,8 +214,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
       </div>
 
       {dialog?.kind === "balance" && (
-        <BalanceDialog account={account} editing={null} onClose={() => setDialog(null)} onConflict={refresh}
-          onSave={async (entry) => apply(await addBalance(id, entry))} />
+        <BalanceDialog account={account} onClose={() => setDialog(null)} onSave={async (entry) => apply(await addBalance(id, entry))} />
       )}
       {dialog?.kind === "edit" && (
         <EditAccountDialog account={account} onClose={() => setDialog(null)}

@@ -142,7 +142,8 @@ def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None =
     can be converted the series is empty and `limited` says so.
 
     With an account_id the series covers that account alone, in its own currency, and "the first balance" is that account's own
-    first balance. An unknown account raises NotFoundError.
+    first balance. An unknown account raises NotFoundError. It also says how many of that account's balances fall inside the dates
+    shown (`balance_count`, which a household series leaves empty).
     """
     if account_id is not None:
         accounts.get_account(conn, account_id)
@@ -155,7 +156,8 @@ def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None =
         "SELECT MIN(as_of_date) FROM live_balances WHERE (? IS NULL OR account_id = ?)",
         (account_id, account_id)).fetchone()[0]
     if first is None or date.fromisoformat(first) > end:
-        return {"start": end.isoformat(), "end": end.isoformat(), "period": period, "series": [], "limited": None}
+        return {"start": end.isoformat(), "end": end.isoformat(), "period": period, "series": [], "limited": None,
+                "balance_count": 0 if account_id is not None else None}
     start = max(start, date.fromisoformat(first)) if start else date.fromisoformat(first)
     if start > end:
         raise ValidationError("The start date cannot be after the end date.")
@@ -166,12 +168,16 @@ def net_worth_series(conn: sqlite3.Connection, today: date, start: date | None =
             begins = date.fromisoformat(through) + timedelta(days=1)
             if begins > end or through >= _last_day(conn):
                 return {"start": start.isoformat(), "end": end.isoformat(), "period": period, "series": [],
-                        "limited": {"starts_on": None, "currencies": codes}}
+                        "limited": {"starts_on": None, "currencies": codes}, "balance_count": None}
             start, limited = begins, {"starts_on": begins.isoformat(), "currencies": codes}
     days = sample_dates(start, end, period)
     totals = _totals(conn, days, account_id)
+    count = None
+    if account_id is not None:          # the account's own balances inside the dates shown, for its page
+        count = conn.execute("SELECT COUNT(*) FROM live_balances WHERE account_id = ? AND as_of_date BETWEEN ? AND ?",
+                             (account_id, start.isoformat(), end.isoformat())).fetchone()[0]
     return {"start": start.isoformat(), "end": end.isoformat(), "period": period,
-            "series": [totals[day] for day in days], "limited": limited}
+            "series": [totals[day] for day in days], "limited": limited, "balance_count": count}
 
 
 def month_end_dates(first: date, end: date) -> list[date]:

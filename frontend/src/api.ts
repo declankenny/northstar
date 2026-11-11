@@ -16,6 +16,8 @@ export type NetWorthSeries = {
   /** Set when dates were left out because a currency has no rate for them: where the series now starts (null when no date can be
    *  worked out) and the currencies that lack a rate before then. */
   limited: { starts_on: string | null; currencies: string[] } | null;
+  /** With an account: how many of its balances fall between `start` and `end`. Null for the household. */
+  balance_count: number | null;
 };
 
 /** Net worth at regular dates. With no start the server begins at the first balance. With an
@@ -288,7 +290,6 @@ export type AccountPage = {
   last_cents: number | null;
   days_since: number | null;
   stale: boolean;
-  balances: BalanceRow[]; // newest first
   types: TypeChoice[]; // what an edit may choose from (the account's own class)
   other_class: { id: number; name: string; types: TypeChoice[] }; // where a class change would move it
   today: string;
@@ -338,12 +339,19 @@ export async function deleteBalance(balanceId: number, version: number): Promise
 /** What a balance's own page shows. `reporting` is null when there is nothing to convert (the account is in the system currency), and
  *  its `value` is null, with no `rate_date`, when the account's currency has no rate on or before the date. */
 export type BalancePageData = {
-  account: AccountPage; // the balance's account, whose balances hold the version of each
+  account: { id: number; name: string; currency: Currency; class_name: string; type_name: string; is_open: boolean };
   balance: BalanceRow;
   reporting: { value: number | null; scale: number; unit: string; rate_date: string | null } | null;
   entered_by: string; entered_on: string; // the UTC date it was entered
   changed_by: string; changed_on: string;
 };
+
+/** The balances either side of one: what deleting it does to the history is said from these. */
+export type Neighbours = { older: { as_of_date: string; amount_cents: number } | null; newer: { as_of_date: string; amount_cents: number } | null };
+
+export async function fetchNeighbours(id: number, signal?: AbortSignal): Promise<Neighbours> {
+  return (await send<Neighbours>("GET", `/api/balances/${id}/neighbours`, undefined, signal))!;
+}
 
 export async function fetchBalance(id: number, signal?: AbortSignal): Promise<BalancePageData> {
   return (await send<BalancePageData>("GET", `/api/balances/${id}`, undefined, signal))!;

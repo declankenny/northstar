@@ -55,15 +55,6 @@ def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> d
     return summary
 
 
-def balance_history(conn: sqlite3.Connection, account_id: int) -> list[sqlite3.Row]:
-    """Every balance of the account, newest date first."""
-    return conn.execute(
-        "SELECT id, as_of_date, amount_cents, note, source, version FROM live_balances "
-        "WHERE account_id = ? ORDER BY as_of_date DESC",
-        (account_id,),
-    ).fetchall()
-
-
 def classes_with_types(conn: sqlite3.Connection) -> list[dict]:
     """Both classes with the types each offers, for the Add account dialog."""
     classes = conn.execute("SELECT id, name FROM account_classes ORDER BY id").fetchall()
@@ -72,10 +63,9 @@ def classes_with_types(conn: sqlite3.Connection) -> list[dict]:
 
 
 def account_page(conn: sqlite3.Connection, account_id: int, today: date) -> dict:
-    """Everything the account page shows: the summary, every balance (newest first), and the types
-    to offer in its Edit and Change class dialogs (its own class's, and the other class's)."""
+    """Everything the account page shows: the summary, and the types to offer in its Edit and Change class dialogs (its own
+    class's, and the other class's). Its balances are a list of their own."""
     page = account_summary(conn, account_id, today)
-    page["balances"] = [dict(row) for row in balance_history(conn, account_id)]
     page["types"] = [dict(row) for row in types_for_class(conn, page["class_id"])]
     other = other_class(conn, page["class_id"])
     page["other_class"] = {"id": other["id"], "name": other["name"],

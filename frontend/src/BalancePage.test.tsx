@@ -6,22 +6,17 @@ import { BalancePage } from "./BalancePage";
 import { navigate } from "./router";
 
 vi.mock("./api", async (original) => ({
-  ...(await original<typeof import("./api")>()), fetchBalance: vi.fn(), editBalance: vi.fn(), deleteBalance: vi.fn(),
+  ...(await original<typeof import("./api")>()), fetchBalance: vi.fn(), fetchNeighbours: vi.fn(), editBalance: vi.fn(), deleteBalance: vi.fn(),
 }));
 vi.mock("./router", async (original) => ({ ...(await original<typeof import("./router")>()), goBack: vi.fn() }));
 
-import { deleteBalance, editBalance, fetchBalance } from "./api";
+import { deleteBalance, editBalance, fetchBalance, fetchNeighbours } from "./api";
 import { goBack } from "./router";
 
 const EUR = { code: "EUR", name: "Euro", minor_units: 2 };
 const account = (over: Partial<AccountPage> = {}): AccountPage => ({
   id: 3, name: "Test euros", currency: EUR, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
   balance_count: 3, earliest_date: "2026-02-01", last_date: "2026-04-20", last_cents: 30000, days_since: 10, stale: false,
-  balances: [
-    { id: 12, as_of_date: "2026-04-20", amount_cents: 30000, note: "Statement balance", version: 7 },
-    { id: 11, as_of_date: "2026-03-01", amount_cents: 25000, note: null, version: 4 },
-    { id: 10, as_of_date: "2026-02-01", amount_cents: 20000, note: null, version: 2 },
-  ],
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-06-03", ...over,
 });
 const page = (over: Partial<BalancePageData> = {}): BalancePageData => ({
@@ -213,11 +208,17 @@ describe("a closed account", () => {
 });
 
 describe("deleting", () => {
+  const older = { as_of_date: "2026-03-01", amount_cents: 25000 };
+  const newer = { as_of_date: "2026-05-02", amount_cents: 41000 };
+  const text = async () => (await screen.findByRole("dialog")).querySelector(".sub")!.textContent?.replace(/ /g, " ");
+
   it("asks first, with what happens to the history, and says it was deleted", async () => {
     vi.mocked(deleteBalance).mockResolvedValue(account());
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older, newer: null });
     await shown();
     fireEvent.click(button("Delete…"));
     const dialog = await screen.findByRole("dialog");
+    expect(fetchNeighbours).toHaveBeenCalledWith(12);
     expect(within(dialog).getByText("Delete this balance?")).toBeTruthy();
     expect(within(dialog).getByText("The EUR 300.00 entry for Apr 20, 2026 is removed. Until the next entry, the balance will go back to EUR 250.00 (entered Mar 1, 2026).")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
@@ -226,7 +227,34 @@ describe("deleting", () => {
     expect(screen.queryByLabelText("Balance in EUR")).toBeNull();
   });
 
+  it("says the balance before it comes back, or where the history starts, or that there is none", async () => {
+    await shown();
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older, newer });
+    fireEvent.click(button("Delete…"));
+    expect(await text()).toBe("The EUR 300.00 entry for Apr 20, 2026 is removed. Until the next entry, the balance will go back to EUR 250.00 (entered Mar 1, 2026).");
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older: null, newer });
+    fireEvent.click(button("Delete…"));
+    await waitFor(() => expect(fetchNeighbours).toHaveBeenCalledTimes(2));
+    expect(await text()).toBe("The EUR 300.00 entry for Apr 20, 2026 is removed. It is the first balance, so the history will start at the next entry, on May 2, 2026.");
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older: null, newer: null });
+    fireEvent.click(button("Delete…"));
+    await waitFor(() => expect(fetchNeighbours).toHaveBeenCalledTimes(3));
+    expect(await text()).toBe("The EUR 300.00 entry for Apr 20, 2026 is removed. It is the only balance, so this account will have no history.");
+  });
+
+  it("asks nothing of the server until Delete… is pressed, and shows a refusal beside the form without a dialog", async () => {
+    vi.mocked(fetchNeighbours).mockRejectedValue(new RequestError("That balance no longer exists.", {}, 404));
+    await shown();
+    expect(fetchNeighbours).not.toHaveBeenCalled();
+    fireEvent.click(button("Delete…"));
+    expect((await screen.findByRole("alert")).textContent).toBe("That balance no longer exists.");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("says nothing was deleted when someone changed the balance first, and keeps the page", async () => {
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older, newer: null });
     vi.mocked(deleteBalance).mockRejectedValue(refusal(conflict()));
     await shown();
     fireEvent.click(button("Delete…"));
@@ -236,6 +264,7 @@ describe("deleting", () => {
   });
 
   it("does not delete when Cancel is pressed", async () => {
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older, newer: null });
     await shown();
     fireEvent.click(button("Delete…"));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));

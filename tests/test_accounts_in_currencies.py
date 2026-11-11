@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from conftest import add_balance, op, type_id, with_db
+from conftest import add_balance, balances_of, op, type_id, with_db
 from northstar import accounts, balances, clock, currencies, networth, rates
 from northstar.errors import ValidationError
 
@@ -155,7 +155,7 @@ def test_an_account_page_carries_its_currency_and_a_balance_is_read_in_it(client
     assert page["currency"] == KWD
     added = client.post(f"{URL}/{mixed['dinars']}/balances", json={"date": "2026-05-20", "amount": "2.500"})
     assert added.status_code == 200
-    assert added.json()["balances"][0]["amount_cents"] == 2500
+    assert balances_of(client, mixed["dinars"])[0]["amount_cents"] == 2500
     refused = client.post(f"{URL}/{mixed['dinars']}/balances", json={"date": "2026-05-21", "amount": "2.5000"})
     assert refused.status_code == 422
 

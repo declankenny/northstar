@@ -6,7 +6,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import add_account, add_balance, op, sign_in, with_db
+from conftest import add_account, add_balance, balances_of, op, sign_in, with_db
 from northstar import currencies, rates
 from northstar.web.app import create_app
 
@@ -44,7 +44,8 @@ def test_it_gives_the_balance_with_its_accounts_page(client, household):
     assert isinstance(body["balance"]["version"], int)
     assert body["account"]["name"] == "Test euros" and body["account"]["currency"]["code"] == "EUR"
     assert (body["account"]["type_name"], body["account"]["class_name"], body["account"]["is_open"]) == ("Savings", "Asset", True)
-    assert body["balance"] in body["account"]["balances"]                                   # the same version as the account page holds
+    assert body["balance"]["version"] == next(b["version"] for b in balances_of(client, body["account"]["id"]) if b["id"] == household["eur"])
+    assert set(body["account"]) == {"id", "name", "currency", "class_name", "type_name", "is_open"}    # a few facts, not the account's page
 
 
 def test_a_balance_in_another_currency_shows_its_value_in_the_system_currency_and_the_date_of_the_rate(client, household):

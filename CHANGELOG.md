@@ -22,6 +22,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Changed
 
+- The internal API (#228): an account's page no longer carries its balances (they are the list `account_balances`), the net worth series of an account says how many of its balances are inside its dates, `GET /api/balances/{id}` answers with the balance and a few facts about its account instead of the account's whole page, and `GET /api/balances/{id}/neighbours` is new. Nothing changes on any screen: the Delete confirmation says the same, asking for what it needs when Delete… is pressed.
 - The internal API: `GET /api/currencies` (the old catalog list) is gone, the list is `POST /api/lists/currencies`; a currency's own endpoints are unchanged.
 - The internal API: `GET /api/accounts` (the old list, with its totals) is gone, the list is `POST /api/lists/accounts`; `GET /api/accounts/options` gives what the Add account dialog offers, and `POST /api/accounts` answers with the new account's id. The API is not a stable contract.
 - The Accounts and Update balances pages and closing an account now read an account's last balance from a view, `last_balances`, instead of each working it out in its own query (#190). Nothing changes on any screen.

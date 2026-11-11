@@ -4,7 +4,7 @@ import pytest
 
 from northstar import networth
 
-from conftest import add_account, add_balance, type_id, with_db
+from conftest import add_account, add_balance, balances_of, type_id, with_db
 
 TODAY = date(2026, 10, 30)
 
@@ -88,7 +88,7 @@ def test_the_account_page_has_everything_it_shows(client, household):
     assert (body["name"], body["class_name"], body["type_name"], body["is_open"]) == ("Checking", "Asset", "Checking", True)
     assert (body["balance_count"], body["earliest_date"], body["last_date"], body["last_cents"]) == (2, "2026-03-15", "2026-06-01", 150000)
     assert body["today"] == "2026-10-30" and body["days_since"] == 151 and body["stale"] is True
-    assert [b["as_of_date"] for b in body["balances"]] == ["2026-06-01", "2026-03-15"]      # newest first
+    assert "balances" not in body                      # the balances are a list of their own, not part of the account
     assert {t["name"] for t in body["types"]} >= {"Checking", "Savings"}
     assert body["other_class"]["name"] == "Liability" and body["other_class"]["types"]
 
@@ -148,7 +148,7 @@ def test_a_closed_account_refuses_balance_changes(client, household):
     client.post(url + "/balances", json={"date": "2026-10-30", "amount": "0"})
     client.post(url + "/close")
     assert client.post(url + "/balances", json={"date": "2026-10-30", "amount": "5"}).status_code == 422
-    entry = client.get(url).json()["balances"][0]
+    entry = balances_of(client, household["checking"])[0]
     assert client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-10-29", "amount": "5", "version": entry["version"]}).status_code == 422
     assert client.delete(f"/api/balances/{entry['id']}", params={"version": entry["version"]}).status_code == 422
 
@@ -172,7 +172,7 @@ def test_add_a_balance_returns_the_updated_account(client, household):
     url = f"/api/accounts/{household['savings']}/balances"
     body = client.post(url, json={"date": "2026-10-29", "amount": "$2,100.25", "note": " bonus "}).json()
     assert (body["last_date"], body["last_cents"], body["balance_count"]) == ("2026-10-29", 210025, 2)
-    assert body["balances"][0]["note"] == "bonus"
+    assert balances_of(client, household["savings"])[0]["note"] == "bonus"
 
 
 def test_adding_on_a_date_that_has_a_balance_edits_it(client, household):
@@ -194,20 +194,21 @@ def test_a_bad_balance_is_refused_with_422_and_saves_nothing(client, household, 
 
 
 def test_edit_a_balance_changes_its_date_amount_and_note(client, household):
-    entry = client.get(f"/api/accounts/{household['checking']}").json()["balances"][1]    # 2026-03-15
+    entry = balances_of(client, household["checking"])[1]    # 2026-03-15
     body = client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-03-10", "amount": "1,010.00", "note": "fixed", "version": entry["version"]}).json()
-    assert [(b["as_of_date"], b["amount_cents"], b["note"]) for b in body["balances"]] == [
+    assert [(b["as_of_date"], b["amount_cents"], b["note"]) for b in balances_of(client, household["checking"])] == [
         ("2026-06-01", 150000, None), ("2026-03-10", 101000, "fixed")]
+    assert "balances" not in body
 
 
 def test_moving_a_balance_onto_another_date_is_refused(client, household):
-    entry = client.get(f"/api/accounts/{household['checking']}").json()["balances"][1]
+    entry = balances_of(client, household["checking"])[1]
     response = client.patch(f"/api/balances/{entry['id']}", json={"date": "2026-06-01", "amount": "1", "version": entry["version"]})
     assert response.status_code == 422 and "already a balance" in response.text
 
 
 def test_delete_a_balance_returns_the_account_without_it(client, household):
-    entry = client.get(f"/api/accounts/{household['checking']}").json()["balances"][0]
+    entry = balances_of(client, household["checking"])[0]
     body = client.delete(f"/api/balances/{entry['id']}", params={"version": entry["version"]}).json()
     assert body["balance_count"] == 1 and body["last_cents"] == 100000
     # it is gone, so a second delete or an edit is a conflict (it was deleted since), and an id that never existed is not found
