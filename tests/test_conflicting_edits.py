@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from northstar import balances, db, sessions, users
-from conftest import add_account, op, with_db
+from conftest import add_account, balances_of, op, with_db
 from test_concurrency import Other, Paused, path_of
 
 ASSET = 1
@@ -34,7 +34,7 @@ def page(client, account_id):
 
 def loaded(client, account_id, day):
     """The balance as the account page shows it, with the version a page would send back."""
-    return next(b for b in page(client, account_id)["balances"] if b["as_of_date"] == day)
+    return next(b for b in balances_of(client, account_id) if b["as_of_date"] == day)
 
 
 def edit(client, balance, amount, **over):
@@ -161,7 +161,7 @@ def test_a_balance_that_never_existed_is_not_found_and_a_closed_account_is_still
 
 def test_a_delete_at_the_version_it_loaded_goes_through(client, account):
     assert remove(client, loaded(client, account, "2026-03-31")).status_code == 200
-    assert [b["as_of_date"] for b in page(client, account)["balances"]] == ["2026-02-28"]
+    assert [b["as_of_date"] for b in balances_of(client, account)] == ["2026-02-28"]
 
 
 def test_a_delete_of_a_balance_changed_since_is_refused_and_nothing_is_deleted(client, account, second_admin):

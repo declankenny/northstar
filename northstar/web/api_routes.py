@@ -34,6 +34,7 @@ class NetWorthSeries(BaseModel):
     period: str
     series: list[NetWorthPoint]
     limited: Limited | None    # set when dates were left out because a currency has no rate for them
+    balance_count: int | None  # with an account: how many of its balances fall between start and end; empty for the household
 
 
 @router.get("/networth", response_model=NetWorthSeries)

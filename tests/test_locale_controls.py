@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from conftest import add_account, op, type_id, with_db
+from conftest import add_account, balances_of, op, type_id, with_db
 from northstar import balances, locales, system_properties as sp, users
 from northstar.errors import ValidationError
 
@@ -147,8 +147,7 @@ def test_the_refusal_comes_before_the_amount_is_read(client):
 def test_editing_a_balance_from_a_stale_page_is_refused_too(client):
     account = setup_account(client, "en-US")
     client.post(f"/api/accounts/{account}/balances", json={"date": "2026-01-31", "amount": "100.00", "locale": "en-US"})
-    page = client.get(f"/api/accounts/{account}").json()
-    entry = page["balances"][0]
+    entry = balances_of(client, account)[0]
     use_locale(client, "fr-FR")
     refused = client.patch(f"/api/balances/{entry['id']}", json={
         "date": "2026-01-31", "amount": "200.00", "version": entry["version"], "locale": "en-US"})

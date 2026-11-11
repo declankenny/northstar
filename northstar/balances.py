@@ -220,7 +220,7 @@ def add_account_with_balance(op: Operation, class_slug: str | None, name: str | 
 def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
     """One balance with its account's name and open state."""
     row = conn.execute(
-        "SELECT b.id, b.account_id, b.as_of_date, b.amount_cents, b.note, b.source, "
+        "SELECT b.id, b.account_id, b.as_of_date, b.amount_cents, b.note, b.source, b.version, "
         "       a.name AS account_name, a.is_open "
         "FROM live_balances b JOIN live_accounts a ON a.id = b.account_id WHERE b.id = ?",
         (balance_id,),
@@ -228,6 +228,19 @@ def get_balance(conn: sqlite3.Connection, balance_id: int) -> dict:
     if row is None:
         raise NotFoundError("That balance no longer exists.")
     return dict(row)
+
+
+def neighbours(conn: sqlite3.Connection, balance_id: int) -> dict:
+    """The balance before this one and the balance after it on the same account (each as its date and amount, or None), for saying what
+    deleting it does to the history. Two small lookups, however long the account's history is."""
+    balance = get_balance(conn, balance_id)
+    result = {}
+    for name, comparison, direction in (("older", "<", "DESC"), ("newer", ">", "ASC")):
+        row = conn.execute(
+            f"SELECT as_of_date, amount_cents FROM live_balances WHERE account_id = ? AND as_of_date {comparison} ? "
+            f"ORDER BY as_of_date {direction} LIMIT 1", (balance["account_id"], balance["as_of_date"])).fetchone()
+        result[name] = dict(row) if row else None
+    return result
 
 
 def balance_details(conn: sqlite3.Connection, balance_id: int, currency_code: str) -> dict:

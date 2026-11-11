@@ -74,6 +74,14 @@ def add_account(conn, name, class_id, type_name):
     return cur.lastrowid
 
 
+def balances_of(client, account_id):
+    """An account's live balances as the database holds them, newest date first, with the version a change must send back."""
+    with with_db(client) as conn:
+        return [dict(row) for row in conn.execute(
+            "SELECT id, as_of_date, amount_cents, note, version FROM live_balances WHERE account_id = ? ORDER BY as_of_date DESC",
+            (account_id,))]
+
+
 def add_balance(conn, account_id, as_of_date, amount_cents):
     conn.execute(
         "INSERT INTO balances (account_id, as_of_date, amount_cents, created_by, updated_by) VALUES (?, ?, ?, (SELECT id FROM users WHERE is_system = 1), (SELECT id FROM users WHERE is_system = 1))",

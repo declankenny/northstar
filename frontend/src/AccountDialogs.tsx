@@ -1,73 +1,37 @@
-import { type FormEvent, useEffect, useState } from "react";
-import { type AccountOptions, type AccountPage, type BalanceEntry, type BalanceRow, type NewAccount } from "./api";
-import { conflictText } from "./conflicts";
+import { type FormEvent, useState } from "react";
+import { type AccountOptions, type AccountPage, type BalanceEntry, type NewAccount } from "./api";
 import { formatDate } from "./dates";
 import { AmountReading } from "./AmountReading";
-import { amountPlaceholder, centsToInput } from "./money";
+import { amountPlaceholder } from "./money";
 import { Modal, useAction } from "./Dialogs";
 import { Link } from "./router";
 import { PATHS } from "./routes";
 import { formatInteger } from "./locale";
 
-/** Add a balance, or edit one. The server checks every field, so a refusal shows here and nothing is lost. */
+/** Add a balance. The server checks every field, so a refusal shows here and nothing is lost. A balance is changed or deleted on its own page. */
 export function BalanceDialog(props: {
   account: AccountPage;
-  editing: BalanceRow | null;
-  /** `version` is the version of the balance being edited as the dialog last saw it (null when adding). */
-  onSave: (entry: BalanceEntry, version: number | null) => Promise<void>;
+  onSave: (entry: BalanceEntry) => Promise<void>;
   onClose: () => void;
-  /** Called when the edit is refused because the balance changed since it was opened, so the page behind can show it as it is now. */
-  onConflict?: () => void;
 }) {
-  const { account, editing, onConflict } = props;
-  const [date, setDate] = useState(editing ? editing.as_of_date : account.today);
-  const [amount, setAmount] = useState(editing ? centsToInput(editing.amount_cents, undefined, account.currency) : "");
-  const [note, setNote] = useState(editing?.note ?? "");
-  const [version, setVersion] = useState<number | null>(editing?.version ?? null);
-  const [openedAt, setOpenedAt] = useState(editing?.amount_cents);    // what the person was looking at, for the message
-  const [shown, setShown] = useState<string | null>(null);            // who changed the balance now on show, after Use the current value
-  const { busy, error, conflict, run, clear } = useAction();
-
-  useEffect(() => {
-    if (conflict) onConflict?.();
-  }, [conflict]); // eslint-disable-line react-hooks/exhaustive-deps -- once per refusal
+  const { account } = props;
+  const [date, setDate] = useState(account.today);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const { busy, error, run } = useAction();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    setShown(null);
-    run(() => props.onSave({ date, amount, note }, version));
+    run(() => props.onSave({ date, amount, note }));
   };
-
-  /** Show the balance as it is now, dropping what was typed, so the person can look at it and decide. */
-  const useCurrent = () => {
-    if (!conflict || conflict.amount_cents === null) return;
-    setDate(conflict.date ?? date);
-    setAmount(centsToInput(conflict.amount_cents, undefined, account.currency));
-    setNote(conflict.note ?? "");
-    setVersion(conflict.version);
-    setOpenedAt(conflict.amount_cents);
-    setShown(`Showing the current value, changed by ${conflict.by ?? "someone"}${conflict.on ? ` on ${formatDate(conflict.on)}` : ""}. Your typed values were dropped.`);
-    clear();
-  };
-
-  if (conflict?.kind === "deleted") {
-    return (
-      <Modal title="Edit balance" subtitle={account.name} onClose={props.onClose}>
-        <p className="notice bad" role="alert"><b>Nothing was saved.</b> {conflictText(conflict)}</p>
-        <div className="foot"><button type="button" className="btn" autoFocus onClick={props.onClose}>Close</button></div>
-      </Modal>
-    );
-  }
 
   return (
-    <Modal title={editing ? "Edit balance" : "Add balance"} subtitle={account.name} onClose={props.onClose}>
+    <Modal title="Add balance" subtitle={account.name} onClose={props.onClose}>
       <form onSubmit={submit}>
         <label>Date
           <input type="date" value={date} max={account.today} onChange={(e) => setDate(e.target.value)} required />
         </label>
-        <div className="hint">
-          Not in the future.{!editing && " A date that already has a balance is replaced."}
-        </div>
+        <div className="hint">Not in the future. A date that already has a balance is replaced.</div>
         <label>Balance
           <input inputMode="decimal" placeholder={amountPlaceholder(account.currency)} value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus />
         </label>
@@ -76,20 +40,9 @@ export function BalanceDialog(props: {
           <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
         </label>
         {error && <p className="notice bad" role="alert">{error}</p>}
-        {conflict && <p className="notice bad" role="alert"><b>Nothing was saved.</b> {conflictText(conflict, openedAt)}</p>}
-        {shown && !conflict && <p className="sub" role="status">{shown}</p>}
         <div className="foot">
-          {conflict ? (
-            <>
-              <button type="button" className="btn ghost" onClick={props.onClose}>Close</button>
-              <button type="button" className="btn" autoFocus onClick={useCurrent}>Use the current value</button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
-              <button className="btn" disabled={busy}>Save</button>
-            </>
-          )}
+          <button type="button" className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button className="btn" disabled={busy}>Save</button>
         </div>
       </form>
     </Modal>

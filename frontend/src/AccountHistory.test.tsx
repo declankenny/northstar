@@ -16,7 +16,7 @@ const USD = { code: "USD", name: "US Dollar", minor_units: 2 };
 const account = (over: Partial<Account> = {}): Account => ({
   id: 7, name: "Test savings", currency: USD, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
   balance_count: 30, earliest_date: "2024-01-01", last_date: "2026-06-01", last_cents: 100000, days_since: 10, stale: false,
-  balances: [], types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30", ...over,
+  types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30", ...over,
 });
 
 const column = (key: string, label: string, kind: ListColumn["kind"]): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: key === "as_of_date", groupable: false });
@@ -38,7 +38,7 @@ const nb = (text: string | null) => text?.replace(/ /g, " ");
 beforeEach(() => {
   window.history.replaceState(null, "", "/accounts/7");
   vi.mocked(fetchAccount).mockResolvedValue(account());
-  vi.mocked(fetchNetWorth).mockResolvedValue({ today: "2026-10-30", start: "2025-10-30", end: "2026-10-30", period: "month", series: [], limited: null });
+  vi.mocked(fetchNetWorth).mockResolvedValue({ today: "2026-10-30", start: "2025-10-30", end: "2026-10-30", period: "month", series: [], limited: null, balance_count: 12 });
   vi.mocked(fetchList).mockResolvedValue(page());
 });
 afterEach(() => {
@@ -125,6 +125,14 @@ describe("the balance history on the account page", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(requests().length).toBe(3));
     expect(requests()[2]).toEqual({ page: 1, sort: { field: "amount_cents", direction: "asc" }, params: { account: 7 } });
+  });
+
+  it("counts the balances inside the chart's dates from the server's answer, and all of them from the account", async () => {
+    render(<AccountPage id={7} isAdmin />);
+    await screen.findByRole("table");
+    const tile = screen.getByText("Balances recorded").closest(".tile") as HTMLElement;
+    await waitFor(() => expect(tile.querySelector(".val")!.textContent).toBe("12"));
+    expect(tile.textContent).toContain("30 in all");
   });
 
   it("says there are no balances for an account with none, and asks for no list", async () => {

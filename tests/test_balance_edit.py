@@ -164,7 +164,7 @@ def test_delete_balance_removes_only_that_one(conn):
     add_balance(conn, acct, "2026-10-01", 100)
     add_balance(conn, acct, "2026-09-01", 200)
     balances.delete_balance(op(conn), balance_id(conn, acct, "2026-10-01"))
-    assert [r["as_of_date"] for r in accounts.balance_history(conn, acct)] == ["2026-09-01"]
+    assert [r["as_of_date"] for r in conn.execute("SELECT as_of_date FROM live_balances WHERE account_id = ?", (acct,))] == ["2026-09-01"]
 
 
 # -- closed accounts: no changes until reopened --

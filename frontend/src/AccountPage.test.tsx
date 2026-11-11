@@ -12,7 +12,7 @@ import { fetchAccount } from "./api";
 // An account with no balances, so the page asks for no chart and only the account matters here.
 const account = (id: number, name: string): Account => ({
   id, name, currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
-  balance_count: 0, earliest_date: null, last_date: null, last_cents: null, days_since: null, stale: false, balances: [],
+  balance_count: 0, earliest_date: null, last_date: null, last_cents: null, days_since: null, stale: false,
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30",
 });
 

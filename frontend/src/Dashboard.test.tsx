@@ -14,7 +14,7 @@ import { fetchNetWorth } from "./api";
 const TODAY = "2026-10-30";
 const answer = (start: string): NetWorthSeries => ({
   today: TODAY, start, end: TODAY, period: "week",
-  series: [{ date: start, assets: 100000, liabilities: 0, net_worth: 100000 }], limited: null,
+  series: [{ date: start, assets: 100000, liabilities: 0, net_worth: 100000 }], limited: null, balance_count: null,
 });
 
 describe("Dashboard when a currency has no rate for the early dates", () => {
