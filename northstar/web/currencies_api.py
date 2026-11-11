@@ -15,18 +15,6 @@ from northstar.web.auth_routes import operation, require_admin, run
 router = APIRouter(prefix="/api/currencies", dependencies=[Depends(require_admin)])
 
 
-class CurrencyRow(BaseModel):
-    code: str
-    name: str
-    minor_units: int        # digits after the decimal point: 0, 2 or 3
-    is_enabled: bool        # the stored flag, as it is
-    account_count: int      # accounts in this currency, open or closed, not deleted
-
-
-class CurrencyList(BaseModel):
-    currencies: list[CurrencyRow]     # ordered by code
-
-
 class RateRow(BaseModel):
     id: int
     date: str              # YYYY-MM-DD, the day the rate is for
@@ -93,11 +81,6 @@ def _page(conn, code: str) -> dict:
     today = clock.today()
     page = rates.currency_page(conn, code, today)
     return {**page, "fetch": rate_fetch.status(conn) if page["can_add_rates"] else None, "today": today.isoformat()}
-
-
-@router.get("", response_model=CurrencyList)
-def list_currencies(request: Request):
-    return run(request, lambda conn: {"currencies": currencies.list_with_counts(conn)})
 
 
 @router.get("/{code}", response_model=CurrencyPage)

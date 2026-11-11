@@ -1,104 +1,74 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { type CurrencyRow } from "./api";
-import { Currencies, matches } from "./Currencies";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ListColumn, ListPage } from "./api";
+import { Currencies } from "./Currencies";
 
-vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchCurrencies: vi.fn() }));
+vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchList: vi.fn(), fetchListFields: vi.fn() }));
 
-import { fetchCurrencies } from "./api";
+import { fetchList, fetchListFields } from "./api";
 
-const row = (code: string, name: string, over: Partial<CurrencyRow> = {}): CurrencyRow => ({
-  code, name, minor_units: 2, is_enabled: false, account_count: 0, ...over,
+const column = (key: string, label: string, kind: ListColumn["kind"] = "text"): ListColumn => ({ key, label, path_label: label, kind, scale: null, linked: key === "code", groupable: true });
+const COLUMNS = [column("code", "Code"), column("name", "Name"), column("minor_units", "Decimal places", "integer"), column("is_enabled", "Enabled", "yes_no"), column("account_count", "Accounts", "integer")];
+
+const row = (code: string, name: string, over: Record<string, unknown> = {}) => ({
+  _id: code.charCodeAt(0), _links: { code: `/currencies/${code}` }, code, name, minor_units: 2, is_enabled: 0, account_count: 0, ...over,
 });
 
-const catalog = [
-  row("EUR", "Euro", { is_enabled: true, account_count: 3 }),
-  row("JPY", "Yen", { minor_units: 0 }),
-  row("KWD", "Kuwaiti Dinar", { minor_units: 3, is_enabled: true }),
-  row("USD", "US Dollar", { account_count: 9 }),
-];
+const page = (rows: ReturnType<typeof row>[], over: Partial<ListPage> = {}): ListPage => ({
+  columns: COLUMNS, rows, total: rows.length, page: 1, pages: 1, page_size: 100, group: null, sort: { field: "code", direction: "asc" },
+  filters: [], skipped: [], default_filter_id: null, default_columns: COLUMNS.map((c) => c.key), customised: false, skipped_columns: [], ...over,
+});
 
+beforeEach(() => {
+  window.history.replaceState(null, "", "/currencies");
+  vi.mocked(fetchListFields).mockResolvedValue({ fields: [], relations: [] });
+  vi.mocked(fetchList).mockResolvedValue(page([
+    row("EUR", "Euro", { is_enabled: 1, account_count: 3 }), row("JPY", "Yen", { minor_units: 0 }),
+    row("KWD", "Kuwaiti Dinar", { minor_units: 3, is_enabled: 1 }), row("USD", "US Dollar", { account_count: 9 }),
+  ]));
+});
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
 
-const open = async () => {
-  vi.mocked(fetchCurrencies).mockResolvedValue({ currencies: catalog });
-  render(<Currencies />);
-  await screen.findByText("Euro");
-};
-const codes = () => within(screen.getByRole("table")).getAllByRole("row").slice(1).map((r) => r.querySelector("td")?.textContent);
-
-describe("matching", () => {
-  it("takes a code that starts with the text, or a name that contains it, ignoring case", () => {
-    const usd = row("USD", "US Dollar");
-    expect(matches(usd, "")).toBe(true);
-    expect(matches(usd, "  ")).toBe(true);
-    expect(matches(usd, "us")).toBe(true);
-    expect(matches(usd, "usd")).toBe(true);
-    expect(matches(usd, "dol")).toBe(true);
-    expect(matches(usd, "sd")).toBe(false);       // inside a code does not count, so "sd" does not find USD
-    expect(matches(usd, "euro")).toBe(false);
-  });
-});
-
 describe("the Currencies page", () => {
+  it("has the admin heading and a list called currencies, naming nothing else, so its own defaults apply", async () => {
+    render(<Currencies />);
+    expect(screen.getByRole("heading", { name: "Currencies" })).toBeTruthy();
+    await screen.findByText("Euro");
+    expect(vi.mocked(fetchList).mock.calls[0][0]).toBe("currencies");
+    expect(vi.mocked(fetchList).mock.calls[0][1]).toEqual({ page: 1 });
+  });
+
   it("lists each currency with its decimals, whether it is enabled and how many accounts use it", async () => {
-    await open();
+    render(<Currencies />);
+    await screen.findByText("Euro");
     const cells = (code: string) => [...within(screen.getByRole("table")).getAllByRole("row").find((r) => r.querySelector("td")?.textContent === code)!
       .querySelectorAll("td")].map((td) => td.textContent);
     expect(cells("EUR")).toEqual(["EUR", "Euro", "2", "Yes", "3"]);
     expect(cells("JPY")).toEqual(["JPY", "Yen", "0", "No", "0"]);
     expect(cells("KWD")).toEqual(["KWD", "Kuwaiti Dinar", "3", "Yes", "0"]);
     expect(cells("USD")).toEqual(["USD", "US Dollar", "2", "No", "9"]);
-    expect(screen.getByText("4 of 4 shown")).toBeTruthy();
   });
 
-  it("links each currency's name to its page", async () => {
-    await open();
-    expect(screen.getByRole("link", { name: "Euro" }).getAttribute("href")).toBe("/currencies/EUR");
-    expect(screen.getByRole("link", { name: "Kuwaiti Dinar" }).getAttribute("href")).toBe("/currencies/KWD");
-    expect(within(screen.getByRole("table")).queryAllByRole("button")).toHaveLength(0);       // the list has no action of its own
+  it("links each currency's code to its page, and a row has no action of its own", async () => {
+    render(<Currencies />);
+    expect((await screen.findByRole("link", { name: "EUR" })).getAttribute("href")).toBe("/currencies/EUR");
+    expect(screen.getByRole("link", { name: "KWD" }).getAttribute("href")).toBe("/currencies/KWD");
+    expect(screen.queryByRole("button", { name: /Actions for/ })).toBeNull();
   });
 
-  it("shows the stored flag and says nothing about a system currency", async () => {
-    await open();
+  it("says nothing about a system currency", async () => {
+    render(<Currencies />);
+    await screen.findByText("Euro");
     expect(screen.queryByText(/system currency/i)).toBeNull();
-    expect(screen.queryByRole("button", { name: /system/i })).toBeNull();
-  });
-
-  it("searches by code or name as you type", async () => {
-    await open();
-    fireEvent.change(screen.getByLabelText("Search currencies"), { target: { value: "dinar" } });
-    expect(codes()).toEqual(["KWD"]);
-    fireEvent.change(screen.getByLabelText("Search currencies"), { target: { value: "e" } });
-    expect(codes()).toEqual(["EUR", "JPY"]);          // EUR starts with it, and "Yen" contains it; Kuwaiti Dinar and US Dollar have no e
-  });
-
-  it("filters to the currencies in use, and to the enabled ones", async () => {
-    await open();
-    fireEvent.click(screen.getByRole("button", { name: "In use" }));
-    expect(codes()).toEqual(["EUR", "USD"]);
-    fireEvent.click(screen.getByRole("button", { name: "Enabled" }));
-    expect(codes()).toEqual(["EUR", "KWD"]);
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
-    expect(codes()).toHaveLength(4);
-    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("combines the search and the filter, and says when nothing matches", async () => {
-    await open();
-    fireEvent.click(screen.getByRole("button", { name: "Enabled" }));
-    fireEvent.change(screen.getByLabelText("Search currencies"), { target: { value: "usd" } });
-    expect(screen.getByText("No currency matches.")).toBeTruthy();
-    expect(screen.getByText("0 of 4 shown")).toBeTruthy();
   });
 
   it("shows the reason when the list cannot be loaded", async () => {
-    vi.mocked(fetchCurrencies).mockRejectedValue(new Error("The server answered 500"));
+    vi.mocked(fetchList).mockRejectedValue(new Error("The server answered 500"));
     render(<Currencies />);
-    expect((await screen.findByRole("alert")).textContent).toBe("The server answered 500");
+    expect(await screen.findByText(/The server answered 500/)).toBeTruthy();
   });
 });

@@ -8,6 +8,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Added
 
+- The Currencies page is a list of the framework (admins only): search the catalog, filter it (and save a filter), sort it by any column, group it, choose its columns and their order, and export it to CSV, like Balances and Accounts. It has the same columns as before (Code, Name, Decimal places, Enabled, Accounts), 100 to a page. A currency's code, not its name, opens its page. The All, In use and Enabled buttons are the filters Enabled is Yes and Accounts is at least 1, and a search finds a currency by any part of its code or name.
 - The Accounts page is a list of the framework (#190): search it, filter it (and save a filter, private or for everyone), sort it by any column, group it, choose its columns and their order, and export it to CSV, like Balances. It opens on the shared filter "Open accounts", with Account, Type › Class, Type, Currency, Last balance, Reporting value, Balance date, Balance age (days), Stale and Balances. An account's name opens its page, which has every action; the menu on each row, the Open and Closed buttons, the totals and the Stale badge are gone (closed accounts are the filter Open is No, and the Dashboard has the totals). Adding an account refreshes the list in place, keeping its sort, filters and page.
 - The balance page's form has no empty line between the amount and the note (#214): how a changed amount was read now shows beside its label.
 - Links are easier to see (#212). A link in a table cell or a title is the accent colour, no longer the bold text colour, and is underlined when the mouse is over it. A link inside a sentence is the accent colour with a soft underline that firms up on hover.
@@ -20,6 +21,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Changed
 
+- The internal API: `GET /api/currencies` (the old catalog list) is gone, the list is `POST /api/lists/currencies`; a currency's own endpoints are unchanged.
 - The internal API: `GET /api/accounts` (the old list, with its totals) is gone, the list is `POST /api/lists/accounts`; `GET /api/accounts/options` gives what the Add account dialog offers, and `POST /api/accounts` answers with the new account's id. The API is not a stable contract.
 - The Accounts and Update balances pages and closing an account now read an account's last balance from a view, `last_balances`, instead of each working it out in its own query (#190). Nothing changes on any screen.
 - An account's class is now read from its type and is no longer stored on the account (#181). Nothing changes on any screen, and the rule that a type's class cannot change while an account uses it is kept, by a trigger.
@@ -33,6 +35,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 - Migration: `0023_user_list_columns` rebuilds `user_list_prefs` so that a person can save the columns they chose for a list, and so that its page size may be empty. Every saved page size is kept. A checked backup is made first.
 - Migration: `0024_account_summaries` adds two views, `last_balances` (each account's newest balance) and `account_summaries` (the figures of each account: its balance count, last balance and date, value in the system currency, age and whether it is stale), for the Accounts list. The second works out the age with a SQL function that the application registers on every connection it opens, so, like `live_balance_values`, it can only be read through the application. No data changes. A checked backup is made first.
 - Migration: `0025_accounts_list` replaces the view `account_summaries` with one that also has the account's own columns, so that the list framework can follow an account's relations, and adds the shared default filter "Open accounts" for the Accounts list. No data changes. A checked backup is made first.
+- Migration: `0026_currency_summaries` adds a view of the currencies with how many accounts use each, for the Currencies list. It reads the accounts, so it can only be created after them and no data changes. A checked backup is made first.
 - Environment variables: nothing.
 - Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
 

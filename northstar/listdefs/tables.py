@@ -57,6 +57,13 @@ TABLES = {
                                     label="Reporting value", groupable=False),       # the same number in two currencies would be one group
         "note": _text(True), "source": _text(), **_audit()},
         denied=frozenset({"version"}), based_on="balances", record_page="/balances/{id}"),
+    # The currency catalog with how many live accounts use each (migration 0026), for the admin Currencies list. It is a view of
+    # `currencies`, so it has that table's key and relations; it does not know which currency is the system currency.
+    "currency_summaries": TableDef("currency_summaries", "code", {
+        "code": _text(True), "name": _text(True), "minor_units": FieldDef(Integer(), label="Decimal places"),
+        "is_enabled": FieldDef(YesNo(), label="Enabled"), "rates_start": FieldDef(Date(), label="Rates start"),
+        "account_count": FieldDef(Integer(), label="Accounts"), **_audit()},
+        based_on="currencies", record_page="/currencies/{value}", record_page_for="admin"),
     "currencies": TableDef("currencies", "code", {
         "code": _text(), "name": _text(True), "minor_units": FieldDef(Integer(), label="Decimal places"),
         "is_enabled": FieldDef(YesNo(), label="Enabled"), "rates_start": FieldDef(Date(), label="Rates start"), **_audit()},

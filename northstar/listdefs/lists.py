@@ -21,5 +21,15 @@ ACCOUNTS = ListDef(
     ("name", "asc"),
 )
 
+# The currency catalog, for admins: about 150 rows, so a page shows 100. Whether a currency is enabled and how many accounts use it
+# are columns, so "enabled" and "in use" are filters a person makes. A currency's code opens its page, where it is switched on or off
+# and its rates are kept.
+CURRENCIES = ListDef(
+    "currencies", "currency_summaries",
+    ("code", "name", "minor_units", "is_enabled", "account_count"),
+    ("code", "asc"), page_size=100, admin_only=True,
+)
+
 loader.register(BALANCES)
 loader.register(ACCOUNTS)
+loader.register(CURRENCIES)
