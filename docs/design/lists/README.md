@@ -1,6 +1,6 @@
 # Managing lists
 
-Status: the design is agreed (November 9, 2026) and not implemented. Nothing in this folder is the spec or the decisions log. Those change only with the code, in the pull request that implements each step.
+Status: the design was agreed on November 9, 2026 and is built (v0.5). Where the build differs from what was agreed, the text says how it was built. Nothing in this folder is the spec or the decisions log. Those change only with the code, in the pull request that implements each step.
 
 This folder holds the design for giving Northstar's lists the same sorting, grouping, filtering, configurable columns, pagination and CSV export, processed on the server and tailored per user.
 

@@ -23,8 +23,11 @@ The framework (steps 1 to 6) is built before any list, so that a list is only da
 | 4 | The column drawer: the relation tree, dragging, saved columns | 2 | [#187](https://github.com/declankenny/northstar/issues/187) |
 | 5 | Group by | 2 | [#188](https://github.com/declankenny/northstar/issues/188) |
 | 6 | Export CSV | 1, 3 | [#189](https://github.com/declankenny/northstar/issues/189) |
-| 7 | The Balances list: a definition, a route and a navigation entry | 2, 3, 4, 5, 6 | to create |
+| 7 | The Balances list: a definition, a route and a navigation entry, then a page for each balance | 2, 3 and 4 | [#203](https://github.com/declankenny/northstar/issues/203), [#210](https://github.com/declankenny/northstar/issues/210) |
 | 8 | Accounts as one table with Class and Stale | 3, 4 | [#190](https://github.com/declankenny/northstar/issues/190) |
+| 9 | Currencies as a list (admins) | 8 | pull request #226 |
+| 10 | The account page's balance history as a fixed list | 7, 8 | [#224](https://github.com/declankenny/northstar/issues/224) |
+| 11 | An account's page stops carrying its balances | 10 | [#228](https://github.com/declankenny/northstar/issues/228) |
 
 ## Steps
 
@@ -35,20 +38,20 @@ The framework (steps 1 to 6) is built before any list, so that a list is only da
 
 ### 1. The registry, the request contract and the processing
 
-- Scope: the registry module (source, display column, tell-apart column, fields and their kinds, relations read from foreign keys with labels from the FK column, walkable, denied columns, searchable flags, record page, row actions), the validated request (list key, fields, operators, sort, group, page), the processing order, the converted-money kind with the conversion rule in framework code, the derived views, and the migration for `user_list_prefs` and `list_filters` with the partial unique index. No list is defined.
-- Tests: a table with no entry fails; a denied column is unreachable; unknown keys and operators are refused; the same table by several roles gets separate joins and labels; a path stops at the safety limit and never repeats a table; a view works as a source; deleted records and the system user never appear; nullable Yes or No, scaled integers and timestamps filter and sort correctly; a converted amount follows the conversion rule, with an empty cell and the named currency when there is no rate; migration tested on a copy of a database.
+- Scope: the registry module (source, display column, tell-apart column, fields and their kinds, relations read from foreign keys with labels from the FK column, walkable, denied columns, searchable flags, record page, row actions), the validated request (list key, fields, operators, sort, group, page), the processing order, one generic amount kind (`ScaledBy`) with the conversion done in a view, and the derived views. No list is defined. As built, step 1 was two pull requests, 1a the generic engine on any SQLite schema and 1b the Northstar side (the table entries, the amount kinds and the every-table-has-an-entry test); the tables for `user_list_prefs` and `list_filters` moved to the steps that use them (2 and 3), so no migration shipped before code used it.
+- Tests: a table with no entry fails; a denied column is unreachable; unknown keys and operators are refused; the same table by several roles gets separate joins and labels; a path stops at the safety limit and never repeats a table; a view works as a source; deleted records and the system user never appear; nullable Yes or No, scaled integers and timestamps filter and sort correctly; a converted amount follows the conversion rule, with an empty value when there is no rate; migration tested on a copy of a database.
 - Docs: spec rules, a decisions entry, `docs/schema.md` and the changelog.
 - Dependencies: none.
 
 ### 2. The shared table
 
-- Scope: the shared list component on TanStack Table 9 in server mode, the header with its menu, nulls-last sorting, the footer, saved page size, the address carrying sort, search and page, states for loading, failure and empty, and the row menu drawn from a definition's row actions. It adds no route and no navigation entry.
+- Scope: the shared list component on TanStack Table 9 in server mode, the header with its menu, nulls-last sorting, the footer, saved page size, the address carrying sort, search and page, states for loading, failure and empty, and the row menu drawn from a definition's row actions. It adds no route and no navigation entry. It also owns the generic list route and the migration for `user_list_prefs` (the page size).
 - Tests: nulls last in both directions; the id tie-breaker; page correction; an overtaken response is ignored; Back restores the view; a disabled action shows its reason.
 - Docs: the mockup is done (outside the repo); the dependency's reason, exact pin and bundle cost; the v9 server-mode features are confirmed in its documentation first.
 
 ### 3. Filters, search and saved filters
 
-- Scope: the Filters tab, typed operators, chips, Apply and Cancel, server-side search over the searchable flags, and saved filters with private and shared kinds, names, defaults and the stale-filter fallback.
+- Scope: the Filters tab, typed operators, chips, Apply and Cancel, server-side search over the searchable flags, and saved filters with private and shared kinds, names, defaults and the stale-filter fallback. It owns the migration for `list_filters`, with the partial unique index.
 - Tests: operators and their edge cases; one condition per field; one shared default per list, enforced; a saved filter on a removed column degrades.
 
 ### 4. The column drawer
@@ -69,12 +72,28 @@ The framework (steps 1 to 6) is built before any list, so that a list is only da
 
 ### 7. The Balances list
 
-- Scope: the Balances definition (the live balances as its source; default columns Date, Account, Account type, Value, Currency, Reporting value and Note; default sort Date, newest first; no default filter; Edit and Delete as row actions using the existing dialogs, disabled with the reason on a closed account), a route, and a navigation entry between Accounts and Update balances.
+- Scope: the Balances definition (the live balances as its source; default columns Date, Account, Account type, Value, Currency, Reporting value and Note; default sort Date, newest first; no default filter), a route, and a navigation entry between Accounts and Update balances. It was built before Group by and Export (steps 5 and 6), so it depends on 2, 3 and 4. It shipped as two pull requests: 7a the list (#203) and 7b a page for each balance at `/balances/{id}` (#210: its amount and note are edited, it is deleted, the date is read-only in the title, and it is opened from the list's Date), which replaced the row menu with Edit and Delete that this step first described, and added the framework change for fields always returned with a row. Whether a row menu is wanted as well was left until the page had been tried (#222).
 - The rule for this pull request: it edits no framework file. If Balances needs something the framework lacks, a framework pull request comes first.
-- Tests: the definition's behaviour through the framework (the default view, a row's actions, a closed account's disabled actions); the existing per-account export and Update balances are unchanged.
+- Tests: the definition's behaviour through the framework (the default view, a row's link, a closed account's balances); the existing per-account export and Update balances are unchanged.
 - Docs: the spec's list rules, the changelog.
 
 ### 8. Accounts as one table
 
-- Scope: Class and Stale as columns, the Open and Closed buttons and the Assets and Liabilities cards replaced, Status as a filter. Whether it ships a shared default filter is decided with its mockup.
+- Scope: Class and Stale as columns, the Open and Closed buttons and the Assets and Liabilities cards replaced, Status as a filter. As built: the list `accounts` over the view `account_summaries` (migrations 0024 and 0025), with the shared default filter "Open accounts"; no totals, no Stale badge and no row menu (#222); after Add account the list reads again in place.
 - Docs: a mockup first.
+
+### 9. Currencies
+
+- Scope: the admin Currencies page as the list `currencies` over the view `currency_summaries` (migration 0026), with the old page's five columns. Added after step 8; Account types, Imports and Users were considered and not moved.
+
+### 10. The account page's balance history
+
+- Scope: the balance history on an account's page as the first fixed list, `account_balances`, over a view with each balance's change from the one before (migration 0027), 12 to a page, the date opening the balance's page. It adds `ListDef.customisable` and `params` to the framework (see "Fixed lists" in the design) and a `fixed` prop to `ListView`.
+
+### 11. An account's page stops carrying its balances
+
+- Scope: the account payload loses its `balances`; the balance count of the chart's dates comes with the net worth answer; the Delete confirmation asks for the balance's neighbours when Delete… is pressed; the balance endpoint answers with the balance and a few facts about its account.
+
+## Left for later
+
+A row menu on a list ([#222](https://github.com/declankenny/northstar/issues/222)), relative date filters ([#191](https://github.com/declankenny/northstar/issues/191)), and the lists of other pages.
