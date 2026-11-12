@@ -11,7 +11,7 @@ The framework (steps 1 to 6) is built before any report, so that a report is onl
 | Step | What | Depends on | Issue |
 | --- | --- | --- | --- |
 | 1 | The report definition and request contracts | none | [#234](https://github.com/declankenny/northstar/issues/234) |
-| 2 | The shared account-values calculation | none | [#235](https://github.com/declankenny/northstar/issues/235) |
+| 2 | The shared account-positions calculation | none | [#235](https://github.com/declankenny/northstar/issues/235) |
 | 3 | Extract the shared filter editor | none | [#236](https://github.com/declankenny/northstar/issues/236) |
 | 4 | Filter capabilities on the server | 1 | [#237](https://github.com/declankenny/northstar/issues/237) |
 | 5 | ECharts and the shared chart wrapper | none | [#238](https://github.com/declankenny/northstar/issues/238) |
@@ -29,11 +29,11 @@ Steps with no dependency can be taken in any order. The suggested order is the t
 - Docs: a decisions entry for the contracts; the spec when a rule changes.
 - Dependencies: none.
 
-### 2. The shared account-values calculation
+### 2. The shared account-positions calculation
 
-- Scope: one calculation of each account's signed system-currency value at one or many dates for an authorized, filtered account population, built on the existing rules in `northstar/networth.py`, returning the native amount and currency and the actual balance and rate dates beside the valuation date. The rate date reports use is settled here (the Accounts list converts at the balance's own date and the Dashboard at today's rate).
-- Tests: results match a hand calculation on synthetic data as well as `net_worth_on` for the same date and population; carry-forward of balances and rates, rounding boundaries, negative balances, zero balances, accounts with no balance by the date, closed and deleted accounts, current classification, and a missing required rate that prevents the whole result.
-- Docs: a decisions entry for the rate date; the spec if the Accounts list or Dashboard behavior changes.
+- Scope: migration 0028 extends the `account_days` view with `balance_id`, `balance_date` and `rate_date` (no new view), and `northstar/positions.py` returns each account's position for an authorized, filtered `Population` at one or many dates: the fact (the balance's id, amount and date), the native currency and its minor units, the rate used and its date, the value in the system currency and the signed contribution to net worth. The rate date reports use is the latest rate on or before the valuation date, independent of the balance's date, as the Dashboard already does. It reads inside `db.read_transaction`.
+- Tests: positions match hand calculations with their provenance; the full population equals `net_worth_on` on every day of a matrix (subsets, whose `net_worth_on(account_id)` is in the account's own currency, are checked by hand); carry-forward of balances and rates, rounding half away from zero in both signs, negative and zero balances, an account with no balance (no rate needed) against a recorded zero (needs one), closed and deleted accounts, current classification, a missing required rate failing the whole call at the earliest day, and one read for many days; the migration on a populated copy leaves the view's rows and the Dashboard series unchanged.
+- Docs: a decisions entry (facts and positions, the rate date, why the view was extended and not added to), the spec, and `docs/schema.md`. The Accounts list and Balances list columns that convert at the balance's own date are [#243](https://github.com/declankenny/northstar/issues/243).
 - Dependencies: none.
 
 ### 3. Extract the shared filter editor

@@ -20,7 +20,7 @@ A configurable exploratory workspace, draggable widgets, user-authored reports a
 - The framework: report definitions, request and result contracts, shell, parameters, filters, data states.
 - Apache ECharts as the chart library for all future chart types, behind a shared chart wrapper.
 - **First consumers**, curated full-page reports chosen to exercise different parts of the framework, not to answer any particular question:
-  - **Assets & Liabilities**, the proof of concept: one as-at date, a hierarchy section, and two treemaps colored by account type. It proves the shell, the as-of date shape, the shared account-values primitive, the filter drawer and the chart wrapper on the simplest calculation. Other date shapes and result sections are checked with small synthetic report definitions in tests.
+  - **Assets & Liabilities**, the proof of concept: one as-at date, a hierarchy section, and two treemaps colored by account type. It proves the shell, the as-of date shape, the shared account-positions calculation, the filter drawer and the chart wrapper on the simplest calculation. Other date shapes and result sections are checked with small synthetic report definitions in tests.
 
 The Net Worth Bridge is **not** in v0.6; its design below is kept for the next release. Other reports (Freshness, net worth over time, currency exposure) are expected later and are used now only to test the contracts. #57's original questions ("why did net worth change?", "how current is the information?") are not release requirements: the framework is.
 
@@ -91,11 +91,13 @@ All money is exact integer minor units with currency metadata, calculated on the
 
 The frontend owns presentation, not authoritative financial arithmetic. Chart adapters convert values for rendering only; displayed totals and reconciliation use server results.
 
-### Shared server primitive
+### Account positions
 
-*Proposal:* one account-values primitive, built on the existing `northstar/networth.py` rules: given an authorized, filtered account population and one or many dates, return each account's signed system-currency value, and its native amount and currency. Every account-population report is a consumer: the bridge at two dates, a trend at many, a breakdown or currency exposure at one. Summed values must equal `net_worth_on` exactly, which keeps the spec rule that net worth is one calculation.
+A balance is a recorded fact: an amount in the account's own currency on a date, unaffected by exchange rates (it can be corrected, but a rate never changes it). An account's **position** on a date is derived: its latest balance on or before the date, converted at the latest rate on or before the date, whatever date the balance has. It moves when a rate moves even though no balance was entered, and net worth is the sum of positions. The Dashboard already works this way.
 
-Settle here the existing question about the rate date. The Accounts list converts a balance at its own date and the Dashboard at today's rate, while reports value at the latest rate on or before the valuation date. The primitive defines the reports behavior once, and the difference with the Accounts list is raised in this epic.
+`northstar/positions.py` is the one calculation of positions, and it is how a report obtains account values. Given a `Population` and one or many dates it returns, for each account and date, the fact (the balance's id, amount and date), the native currency and its minor units, the rate used and its date, the value in the system currency and the signed contribution to net worth. It reads the `account_days` view, which migration 0028 extended with the balance id, the balance date and the rate date, so the Dashboard and the reports share the SQL rule that picks the balance and the rate, and `conversion.convert`; the Python aggregation by class is written in both `networth.py` and `positions.py`, and permanent parity tests keep them together. Reports use positions, so a report as at today equals the Dashboard. The Accounts list and Balances list columns that convert a balance at its own date are a separate issue ([#243](https://github.com/declankenny/northstar/issues/243)).
+
+An account with no balance by a date is listed with no balance, no rate and a value of zero, whatever its currency, which is not a missing-rate error; a recorded zero is a balance and in another currency still needs a rate. If any date asked about lacks a required rate the whole call fails, naming the earliest such date and every currency missing on it, and only the accounts in the population can cause it. It reads inside `db.read_transaction`, so everything comes from one snapshot.
 
 ### Request and lifecycle
 
@@ -191,7 +193,7 @@ The shared "account fields, no dates" preset: one account population used for th
 
 ### Calculation
 
-The shared account-values primitive at one date, using the same valuation rules as the bridge (latest balance on or before the date, rate on or before the date, exact conversion and rounding per account, class convention for assets and liabilities, existing visibility and deletion rules). An account with no balance by the date counts zero and is marked "no balance". Assets, liabilities and net worth are summed from the exact per-account values, and net worth equals `net_worth_on(date)` for the same population. A missing required exchange rate prevents the whole result.
+The shared account-positions calculation at one date, using the same valuation rules as the bridge (latest balance on or before the date, rate on or before the date, exact conversion and rounding per account, class convention for assets and liabilities, existing visibility and deletion rules). An account with no balance by the date counts zero and is marked "no balance". Assets, liabilities and net worth are summed from the exact per-account values, and net worth equals `net_worth_on(date)` for the same population. A missing required exchange rate prevents the whole result.
 
 ### Presentation
 
@@ -226,7 +228,7 @@ Account filters choose one population used at both endpoints and in all steps. C
 
 ### Calculation and reconciliation
 
-Reuse the shared primitive and `northstar/networth.py` rules. At each endpoint, use each account's latest balance on or before the date; an account with no balance counts zero, and detail distinguishes no prior balance from a recorded zero. Use the latest rate on or before the valuation date, convert and round each account with the existing exact-money rules, then aggregate. Signed contribution is asset value minus liability value; do not assume liabilities are stored negative. Existing visibility and deletion rules apply, and current classification is used (no historical metadata is reconstructed).
+Reuse the shared positions calculation and `northstar/networth.py` rules. At each endpoint, use each account's latest balance on or before the date; an account with no balance counts zero, and detail distinguishes no prior balance from a recorded zero. Use the latest rate on or before the valuation date, convert and round each account with the existing exact-money rules, then aggregate. Signed contribution is asset value minus liability value; do not assume liabilities are stored negative. Existing visibility and deletion rules apply, and current classification is used (no historical metadata is reconstructed).
 
 For each included account `i`:
 
@@ -271,7 +273,7 @@ Summarize stale accounts and accounts without balances, each with a working link
 
 "Stale" is the existing rule (spec, Staleness; `northstar/staleness.py`): an open account is stale when the days from its latest balance to today exceed its type's `stale_after_days`, an open account with no balances is also flagged, and closed accounts are never flagged. "Today" is the system timezone's date. The report reuses that rule and adds no second definition.
 
-The Accounts list already has Stale and days-since columns and a Stale filter, so the report must offer more than that list filtered. *Proposal:* a summary that says how far the net worth figure can be trusted (stale and empty counts by type, the oldest balance, and the share of net worth held in stale balances, calculated by the shared account-values primitive), with the stale accounts listed and linked for update. Which filters apply and the exact rows are designed when the report is built.
+The Accounts list already has Stale and days-since columns and a Stale filter, so the report must offer more than that list filtered. *Proposal:* a summary that says how far the net worth figure can be trusted (stale and empty counts by type, the oldest balance, and the share of net worth held in stale balances, calculated by the shared account-positions calculation), with the stale accounts listed and linked for update. Which filters apply and the exact rows are designed when the report is built.
 
 ## Implementation sequence
 
@@ -279,8 +281,8 @@ The Accounts list already has Stale and days-since columns and a Stale filter, s
 2. **Extract shared filters:** make the editor and chips reusable with saved filters and Columns as capabilities; add report capability validation at the UI and server boundaries. Lists tests unchanged.
 3. **Add ECharts and the shared chart wrapper:** tree-shaken imports, SVG renderer, CSP-safe tooltip formatter, theme from the CSS variables, aria description, a unit-test approach, and the decisions entry.
 4. **Build the report shell:** navigation, searchable selector, parameter renderer, transient view state, default initialization, request lifecycle, states. Validate with synthetic definitions.
-5. **Shared account-values primitive:** with tests against `net_worth_on`, and the rate-date question settled.
-6. **Assets & Liabilities report:** calculation on the shared primitive, then the two treemaps, summary and supporting table. This is the first report through the shell.
+5. **Shared account-positions calculation:** with tests against `net_worth_on`, the rate date settled (the rate on or before the valuation date), and `account_days` extended with where each figure came from.
+6. **Assets & Liabilities report:** calculation on the shared positions, then the two treemaps, summary and supporting table. This is the first report through the shell.
 7. **Validate and document:** targeted tests; update the specification and decisions log when the design is approved and implementation lands.
 
 Step 5 depends only on existing valuation code, so it may run earlier than its position if useful.

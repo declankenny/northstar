@@ -20,8 +20,8 @@ LEGACY_LEDGER = (
 # A rebuild of accounts or balances has to drop the views over them first (SQLite cannot rename a table under a view) and
 # recreate them, and the partial name index, afterwards: the live views and account_days, which is read from the newest
 # migration that creates it. The runner's guard checks that everything came back.
-_RATES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0019_account_class_from_type.sql").read_text(encoding="utf-8")
-ACCOUNT_DAYS = _RATES[_RATES.index("CREATE VIEW account_days"):_RATES.index(") WHERE amount IS NOT NULL;") + len(") WHERE amount IS NOT NULL;")] + "\n"
+_RATES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0028_account_days_provenance.sql").read_text(encoding="utf-8")
+ACCOUNT_DAYS = _RATES[_RATES.index("CREATE VIEW account_days"):]
 LIVE_BALANCES = ("CREATE VIEW live_balances AS SELECT balances.* FROM balances "
                  "JOIN accounts ON accounts.id = balances.account_id WHERE accounts.deleted = 0;\n")
 _VALUES = (pathlib.Path(__file__).parent.parent / "northstar" / "migrations" / "0020_live_balance_values.sql").read_text(encoding="utf-8")
