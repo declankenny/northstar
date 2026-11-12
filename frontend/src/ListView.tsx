@@ -2,13 +2,15 @@ import {
   createColumnHelper, rowPaginationFeature, rowSortingFeature, tableFeatures, useTable,
   type PaginationState, type Row, type SortingState,
 } from "@tanstack/react-table";
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
-  type Choices, type Condition, exportList, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListColumns,
+  type Condition, exportList, fetchList, fetchListChoices, fetchListFields, type ListColumn, type ListPage, type ListRow, saveListColumns,
   saveListPageSize,
 } from "./api";
 import { FilterDrawer } from "./FilterDrawer";
-import { describe, flatten } from "./listFilters";
+import { FilterChips } from "./FilterChips";
+import { flatten } from "./listFilters";
+import { useChoiceNames } from "./useChoiceNames";
 import { formatCell, isNumeric } from "./listFormat";
 import { COLLAPSED, type Collapsing, groupLabel, groupSummary, isCollapsed, OPEN, sections, toggled } from "./listGroups";
 import { listAddress, listRequest, parseListView, sortedBy, withFilters, withGroup, withPage, withSearch } from "./listState";
@@ -110,8 +112,6 @@ export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
   const [drawer, setDrawer] = useState<"filters" | "columns" | null>(null);   // which tab the open drawer starts on
   const opener = useRef<HTMLButtonElement | null>(null);                    // the button that opened it, to give focus back to
   const [columnsChanged, setColumnsChanged] = useState(0);                    // counts the person's changes to their columns, which are not in the address
-  const [named, setNamed] = useState<Map<string, Choices>>(new Map()); // what a relation's records are called, for chips and the drawer
-  const asked = useRef(new Set<string>());
   const path = usePath();
   const address = useSearch();
   const [kept, setKept] = useState(() => parseListView(""));                  // a fixed list's sort and page
@@ -135,18 +135,9 @@ export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
   // The columns that can be filtered by: needed to say a filter in words and to build one.
   const { data: tree, error: treeError } = useRequest((signal) => fetchListFields(listKey, signal), [listKey], { skip: !!fixed });
   const nodes = useMemo(() => new Map(flatten(tree).map((n) => [n.key, n])), [tree]);
-  const ensureChoices = useCallback((field: string) => {
-    const id = `${listKey}/${field}`;
-    if (asked.current.has(id)) return;
-    asked.current.add(id);
-    fetchListChoices(listKey, field).then(
-      (choices) => setNamed((before) => new Map(before).set(field, choices)),
-      () => asked.current.delete(id),
-    );
-  }, [listKey]);
-  useEffect(() => { asked.current = new Set(); setNamed(new Map()); }, [listKey]);
   const applied: Condition[] = page?.filters ?? NO_CONDITIONS;
-  useEffect(() => { applied.forEach((c) => { if (nodes.get(c.field)?.choices === "records") ensureChoices(c.field); }); }, [applied, nodes, ensureChoices]);
+  // What a relation's records are called, for the chips and the drawer.
+  const { named, ensureChoices } = useChoiceNames(listKey, (field) => fetchListChoices(listKey, field), applied, nodes);
 
   // The search box follows the address (Back, a link), and the address follows the box once typing pauses, without a history
   // entry for every letter. A change this page made itself is not copied back, which would undo what was typed in the meantime.
@@ -315,18 +306,8 @@ export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
             <button aria-label="Ungroup" onClick={() => go(withGroup(view, null))}>✕</button></span>
         </div>
       )}
-      {applied.length > 0 && (
-        <div className="lf-chips" role="list" aria-label="Filters applied">
-          {applied.map((condition, i) => (
-            <span className="lf-chip" role="listitem" key={condition.field}>
-              {describe(nodes.get(condition.field), condition, named.get(condition.field))}
-              <button aria-label={`Remove the filter: ${describe(nodes.get(condition.field), condition, named.get(condition.field))}`}
-                onClick={() => go(withFilters(view, applied.filter((_, j) => j !== i)))}>✕</button>
-            </span>
-          ))}
-          <button className="link" onClick={() => go(withFilters(view, []))}>Clear filters</button>
-        </div>
-      )}
+      <FilterChips conditions={applied} nodes={nodes} names={named}
+        onRemove={(i) => go(withFilters(view, applied.filter((_, j) => j !== i)))} onClear={() => go(withFilters(view, []))} />
       {page && page.skipped.length > 0 && (
         <p className="notice warn" role="status">
           {page.skipped.length === 1 ? "1 condition of your default filter was" : `${page.skipped.length} conditions of your default filter were`} left
