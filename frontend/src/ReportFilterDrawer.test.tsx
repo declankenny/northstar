@@ -24,7 +24,10 @@ const TREE: FieldTree = {
     field({ key: "name", label: "Name", path_label: "Name", operators: ops("contains", "equals") }),
     field({ key: "status", label: "Status", path_label: "Status", kind: "choice", operators: ops("is_any_of"), choices: "values", values: ["Open", "Closed"] }),
   ],
-  relations: [field({ key: "type", label: "Account type", path_label: "Account type", kind: "choice", operators: ops("is_any_of"), choices: "records" })],
+  relations: [field({
+    key: "type", label: "Account type", path_label: "Account type", kind: "choice", operators: ops("is_any_of"), choices: "records",
+    children: { fields: [field({ key: "type.name", label: "Name", path_label: "Account type › Name" })], relations: [] },
+  })],
 };
 const NAMES: Choices = { kind: "records", values: [], more: false, options: [{ id: 3, value: "Savings", detail: null }, { id: 4, value: "Loan", detail: null }] };
 
@@ -66,10 +69,21 @@ describe("a report's filter drawer", () => {
     expect(text).not.toMatch(/list|row|column|currenc/i);
   });
 
+  it("says fields, not columns, in the labels a screen reader reads: the picker and the buttons that open a relation", () => {
+    show();
+    fireEvent.click(drawer().getByRole("button", { name: "+ Add filter" }));
+    const picker = drawer().getByLabelText("Fields to filter by");
+    expect(drawer().queryByLabelText(/column/i)).toBeNull();
+    fireEvent.click(within(picker).getByRole("button", { name: "Show the fields of Account type" }));
+    expect(within(picker).getByRole("button", { name: "Hide the fields of Account type" })).toBeTruthy();
+    const labels = [...screen.getByRole("dialog").querySelectorAll("[aria-label]")].map((e) => e.getAttribute("aria-label")).join("|");
+    expect(labels).not.toMatch(/column/i);
+  });
+
   it("builds a condition from what the report allows, and applies it only on Apply changes", () => {
     const { onApply } = show();
     fireEvent.click(drawer().getByRole("button", { name: "+ Add filter" }));
-    fireEvent.click(within(drawer().getByLabelText("Columns to filter by")).getByRole("button", { name: "Name" }));
+    fireEvent.click(within(drawer().getByLabelText("Fields to filter by")).getByRole("button", { name: "Name" }));
     fireEvent.change(drawer().getByLabelText("Name"), { target: { value: "Test" } });
     expect(onApply).not.toHaveBeenCalled();
     fireEvent.click(drawer().getByRole("button", { name: "Apply changes" }));

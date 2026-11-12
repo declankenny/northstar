@@ -114,7 +114,7 @@ export function FilterConditions({ tree, filters, choices, words }: { tree: Fiel
           onRemove={() => setDraft(draft.filter((_, j) => j !== i))} />
       ))}
       <button className="link" aria-expanded={adding} onClick={() => setAdding(!adding)}>+ Add filter</button>
-      {adding && <FieldPicker tree={tree} used={used} label="Columns to filter by" usedNote="already filtered" unavailable={(node) => node.operators.length === 0}
+      {adding && <FieldPicker tree={tree} used={used} label={words.picker} things={words.things} usedNote="already filtered" unavailable={(node) => node.operators.length === 0}
         onPick={(node) => { setDraft([...draft, startCondition(node)]); setAdding(false); }} />}
       <p className="hint lf-help">{words.help}</p>
     </>
