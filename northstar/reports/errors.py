@@ -9,9 +9,9 @@ from northstar.errors import ValidationError
 
 class ReportInputError(ValidationError):
     """Something the person sent is wrong. `path` says where in the request: ["parameters", "closing_date"]. The message is written
-    to be shown."""
+    to be shown. A step of the path is a name, or a number for the place in a list: ["filters", 0, "field"]."""
 
-    def __init__(self, message: str, path: list[str] | tuple[str, ...]):
+    def __init__(self, message: str, path: list[str | int] | tuple[str | int, ...]):
         super().__init__(message)
         self.path = list(path)
 

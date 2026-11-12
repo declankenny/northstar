@@ -22,6 +22,50 @@ class Condition:
     value: object                                   # already read by the field's kind
 
 
+class ConditionProblem(ValidationError):
+    """A filter that cannot be used, and which one: its place in the list (`index`) and the part that is wrong (`part`: "field",
+    "operator" or "value", or None when the condition as a whole is not shaped right). To a list it is an ordinary ValidationError."""
+
+    def __init__(self, message: str, index: int, part: str | None):
+        super().__init__(message)
+        self.index = index
+        self.part = part
+
+
+def parse_conditions(catalog: Catalog, base: str, raw, refusal=None) -> tuple[Condition, ...]:
+    """The filters of a request, read against the registry from table `base`: each field one the registry offers, each operator one
+    its kind allows, each value one its kind can read, and no field twice. `refusal`, when given, is asked about every field and
+    answers with why it may not be used (or None): a report's own exclusions. A problem is a ConditionProblem saying which condition
+    and which part of it."""
+    if not isinstance(raw, (list, tuple)) or len(raw) > MAX_FILTERS:
+        raise ValidationError("The filters must be a list.")
+    filters, seen = [], set()
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict) or set(item) - {"field", "operator", "value"} or "field" not in item:
+            raise ConditionProblem("Each filter needs a field, an operator and a value.", index, None)
+        key = item["field"]
+        try:
+            resolved = catalog.resolve(base, key)
+        except ValidationError as error:
+            raise ConditionProblem(str(error), index, "field") from None
+        if refusal is not None and (why := refusal(key)):
+            raise ConditionProblem(why, index, "field")
+        if key in seen:
+            raise ConditionProblem("A column can have one filter.", index, "field")
+        seen.add(key)
+        kind = Reference() if resolved.relation else resolved.kind      # a relation is filtered by the id it points at
+        operator = item.get("operator")
+        try:
+            kind.check_operator(operator)
+        except ValidationError as error:
+            raise ConditionProblem(str(error), index, "operator") from None
+        try:
+            filters.append(Condition(key, operator, kind.read(operator, item.get("value"))))
+        except ValidationError as error:
+            raise ConditionProblem(str(error), index, "value") from None
+    return tuple(filters)
+
+
 @dataclass(frozen=True)
 class ListRequest:
     columns: tuple[str, ...]
@@ -68,21 +112,7 @@ def parse_request(catalog: Catalog, definition: ListDef, data: dict | None) -> L
     for key in columns:
         catalog.resolve(base, key)
 
-    raw_filters = data.get("filters", [])
-    if not isinstance(raw_filters, (list, tuple)) or len(raw_filters) > MAX_FILTERS:
-        raise ValidationError("The filters must be a list.")
-    filters, seen = [], set()
-    for item in raw_filters:
-        if not isinstance(item, dict) or set(item) - {"field", "operator", "value"} or "field" not in item:
-            raise ValidationError("Each filter needs a field, an operator and a value.")
-        key = item["field"]
-        resolved = catalog.resolve(base, key)
-        if key in seen:
-            raise ValidationError("A column can have one filter.")
-        seen.add(key)
-        kind = Reference() if resolved.relation else resolved.kind      # a relation is filtered by the id it points at
-        operator = item.get("operator")
-        filters.append(Condition(key, operator, kind.read(operator, item.get("value"))))
+    filters = parse_conditions(catalog, base, data.get("filters", []))
 
     search = data.get("search", "")
     if not isinstance(search, str) or len(search) > MAX_SEARCH:
@@ -111,4 +141,4 @@ def parse_request(catalog: Catalog, definition: ListDef, data: dict | None) -> L
     page_size = data.get("page_size", definition.page_size)
     if definition.customisable and page_size not in PAGE_SIZES:     # a fixed list has its own size, which is not one a person chooses
         raise ValidationError(f"Show {', '.join(map(str, PAGE_SIZES))} rows per page.")
-    return ListRequest(tuple(columns), tuple(filters), search.strip(), sort_key, direction, group, page, page_size, params)
+    return ListRequest(tuple(columns), filters, search.strip(), sort_key, direction, group, page, page_size, params)

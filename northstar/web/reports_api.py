@@ -35,7 +35,15 @@ def list_reports(request: Request):
 @router.get("/{key}")
 def describe_report(key: str, request: Request):
     definition = _report(key, current_user(request))
-    return engine.describe(definition, clock.today())
+    return run(request, lambda conn: engine.describe(definition, clock.today(), conn))
+
+
+@router.get("/{key}/choices/{field:path}")
+def report_choices(key: str, field: str, request: Request):
+    """What can be picked when filtering the report by a field, drawn from the accounts this person may see."""
+    user = current_user(request)
+    definition = _report(key, user)
+    return run(request, lambda conn: engine.choices(conn, definition, user, field))
 
 
 @router.post("/{key}")

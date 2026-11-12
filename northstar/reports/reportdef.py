@@ -20,10 +20,13 @@ _KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 
 @dataclass(frozen=True)
 class FilterDecl:
-    """What a report will let a person filter by: a named set of fields (its `preset`) and the conditions it opens with. Declared here
-    so the place is fixed. The engine enforces it with the filter capabilities, and until then refuses any filter in a request and any
-    default filter in a definition (a preset alone is accepted)."""
-    preset: str
+    """How a report may be filtered. A report with no declaration cannot be filtered. With one, it can be filtered by everything the
+    registry offers from its population except what it excludes: `exclude_dates` (every date or timestamp, on any path, including
+    those of related records) and `exclude` (field keys, on whole path segments: "type" excludes "type" and everything beneath it,
+    "type.name" only that field). `defaults` are the conditions the report opens with, as they are sent: {"field", "operator",
+    "value"}. They are checked against the registry, and so are the exclusions, whenever the report is used (see filters.py)."""
+    exclude_dates: bool = False
+    exclude: tuple[str, ...] = ()
     defaults: tuple = ()
 
 
@@ -72,13 +75,19 @@ def check(definition: ReportDef) -> None:
         problems.append(f"{definition.key}: the population {definition.population!r} is not one a report can count")
     if not callable(definition.calculate):
         problems.append(f"{definition.key}: no calculation")
-    if definition.filters is not None:
-        if not isinstance(definition.filters, FilterDecl) or not definition.filters.preset:
-            problems.append(f"{definition.key}: the filters declaration needs a preset")
-        elif definition.filters.defaults:
-            # The engine builds the population from every live account until the filter capabilities exist, so a default filter would
-            # promise a restricted report and produce an unrestricted one.
-            problems.append(f"{definition.key}: default filters cannot be enforced yet, so a report cannot declare any")
+    declared = definition.filters
+    if declared is not None:
+        if not isinstance(declared, FilterDecl):
+            problems.append(f"{definition.key}: the filters declaration is not a FilterDecl")
+        else:
+            # Only the shape is checked here. What the exclusions and defaults mean needs the registry, which needs the database, so
+            # that is checked whenever the report is used (filters.prepare) and by a test over every registered report.
+            if not isinstance(declared.exclude_dates, bool):
+                problems.append(f"{definition.key}: exclude_dates is yes or no")
+            if not isinstance(declared.exclude, tuple) or not all(isinstance(key, str) and key for key in declared.exclude):
+                problems.append(f"{definition.key}: the exclusions are a tuple of field keys")
+            if not isinstance(declared.defaults, tuple) or not all(isinstance(item, dict) for item in declared.defaults):
+                problems.append(f"{definition.key}: the default filters are a tuple of conditions")
     if problems:
         raise ReportDefinitionError("; ".join(problems))
     params_module.check(definition.key, definition.params)

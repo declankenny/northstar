@@ -60,7 +60,7 @@ Definitions live in code, consistent with the existing lists approach. A report 
 | Identity | Stable key, title, description, authorization |
 | Population | What the report counts: accounts today; transactions later. The framework never assumes accounts |
 | Parameters | Types, defaults, allowed values, cross-parameter validation |
-| Filters | An allowed field set (a named, shareable preset, optionally narrowed), operators, and initial default conditions |
+| Filters | What it excludes from the registry's fields (all dates, named fields), and initial default conditions |
 | Calculation | Server-side evaluator over an authorized, filtered population |
 | Result | Typed sections (below) plus coverage metadata |
 | Presentation | Which visualization binds to which section, and transient interaction capabilities such as hierarchical expansion |
@@ -127,9 +127,11 @@ Preserve the filter language: conditions combine with AND; multiple selected val
 
 ### Filter availability and enforcement
 
-A report declares an allowed field set, resolved through the shared registry. This limits related-field traversal as well as direct fields: prohibiting dates must not leave a date path through a relation. Common sets are named presets, for example "account fields, no dates", so reports share them instead of repeating lists.
+A report is filtered by everything the shared registry offers from its population, except what it explicitly excludes. It declares no allowed list and no named preset (an earlier version of this design did, see the decisions entry for #237): the registry already decides what may be offered at all, so a report only restricts. The consequence is a rule: a field or relation added to the registry is available to every report that does not exclude it.
 
-The same declaration governs the drawer's fields and operators, validation of declared defaults, validation of draft conditions and calculation requests, and server-side scope. Unsupported conditions are never silently applied or discarded; requests containing them are rejected with a field-specific error. An invalid declared default is a report-definition error, not a reason to silently broaden the report. URLs do not supply filter state.
+A report can exclude all dates (by kind, on every step of a path, so prohibiting dates cannot leave a date path through a relation and a date column added later is excluded too) and named fields (on whole path segments: `type` excludes `type` and everything beneath it, `type.name` only that field). A misspelled or obsolete exclusion is a fault in the report.
+
+The same declaration governs the drawer's fields and operators, validation of declared defaults, validation of requests, and server-side scope, and it is checked whichever endpoint is asked first. Unsupported conditions are never silently applied or discarded; requests containing them are rejected with an error that names the condition and the part (`["filters", 0, "field"]`). An invalid declared default is a report-definition error, not a reason to silently broaden the report. URLs do not supply filter state. A request that omits `filters` means the report's own defaults, an empty list means none, and explicit conditions replace the defaults. Filtering only narrows the population the framework authorized, and the choices a filter by a record offers come from it.
 
 ### Defaults and transient state
 
@@ -189,7 +191,7 @@ Used to test the contracts. Only Assets & Liabilities is committed to v0.6; the 
 
 ### Filters
 
-The shared "account fields, no dates" preset: one account population used for the whole report. Date conditions are prohibited, including through related fields. No saved filters.
+One account population used for the whole report, filtered by every account field the registry offers except dates, which the report excludes because it has its own as-at date. Date conditions are prohibited, including through related fields. No saved filters.
 
 ### Calculation
 

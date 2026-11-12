@@ -1,3 +1,4 @@
+import type { Choices, Condition, FieldTree } from "../api";
 import type { SectionKind, View } from "./views";
 
 /** The contracts of the report endpoints (`/api/reports`). Money is integer minor units, dates are `YYYY-MM-DD` text, and nothing
@@ -40,8 +41,17 @@ export type ReportDefinition = {
   today: string; // the server's today(), so the page never reads the browser's clock
   parameters: ReportParameter[];
   sections: ReportSectionDeclaration[];
-  filters: { enabled: false }; // filled in when filters arrive
+  filters: ReportFilters;
 };
+
+/** What a report can be filtered by. `fields` is a list's field tree, so the shared filter drawer takes it as it is: it holds
+ *  everything the registry offers for the report's population except what the report excludes (all dates, or named fields).
+ *  `defaults` are the conditions the report opens with, which may be none. */
+export type ReportFilters = { enabled: false } | { enabled: true; fields: FieldTree; defaults: Condition[] };
+
+/** `GET /api/reports/{key}/choices/{field}`: what to pick from when filtering by a field of a report, drawn from the accounts the
+ *  person may see. The same shape a list's choices have. */
+export type ReportChoices = Choices;
 
 /** What a drill target points at. The page maps it to a route. */
 export type ReportLink =
@@ -94,7 +104,7 @@ export type ReportResult = {
   report: string;
   today: string;
   parameters: Record<string, string | number>;
-  filters: never[];
+  filters: Condition[]; // the conditions that were applied: the request's, or the report's own when it named none
   currency: { code: string; minor_units: number };
   sections: Record<string, SectionData>;
   notes: ReportNote[];
@@ -102,6 +112,6 @@ export type ReportResult = {
 
 /** What a failed request says. Classify by `code`, never by the status alone or the words of `detail`. */
 export type ReportError =
-  | { code: "invalid_input"; detail: string; path: string[] }
+  | { code: "invalid_input"; detail: string; path: (string | number)[] } // a number is a place in a list: ["filters", 0, "field"]
   | { code: "unavailable_data"; detail: string; reason: "missing_rates" | "no_system_currency"; missing_rates?: string[] }
   | { code: "calculation_error"; detail: string };

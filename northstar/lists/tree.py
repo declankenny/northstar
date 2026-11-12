@@ -31,7 +31,13 @@ def _node(resolved: Resolved) -> dict:
 
 def field_tree(catalog: Catalog, definition: ListDef) -> dict:
     """The tree of columns for a list: {"fields": [...], "relations": [... each with "children": the same shape, or None]}."""
-    base = definition.table
+    return field_tree_for(catalog, definition.table)
+
+
+def field_tree_for(catalog: Catalog, base: str, refusal=None) -> dict:
+    """The tree of what can be filtered by from table `base`. `refusal`, when given, is asked about every key and answers with why it may
+    not be used (or None): what it refuses is not offered, and neither is anything beneath a relation it refuses, so the tree offers a
+    key exactly when a request that asks `refusal` would accept it."""
 
     def walk(table: str, prefix: str, skip: str | None) -> dict:
         fields, relations = [], []
@@ -39,11 +45,15 @@ def field_tree(catalog: Catalog, definition: ListDef) -> dict:
             if name == skip:
                 continue                                # the display column of a related record is the relation itself
             try:
+                if refusal is not None and refusal(prefix + name):
+                    continue
                 fields.append(_node(catalog.resolve(base, prefix + name)))
             except ValidationError:
                 continue                                # a request would refuse it, so it is not offered
         for relation in catalog.relations(table).values():
             try:
+                if refusal is not None and refusal(prefix + relation.key):
+                    continue
                 node = _node(catalog.resolve(base, prefix + relation.key))
             except ValidationError:
                 continue
