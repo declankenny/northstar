@@ -58,9 +58,11 @@ def _read_request(definition: ReportDef, data: object, today: date) -> tuple[dic
         raise ReportInputError(f"Unknown request field: {unknown[0]}.", [unknown[0]])
     if "parameters" not in data:
         raise ReportInputError("The request must name the parameters.", ["parameters"])
-    filters = data.get("filters")
-    if filters is not None and not isinstance(filters, list):
-        raise ReportInputError("The filters must be a list.", ["filters"])
+    filters = None                                  # not named: the report's own. Only a missing key means that; `null` is not a list
+    if "filters" in data:
+        filters = data["filters"]
+        if not isinstance(filters, list):
+            raise ReportInputError("The filters must be a list.", ["filters"])
     if filters and definition.filters is None:
         raise ReportInputError("This report cannot be filtered.", ["filters"])      # never applied and never dropped
     return params_module.read(definition.params, data["parameters"], today), filters

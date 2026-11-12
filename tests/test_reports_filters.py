@@ -423,3 +423,32 @@ def test_a_field_reached_through_a_date_is_a_date_for_a_report_that_excludes_dat
         with pytest.raises(ReportInputError, match="is a date"):
             run(excluding, [condition(field, operator, value)], conn)
     assert "type.stale_after_days" in set(keys_of(engine.describe(allowing, TODAY, conn)["filters"]["fields"]))
+
+
+def test_an_explicit_null_for_the_filters_is_refused_and_only_a_missing_key_means_the_reports_own(conn, household, client):
+    """`null` is neither no filters nor the defaults: it is not a list. Omission applies the opening conditions, `[]` clears them."""
+    opening = condition("type", "is_any_of", [type_id(conn, "Savings")])
+    definition = register(FilterDecl(defaults=(opening,)))
+    run(definition, "omit", conn)
+    assert names(conn, SEEN["ids"]) == ["Alpha", "Gamma"]
+    SEEN.clear()
+    run(definition, [], conn)
+    assert len(SEEN["ids"]) == 4
+    SEEN.clear()
+    for sent in (None, "null"):
+        body = {"parameters": {}, "filters": None} if sent is None else {"parameters": {}, "filters": "null"}
+        with pytest.raises(ReportInputError, match="must be a list") as error:
+            engine.calculate(conn, definition, ADMIN, body, TODAY)
+        assert error.value.path == ["filters"]
+    assert "ids" not in SEEN                                                                     # the calculation was never invoked
+    refused = client.post("/api/reports/probe", json={"parameters": {}, "filters": None})
+    assert refused.status_code == 422 and refused.json()["code"] == "invalid_input" and refused.json()["path"] == ["filters"]
+    assert "ids" not in SEEN
+    assert client.post("/api/reports/probe", json={"parameters": {}}).status_code == 200      # a missing key is the defaults
+
+
+def test_a_report_that_cannot_be_filtered_also_refuses_a_null_for_the_filters(conn, household):
+    definition = register(None)
+    with pytest.raises(ReportInputError, match="must be a list") as error:
+        engine.calculate(conn, definition, ADMIN, {"parameters": {}, "filters": None}, TODAY)
+    assert error.value.path == ["filters"]
