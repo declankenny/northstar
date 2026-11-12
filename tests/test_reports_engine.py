@@ -61,13 +61,18 @@ def test_registering_checks_the_definition_and_refuses_a_repeat():
     assert "a" not in loader._DEFINITIONS and "probe" not in loader._DEFINITIONS
 
 
-def test_a_default_filter_cannot_be_declared_until_it_can_be_enforced():
-    """The engine counts every live account until step 4, so a default filter would promise a restricted report and give an unrestricted one."""
-    for bad in (FilterDecl("accounts", defaults=({"field": "type", "operator": "is", "value": 1},)), FilterDecl("accounts", defaults=("x",))):
-        with pytest.raises(ReportDefinitionError, match="default filters cannot be enforced"):
+def test_the_shape_of_a_filter_declaration_is_checked_when_it_is_registered():
+    """Only the shape: what the exclusions and the default conditions mean needs the registry, so that is checked whenever the report is
+    used (tests/test_reports_filters.py)."""
+    for bad in (FilterDecl(exclude_dates="yes"), FilterDecl(exclude=["type"]), FilterDecl(exclude=("",)), FilterDecl(exclude=(3,)),
+                FilterDecl(defaults=("x",)), FilterDecl(defaults=[{"field": "type"}]), "type"):
+        with pytest.raises(ReportDefinitionError):
             loader.register(simple(ok, filters=bad))
     assert "probe" not in loader._DEFINITIONS
-    loader.register(simple(ok, filters=FilterDecl("accounts")))                  # a preset alone declares the place and restricts nothing
+    loader.register(simple(ok, filters=FilterDecl()))                            # no exclusions and no defaults: everything, unrestricted
+    loader._DEFINITIONS.pop("probe")
+    loader.register(simple(ok, filters=FilterDecl(exclude_dates=True, exclude=("type.name",),
+                                                  defaults=({"field": "type", "operator": "is", "value": 1},))))
     loader._DEFINITIONS.pop("probe")
 
 
@@ -160,9 +165,9 @@ def test_a_request_with_the_wrong_shape_is_refused_with_where(conn):
         assert error.value.path == path
 
 
-def test_any_filter_is_refused_until_filtering_exists_and_never_silently_dropped(conn, household):
+def test_a_report_that_cannot_be_filtered_refuses_any_filter_and_never_silently_drops_one(conn, household):
     condition = {"field": "account", "operator": "is", "value": household[0]}
-    with pytest.raises(ReportInputError, match="not available") as error:
+    with pytest.raises(ReportInputError, match="cannot be filtered") as error:
         engine.calculate(conn, NONE, ADMIN, {"parameters": {}, "filters": [condition]}, TODAY)
     assert error.value.path == ["filters"]
     engine.calculate(conn, NONE, ADMIN, {"parameters": {}, "filters": []}, TODAY)           # an empty list is no filter

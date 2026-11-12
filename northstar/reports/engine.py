@@ -16,7 +16,7 @@ from datetime import date
 
 from northstar import currencies, db
 from northstar.networth import NoRate
-from northstar.reports import params as params_module, sections as sections_module
+from northstar.reports import filters as filters_module, params as params_module, sections as sections_module
 from northstar.reports.errors import ReportDefectError, ReportInputError, ReportUnavailable
 from northstar.reports.population import visible_accounts
 from northstar.reports.reportdef import ReportContext, ReportDef, ReportResult
@@ -24,9 +24,12 @@ from northstar.reports.reportdef import ReportContext, ReportDef, ReportResult
 log = logging.getLogger(__name__)
 
 
-def describe(definition: ReportDef, today: date) -> dict:
+def describe(definition: ReportDef, today: date, conn: sqlite3.Connection | None = None) -> dict:
     """The report's public metadata, with defaults resolved for `today` and checked against the rules. A default that does not hold
-    on this day is a fault in the report."""
+    on this day is a fault in the report. A report that can be filtered needs `conn`, because what it may be filtered by comes from the
+    registry, and a fault in its exclusions or opening conditions is a fault in the report."""
+    if definition.filters is not None and conn is None:
+        raise ValueError("Describing a report that can be filtered needs the database.")
     defaults = params_module.resolve_defaults(definition.params, today)
     try:
         params_module.read(definition.params, defaults, today)
@@ -41,11 +44,13 @@ def describe(definition: ReportDef, today: date) -> dict:
              "minimum": p.minimum, "maximum": p.maximum, "rules": params_module.describe_rules(p)}
             for p in definition.params],
         "sections": [{"key": s.key, "kind": s.kind, "view": s.view, "title": s.title, "sized": s.sized} for s in definition.sections],
-        "filters": {"enabled": False},               # filters arrive with the filter capabilities; until then none is accepted
+        "filters": {"enabled": False} if definition.filters is None else filters_module.prepare(conn, definition).describe(),
     }
 
 
-def _read_request(definition: ReportDef, data: object, today: date) -> dict:
+def _read_request(definition: ReportDef, data: object, today: date) -> tuple[dict, object]:
+    """The parameters, typed, and the filters as sent (None when the request names none). What the filters mean needs the registry,
+    so it is read where the report's filter rules are."""
     if not isinstance(data, dict):
         raise ReportInputError("The request must be an object.", [])
     unknown = sorted(str(key) for key in set(data) - {"parameters", "filters"})
@@ -53,25 +58,34 @@ def _read_request(definition: ReportDef, data: object, today: date) -> dict:
         raise ReportInputError(f"Unknown request field: {unknown[0]}.", [unknown[0]])
     if "parameters" not in data:
         raise ReportInputError("The request must name the parameters.", ["parameters"])
-    filters = data.get("filters", [])
-    if not isinstance(filters, list):
+    filters = data.get("filters")
+    if filters is not None and not isinstance(filters, list):
         raise ReportInputError("The filters must be a list.", ["filters"])
-    if filters:
-        # Never applied and never dropped: until the filter capabilities exist, a filter is refused.
-        raise ReportInputError("Filters are not available for reports yet.", ["filters"])
-    return params_module.read(definition.params, data["parameters"], today)
+    if filters and definition.filters is None:
+        raise ReportInputError("This report cannot be filtered.", ["filters"])      # never applied and never dropped
+    return params_module.read(definition.params, data["parameters"], today), filters
 
 
 def calculate(conn: sqlite3.Connection, definition: ReportDef, user, data: object, today: date) -> dict:
     """The report for this request, as the answer the page shows: the effective parameters and filters, the currency, every declared
     section checked, and the notes. `today` is read once by the caller."""
-    values = _read_request(definition, data, today)
+    values, sent = _read_request(definition, data, today)
     with db.read_transaction(conn):                # everything read from the database below shares this one snapshot
+        rules = filters_module.prepare(conn, definition)          # checked here whichever endpoint is asked first
+        if rules is None:
+            conditions, applied = (), []
+        elif sent is None:                                         # no filters named: the report's own. An empty list is "none"
+            conditions, applied = rules.opening()
+        else:
+            conditions, applied = rules.read(sent)
         system = currencies.system_currency(conn)
         if system is None:
             raise ReportUnavailable("An administrator has not chosen the system currency yet, so reports cannot be worked out.",
                                     "no_system_currency")
-        context = ReportContext(conn, today, values, visible_accounts(conn, user), system)
+        population = visible_accounts(conn, user)                   # who may see which account, then only the ones that match
+        if rules is not None:
+            population = rules.narrow(conn, population, conditions)
+        context = ReportContext(conn, today, values, population, system)
         try:
             result = definition.calculate(context)
         except NoRate as error:
@@ -80,10 +94,10 @@ def calculate(conn: sqlite3.Connection, definition: ReportDef, user, data: objec
             raise
         except Exception as error:
             raise ReportDefectError(f"report {definition.key}: the calculation raised {type(error).__name__}") from error
-    return _package(definition, values, system, result, today)
+    return _package(definition, values, applied, system, result, today)
 
 
-def _package(definition: ReportDef, values: dict, system, result: object, today: date) -> dict:
+def _package(definition: ReportDef, values: dict, applied: list, system, result: object, today: date) -> dict:
     if not isinstance(result, ReportResult):
         raise ReportDefectError(f"report {definition.key}: the calculation did not return a ReportResult")
     declared = {s.key: s for s in definition.sections}
@@ -101,8 +115,18 @@ def _package(definition: ReportDef, values: dict, system, result: object, today:
         "report": definition.key,
         "today": today.isoformat(),
         "parameters": params_module.serialise(definition.params, values),
-        "filters": [],
+        "filters": applied,
         "currency": {"code": system.code, "minor_units": system.minor_units},
         "sections": sections,
         "notes": sections_module.validate_notes(result.notes, definition.sections),
     }
+
+
+def choices(conn: sqlite3.Connection, definition: ReportDef, user, field: object) -> dict:
+    """What can be picked when filtering the report by `field`: the declared values, or the records the accounts this person may see
+    point at. The report's filter rules decide whether the field is offered, as they do for a request."""
+    with db.read_transaction(conn):
+        rules = filters_module.prepare(conn, definition)
+        if rules is None:
+            raise ReportInputError("This report cannot be filtered.", ["field"])
+        return rules.choices(conn, field, visible_accounts(conn, user))

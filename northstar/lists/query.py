@@ -11,6 +11,7 @@ A column that has to be worked out is a column of a view the list reads from, so
 database's own work like any other.
 """
 
+import json
 import math
 import re
 import sqlite3
@@ -58,11 +59,12 @@ class _Joins:
         return self.aliases[key]
 
 
-class _View:
-    """The pieces of the statement for one request."""
+class _Conditions:
+    """What conditions on the rows of one table need: the joins they use, the parameters they bring, and the SQL of each. A list's
+    view is this and more; a caller that only wants the rows that match (a report's population) uses it alone."""
 
-    def __init__(self, catalog: Catalog, definition: ListDef, request: ListRequest):
-        self.catalog, self.definition, self.request = catalog, definition, request
+    def __init__(self, catalog: Catalog, base: str):
+        self.catalog, self.base = catalog, base
         self.joins = _Joins(catalog)
         self.params: list = []
 
@@ -76,6 +78,28 @@ class _View:
         """The alias of the table a kind's own path of relations leads to, from the table the column is on."""
         return self.joins.alias((*resolved.path, *self.catalog.follow(resolved.table, keys)))
 
+    def identity(self, resolved: Resolved) -> str:
+        """The expression a relation is filtered by: the id it points at."""
+        return f'{self.joins.alias(resolved.path[:-1])}."{resolved.relation.column}"'
+
+    def condition(self, condition) -> str:
+        """The SQL for one condition, parenthesised. Its parameters are added to `params`, in the order the SQL uses them."""
+        resolved = self.catalog.resolve(self.base, condition.key)
+        if resolved.relation:                       # a relation is filtered by the id it points at
+            sql, params = Reference().where(self.identity(resolved), condition.operator, condition.value)
+        else:
+            sql, params = resolved.kind.where(resolved.kind.compare(self, resolved), condition.operator, condition.value)
+        self.params += params
+        return f"({sql})"
+
+
+class _View(_Conditions):
+    """The pieces of the statement for one request."""
+
+    def __init__(self, catalog: Catalog, definition: ListDef, request: ListRequest):
+        super().__init__(catalog, definition.table)
+        self.definition, self.request = definition, request
+
     # -- the statement --
 
     def where(self) -> str:
@@ -88,18 +112,8 @@ class _View:
         if request.search:
             parts.append(self._search())
         for condition in request.filters:
-            resolved = catalog.resolve(definition.table, condition.key)
-            if resolved.relation:                       # a relation is filtered by the id it points at
-                sql, params = Reference().where(self.identity(resolved), condition.operator, condition.value)
-            else:
-                sql, params = resolved.kind.where(resolved.kind.compare(self, resolved), condition.operator, condition.value)
-            parts.append(f"({sql})")
-            self.params += params
+            parts.append(self.condition(condition))
         return " AND ".join(parts)
-
-    def identity(self, resolved: Resolved) -> str:
-        """The expression a relation is filtered by: the id it points at."""
-        return f'{self.joins.alias(resolved.path[:-1])}."{resolved.relation.column}"'
 
     def _search(self) -> str:
         """Match the searchable columns of the table and the display values of its relations."""
@@ -284,29 +298,58 @@ CHOICE_LIMIT = 500
 
 
 def choices(conn: sqlite3.Connection, catalog: Catalog, definition: ListDef, key: str) -> dict:
-    """What a person can pick from when filtering by a column. A choice of declared values (a status) is those values. A relation
+    """What a person can pick from when filtering a list by a column. A choice of declared values (a status) is those values. A relation
     is the records the list's own rows point at, so a filter offers what is actually there: never a record the list leaves out
     (a deleted account has no balances in a list of balances), and not every record the target table holds. Each has its id, the
     display value, and the table's tell-apart detail where it declares one, so two people with one name can be told apart.
     At most CHOICE_LIMIT are returned, with `more` saying there were others."""
-    base = definition.table
-    resolved = catalog.resolve(base, key)
+    resolved = catalog.resolve(definition.table, key)
+    if resolved.relation is not None and definition.params:
+        raise ValidationError("That list has no choices to filter by.")
+    return field_choices(conn, catalog, definition.table, definition.source, key, scope=definition.scope)
+
+
+def field_choices(conn: sqlite3.Connection, catalog: Catalog, table: str, source: str | None, key: str, *,
+                  scope: str | None = None, within=None) -> dict:
+    """The choices for filtering the rows of `table` (read from `source`, a view over it, when there is one) by `key`: the declared
+    values, or the records the rows point at, as `choices` describes. `scope` is a fixed condition of the rows; `within` limits them
+    to these ids of the table, so a caller offers only what its own rows hold."""
+    resolved = catalog.resolve(table, key)
     if resolved.relation is None:
         if isinstance(resolved.kind, Category):
             return {"kind": "values", "values": list(resolved.kind.values), "options": [], "more": False}
         raise ValidationError("That column has no list of choices.")
 
-    if definition.params:
-        raise ValidationError("That list has no choices to filter by.")
-    request = ListRequest((), (), "", definition.sort[0], "asc", None, 1, 10)
-    view = _View(catalog, definition, request)
+    view = _Conditions(catalog, table)
     identity, display = view.identity(resolved), view.plain(resolved)
     target = catalog.tables[resolved.relation.target]
     detail = f'{view.joins.alias(resolved.path)}."{target.tell_apart}"' if target.tell_apart else "NULL"
     collate = " COLLATE NOCASE" if resolved.kind.sorts_without_case else ""
-    where = f"{identity} IS NOT NULL" + (f" AND ({definition.scope})" if definition.scope else "")
-    sql = (f'SELECT DISTINCT {identity} AS id, {display} AS value, {detail} AS detail FROM "{definition.source or base}" AS b '
+    where, params = f"{identity} IS NOT NULL" + (f" AND ({scope})" if scope else ""), []
+    if within is not None:
+        where += f' AND b."{catalog.primary_key[table]}" IN (SELECT value FROM json_each(?))'
+        params.append(json.dumps(list(within)))
+    sql = (f'SELECT DISTINCT {identity} AS id, {display} AS value, {detail} AS detail FROM "{source or table}" AS b '
            f'{" ".join(view.joins.sql)} WHERE {where} ORDER BY value{collate}, id LIMIT ?')
-    rows = conn.execute(sql, (CHOICE_LIMIT + 1,)).fetchall()
+    rows = conn.execute(sql, (*params, CHOICE_LIMIT + 1)).fetchall()
     return {"kind": "records", "values": [], "more": len(rows) > CHOICE_LIMIT,
             "options": [{"id": r["id"], "value": r["value"], "detail": r["detail"]} for r in rows[:CHOICE_LIMIT]]}
+
+
+_PLAIN_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def matching_ids(conn: sqlite3.Connection, catalog: Catalog, table: str, source: str | None, conditions, within=None) -> tuple[int, ...]:
+    """The ids of the rows of `table` (read from `source`, a view over it, when there is one) that meet every condition, in id order.
+    `within` limits them to these ids, so what is returned is always a subset of what the caller may see. Conditions are as
+    `parse_conditions` read them."""
+    if not _PLAIN_NAME.match(source or table):
+        raise ValueError("A source is a plain table or view name.")
+    view = _Conditions(catalog, table)
+    parts = [view.condition(condition) for condition in conditions]
+    key = f'b."{catalog.primary_key[table]}"'
+    if within is not None:
+        parts.append(f"{key} IN (SELECT value FROM json_each(?))")
+        view.params.append(json.dumps(list(within)))
+    sql = f'SELECT {key} FROM "{source or table}" AS b {" ".join(view.joins.sql)} WHERE {" AND ".join(parts) or "1"} ORDER BY {key}'
+    return tuple(row[0] for row in conn.execute(sql, view.params))
