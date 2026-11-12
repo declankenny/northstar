@@ -26,7 +26,7 @@ Use synthetic data only, always: no real balances, account numbers or credential
 
    ```
    python -m pytest        # Python tests
-   cd frontend && npm test # frontend tests
+   cd frontend && npm test # frontend tests (charts are tested as DOM in jsdom: see the comment at the top of frontend/src/charts/Chart.test.tsx)
    ```
 
 3. If you changed how the app looks or behaves, run it and look at the result. A passing test suite is not the same as a working screen.
