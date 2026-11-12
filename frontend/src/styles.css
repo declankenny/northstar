@@ -577,7 +577,8 @@ button.btn.ghost.danger-text { color: var(--neg); }
 .chart-frame { display: flex; flex-direction: column; gap: 10px; }
 .chart-canvas { width: 100%; height: 360px; }
 .chart-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
-.chart-crumbs [aria-current] { font-weight: 650; }
+.chart-crumbs [aria-current] { font-weight: 650; border-radius: 4px; }
+.chart-crumbs [aria-current]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .chart-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .chart-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; color: var(--text); font: inherit; padding: 6px 8px;
   border-radius: 6px; cursor: pointer; text-align: left; }

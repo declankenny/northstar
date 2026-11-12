@@ -135,6 +135,44 @@ describe("a treemap you can drill into", () => {
     expect(screen.getByRole("navigation", { name: "Where you are in Assets" })).toBeTruthy();
   });
 
+  it("moves focus to where you now are after drilling in or going back, because the button that had it is gone", () => {
+    const deep: TreeNode = { id: "r", name: "Root", size: 1, children: [{ id: "a", name: "A", size: 1, children: [{ id: "b", name: "B", size: 1, children: [{ id: "c", name: "C", size: 1 }] }] }] };
+    render(<TreemapDrill root={deep} format={format} label="Assets" />);
+    const current = () => within(crumbs()).getByText((_, el) => el?.getAttribute("aria-current") === "location");
+    const first = screen.getByRole("button", { name: /^A/ });
+    first.focus();
+    fireEvent.click(first);                                                        // drill into A from its button
+    expect(document.activeElement).toBe(current());
+    expect(document.activeElement!.textContent).toBe("A");
+    const second = screen.getByRole("button", { name: /^B/ });
+    second.focus();
+    fireEvent.click(second);
+    expect(document.activeElement!.textContent).toBe("B");
+    const back = within(crumbs()).getByRole("button", { name: "Root" });
+    back.focus();
+    fireEvent.click(back);                                                         // and back up from the breadcrumb, whose button became text
+    expect(document.activeElement).toBe(current());
+    expect(document.activeElement!.textContent).toBe("Root");
+    expect(document.activeElement).not.toBe(document.body);
+    // The place is not in the tab order by itself, only a target for focus, and what is inside it comes next.
+    expect(current().tabIndex).toBe(-1);
+  });
+
+  it("leaves focus on a node with nothing inside it, which does not go anywhere, and does not take it for a click on the chart", () => {
+    const onLeaf = vi.fn();
+    const { container } = show({ onLeaf });
+    const leaf = list().getByRole("button", { name: /Cash/ });
+    leaf.focus();
+    fireEvent.click(leaf);
+    expect(onLeaf).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(leaf);
+    (document.activeElement as HTMLElement).blur();
+    const svg = container.querySelector("svg")!;
+    for (const type of ["mouseMove", "mouseDown", "mouseUp", "click"] as const) fireEvent[type](svg, { clientX: 100, clientY: 100 });
+    expect(crumbs().textContent).toBe("Assets › Savings");                          // it drilled, as a click on the chart does
+    expect(document.activeElement).toBe(document.body);                            // and left focus alone
+  });
+
   it("keeps a colour with its entity when another is filtered out, and never gives it to the next one", () => {
     const { container, rerender } = show();
     const slots = () => [...container.querySelectorAll(".chart-list .chart-swatch")].map((s) => [...s.classList].find((c) => c.startsWith("chart-slot")));
