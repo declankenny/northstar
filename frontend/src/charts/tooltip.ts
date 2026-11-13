@@ -1,3 +1,5 @@
+import { SLOTS } from "./theme";
+
 /** A chart's tooltip, as HTML with class names only. The app's Content-Security-Policy (`style-src 'self'`) blocks a `style` attribute in
  *  markup, which is what ECharts' default tooltip writes, so every chart uses this: what is coloured or laid out is done by the classes in
  *  styles.css, and a colour is a slot (`chart-slot-3`) and never a value. Text is escaped. */
@@ -9,7 +11,7 @@ export const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ESCA
 
 export function tooltipHtml({ title, rows, note }: Tip): string {
   const lines = rows.map((row) => {
-    const swatch = row.slot && row.slot >= 1 && row.slot <= 8 ? `<span class="chart-swatch chart-slot-${Math.trunc(row.slot)}"></span>` : "";
+    const swatch = row.slot && row.slot >= 1 && row.slot <= SLOTS ? `<span class="chart-swatch chart-slot-${Math.trunc(row.slot)}"></span>` : "";
     return `<div class="chart-tip-row">${swatch}<span class="chart-tip-label">${escapeHtml(row.label)}</span><b class="chart-tip-value">${escapeHtml(row.value)}</b></div>`;
   });
   return `<div class="chart-tip"><div class="chart-tip-title">${escapeHtml(title)}</div>${lines.join("")}${note ? `<div class="chart-tip-note">${escapeHtml(note)}</div>` : ""}</div>`;

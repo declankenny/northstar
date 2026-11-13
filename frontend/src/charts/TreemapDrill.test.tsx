@@ -48,8 +48,20 @@ describe("the nodes and slots", () => {
     expect(slotOf(savings, [root])).toBe(1);
     expect(slotOf(savings.children![0], [root, savings])).toBe(1);
     expect(slotOf(root, [root])).toBeUndefined();
-    expect(slotOf({ id: "x", name: "X", size: 1, slot: 9 }, [root])).toBeUndefined();
     expect(slotOf({ id: "x", name: "X", size: 1, slot: 0 }, [root])).toBeUndefined();
+    expect(slotOf({ id: "x", name: "X", size: 1, slot: -3 }, [root])).toBeUndefined();
+    expect(slotOf({ id: "x", name: "X", size: 1, slot: 1.5 }, [root])).toBeUndefined();
+  });
+
+  it("reuses the colours in order when there are more entities than colours, and does not group the surplus: that is not the palette's decision", () => {
+    const root: TreeNode = { id: "r", name: "Root", size: 1, children: Array.from({ length: 20 }, (_, i) => ({ id: `t${i + 1}`, name: `Type ${i + 1}`, size: 1, slot: i + 1 })) };
+    expect([1, 8, 9, 16, 17, 20].map((n) => slotOf(root.children![n - 1], [root]))).toEqual([1, 8, 9, 16, 1, 4]);
+    const { container } = render(<TreemapDrill root={root} format={format} label="Assets" />);
+    const buttons = list().getAllByRole("button");
+    expect(buttons).toHaveLength(20);                                          // every type is its own entry: running out of colours folds nothing
+    expect(buttons.map((b) => b.textContent)).not.toContain("Other");
+    const classes = [...container.querySelectorAll(".chart-list .chart-swatch")].map((s) => [...s.classList].find((c) => c.startsWith("chart-slot")));
+    expect(classes.slice(14)).toEqual(["chart-slot-15", "chart-slot-16", "chart-slot-1", "chart-slot-2", "chart-slot-3", "chart-slot-4"]);
   });
 
   it("colours a block by its entity's slot and labels it for a reader of the colour behind it", () => {

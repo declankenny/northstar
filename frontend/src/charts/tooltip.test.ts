@@ -13,8 +13,8 @@ describe("a chart's tooltip", () => {
   });
 
   it("colours a swatch by slot, never by a value, and only for a slot there is", () => {
-    for (const slot of [0, 9, -1, 3.7 + 10]) expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot }] })).not.toContain("chart-swatch");
-    expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot: 8 }] })).toContain("chart-slot-8");
+    for (const slot of [0, 17, -1, 3.7 + 14, 100]) expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot }] })).not.toContain("chart-swatch");
+    for (const slot of [8, 9, 16]) expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot }] })).toContain(`chart-slot-${slot}`);
     expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot: 2.9 }] })).toContain("chart-slot-2");
     expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot: Number.NaN }] })).not.toContain("chart-swatch");
   });
