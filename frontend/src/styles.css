@@ -582,6 +582,7 @@ button.btn.ghost.danger-text { color: var(--neg); }
 .chart-frame { display: flex; flex-direction: column; gap: 10px; }
 .chart-canvas { width: 100%; height: 360px; }
 .chart-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
+.chart-crumbs [aria-hidden] { margin-left: 0.3em; }                       /* the space before the arrow is the first thing in a flex item, so it collapses */
 .chart-crumbs [aria-current] { font-weight: 650; border-radius: 4px; }
 .chart-crumbs [aria-current]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .chart-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
@@ -596,7 +597,7 @@ button.btn.ghost.danger-text { color: var(--neg); }
 .chart-slot-9 { background: var(--chart-9); } .chart-slot-10 { background: var(--chart-10); } .chart-slot-11 { background: var(--chart-11); } .chart-slot-12 { background: var(--chart-12); }
 .chart-slot-13 { background: var(--chart-13); } .chart-slot-14 { background: var(--chart-14); } .chart-slot-15 { background: var(--chart-15); } .chart-slot-16 { background: var(--chart-16); }
 .chart-tip { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 140px; font-size: 13px; color: var(--text); }
-.chart-tip-title { font-weight: 650; margin-bottom: 4px; }
+.chart-tip-title { font-weight: 650; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
 .chart-tip-row { display: flex; align-items: center; gap: 8px; }
 .chart-tip-label { flex: 1; color: var(--muted); }
 .chart-tip-value { font-variant-numeric: tabular-nums; }

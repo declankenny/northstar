@@ -242,6 +242,43 @@ def test_a_bad_link_inside_a_node_or_a_row_is_found():
         sections.validate(TREE, data)
 
 
+# -- a node's note and colour --
+
+def test_a_node_may_carry_a_short_note_and_the_entity_its_colour_comes_from():
+    data = tree()
+    data["nodes"][0]["note"] = "2 accounts"
+    data["nodes"][0]["children"][0]["colour"] = {"kind": "account_type", "id": 7}
+    got = sections.validate(TREE, data)["nodes"][0]
+    assert got["note"] == "2 accounts" and got["children"][0]["colour"] == {"kind": "account_type", "id": 7}
+    assert "note" not in got["children"][1] and "colour" not in got["children"][1]
+
+
+@pytest.mark.parametrize("bad", ["", "   ", 5, None, "two\nlines", "x" * 121])
+def test_a_note_is_one_short_line_of_text(bad):
+    data = tree()
+    data["nodes"][2]["note"] = bad
+    with pytest.raises(ReportDefectError):
+        sections.validate(TREE, data)
+
+
+def test_a_note_of_the_longest_allowed_length_is_accepted():
+    data = tree()
+    data["nodes"][2]["note"] = "x" * 120
+    assert sections.validate(TREE, data)["nodes"][2]["note"] == "x" * 120
+
+
+@pytest.mark.parametrize("bad", [
+    {"kind": "account_type"}, {"id": 3}, {"kind": "account_type", "id": 0}, {"kind": "account_type", "id": -1}, {"kind": "account_type", "id": True},
+    {"kind": "account_type", "id": 1.5}, {"kind": "Account Type", "id": 3}, {"kind": "", "id": 3}, {"kind": "account_type", "id": 3, "slot": 2},
+    {"kind": "account_type", "id": 2 ** 53}, "account_type", 3, None,
+])
+def test_a_colour_names_a_kind_and_an_id_from_1_and_nothing_else(bad):
+    data = tree()
+    data["nodes"][2]["colour"] = bad
+    with pytest.raises(ReportDefectError):
+        sections.validate(TREE, data)
+
+
 # -- notes --
 
 def test_a_note_has_a_code_a_text_and_may_name_a_declared_section():

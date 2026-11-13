@@ -60,9 +60,10 @@ def test_the_endpoints_need_a_signed_in_person(anon_client):
 
 
 def test_the_list_hides_admin_only_reports_from_a_member(client, member_client):
-    assert [r["key"] for r in client.get("/api/reports").json()["reports"]] == ["synthetic_as_of", "synthetic_none", "synthetic_pair", "synthetic_range"]
+    assert [r["key"] for r in client.get("/api/reports").json()["reports"]] == [
+        "assets_liabilities", "synthetic_as_of", "synthetic_none", "synthetic_pair", "synthetic_range"]
     listed = member_client.get("/api/reports").json()["reports"]
-    assert [r["key"] for r in listed] == ["synthetic_as_of", "synthetic_pair", "synthetic_range"]
+    assert [r["key"] for r in listed] == ["assets_liabilities", "synthetic_as_of", "synthetic_pair", "synthetic_range"]
     assert set(listed[0]) == {"key", "title", "description"}
 
 

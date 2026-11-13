@@ -133,9 +133,29 @@ describe("a hierarchy drawn as a treemap", () => {
     render(<TreemapView {...props(["hierarchy", "treemap"], data, { title: "Assets", sized: true })} />);
     fireEvent.click(screen.getByRole("button", { name: /^Savings/ }));
     const list = within(screen.getByRole("list", { name: "Assets, as a list" }));
-    expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual(["Emergency fund$600.00", "Overdrawn-$10.00"]);
+    expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual(["Emergency fund$600.00", "Overdrawn · not in the chart-$10.00"]);
     act(() => { fireEvent.click(list.getByRole("button", { name: /Emergency fund/ })); });
     expect(window.location.pathname).toBe("/accounts/9");
+  });
+
+  it("colours a node from the entity the report names, so an account takes its type's colour and not its own id's", () => {
+    const coloured: HierarchyData = { nodes: [
+      { id: "t7", label: "Savings", value: 600, size: 600, colour: { kind: "account_type", id: 7 }, children: [
+        { id: "x31", label: "Joint", value: 600, size: 600, colour: { kind: "account_type", id: 7 }, link: { to: "account", id: 31 } }] },
+      { id: "t18", label: "Cash", value: 100, size: 100, colour: { kind: "account_type", id: 18 } },
+      { id: "t0", label: "Plain", value: 50, size: 50 }] };
+    const { container } = render(<TreemapView {...props(["hierarchy", "treemap"], coloured, { title: "Assets", sized: true })} />);
+    const swatches = [...container.querySelectorAll(".chart-list .chart-swatch")].map((s) => [...s.classList].find((c) => c.startsWith("chart-slot")));
+    expect(swatches).toEqual(["chart-slot-7", "chart-slot-2", undefined]);                  // 18 repeats as 2, and a node with no colour is muted
+    fireEvent.click(screen.getByRole("button", { name: /^Savings/ }));
+    expect([...container.querySelectorAll(".chart-list .chart-swatch")].map((s) => [...s.classList].find((c) => c.startsWith("chart-slot")))).toEqual(["chart-slot-7"]);
+  });
+
+  it("says nothing but where you are when a hierarchy has no nodes, so a report can say why in a note", () => {
+    const { container } = render(<TreemapView {...props(["hierarchy", "treemap"], { nodes: [] }, { title: "Liabilities", sized: true })} />);
+    expect(screen.getByRole("navigation", { name: "Where you are in Liabilities" }).textContent).toBe("Liabilities");
+    expect(container.querySelector(".chart-canvas")).toBeNull();
+    expect(screen.queryByRole("list")).toBeNull();
   });
 
   it("does nothing for a leaf that names no target", () => {

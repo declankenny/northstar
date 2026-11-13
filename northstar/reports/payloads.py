@@ -61,12 +61,19 @@ class SeriesData(TypedDict):
 # -- hierarchy --
 
 
+class Colour(TypedDict):
+    kind: str                                       # what the id is the id of, such as "account_type"
+    id: int                                         # the entity's id, from 1: the page turns it into a slot of the palette
+
+
 class HierarchyNode(TypedDict):
     id: str
     label: str
     value: int                                      # signed financial value; a parent equals the sum of its children
     size: NotRequired[int]                          # a leaf of a sized section only; the framework adds each parent's
     link: NotRequired[Link]
+    note: NotRequired[str]                          # one short line the report writes, such as a balance date
+    colour: NotRequired[Colour]                     # the entity the colour comes from; without one a node takes its parent's
     children: NotRequired[list["HierarchyNode"]]
 
 

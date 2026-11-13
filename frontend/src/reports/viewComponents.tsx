@@ -1,4 +1,5 @@
 import { type ComponentType, useMemo } from "react";
+import { slotFor } from "../charts/colour";
 import { TreemapDrill } from "../charts/TreemapDrill";
 import type { TreeNode } from "../charts/treemap";
 import { formatDate } from "../dates";
@@ -139,12 +140,14 @@ function toTree(nodes: HierarchyNode[], prefix: string, values: Map<string, numb
     values.set(id, node.value);
     links.set(id, node.link);
     const children = node.children?.length ? toTree(node.children, id, values, links) : undefined;
-    return { id, name: node.label, size: node.size ?? 0, children };
+    // A colour is named by the entity it comes from, and the page turns that into a slot from the id alone, so it is the same everywhere.
+    const slot = node.colour ? slotFor(node.colour.kind, node.colour.id) : undefined;
+    return { id, name: node.label, size: node.size ?? 0, slot, note: node.note, children };
   });
 }
 
-/** A hierarchy drawn as a treemap you can drill into, with the same nodes as a list of buttons. The nodes' colours and the rest of what
- *  a particular report needs of it are the report's own work; this is the shared view. */
+/** A hierarchy drawn as a treemap you can drill into, with the same nodes as a list of buttons. A node's colour comes from the entity the report
+ *  names (`colour`), else its parent's; its note is shown in its tooltip; a node with no area is only in the list. */
 export function TreemapView({ section, data, currency }: ViewProps) {
   const { nodes } = data as HierarchyData;
   const { root, values, links } = useMemo(() => {

@@ -80,6 +80,10 @@ export type HierarchyNode = {
   value: number;
   size?: number;
   link?: ReportLink;
+  /** One short line the report writes (a balance date, say), shown beside the node. */
+  note?: string;
+  /** The entity the colour comes from (an account names its type), turned into a slot by `slotFor`. Without one a node takes its parent's. */
+  colour?: { kind: string; id: number };
   children?: HierarchyNode[];
 };
 

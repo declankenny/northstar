@@ -12,6 +12,11 @@ describe("a chart's tooltip", () => {
     expect(html).toContain("Two accounts");
   });
 
+  it("puts a colour square in the title row, beside the name, and only for a slot there is", () => {
+    expect(tooltipHtml({ title: "Savings", slot: 4, rows: [] })).toContain('<div class="chart-tip-title"><span class="chart-swatch chart-slot-4"></span><span>Savings</span></div>');
+    for (const slot of [undefined, 0, 17, Number.NaN]) expect(tooltipHtml({ title: "Savings", slot, rows: [] })).not.toContain("chart-swatch");
+  });
+
   it("colours a swatch by slot, never by a value, and only for a slot there is", () => {
     for (const slot of [0, 17, -1, 3.7 + 14, 100]) expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot }] })).not.toContain("chart-swatch");
     for (const slot of [8, 9, 16]) expect(tooltipHtml({ title: "t", rows: [{ label: "l", value: "v", slot }] })).toContain(`chart-slot-${slot}`);

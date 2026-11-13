@@ -20,9 +20,10 @@ def test_every_section_kind_has_a_payload_type_and_nothing_else_does():
 def test_the_payload_fields_are_the_fields_the_validators_accept():
     """A payload that uses every field the type names is accepted, and the checked copy has exactly those fields."""
     link = {"to": "list", "list": "balances", "filters": [{"field": "a", "operator": "is", "value": 1}]}
-    node = {"id": "n", "label": "N", "value": 1, "link": link, "children": [{"id": "c", "label": "C", "value": 1, "size": 1}]}
+    node = {"id": "n", "label": "N", "value": 1, "link": link, "note": "A note", "colour": {"kind": "account_type", "id": 3},
+            "children": [{"id": "c", "label": "C", "value": 1, "size": 1}]}
     checked = sections.validate(TREE, {"nodes": [node]})["nodes"][0]
-    assert set(checked) == fields(payloads.HierarchyNode) and set(checked["children"][0]) == fields(payloads.HierarchyNode) - {"link", "children"}
+    assert set(checked) == fields(payloads.HierarchyNode) and set(checked["children"][0]) == fields(payloads.HierarchyNode) - {"link", "children", "note", "colour"}
     assert set(sections.link({"to": "account", "id": 1}, "x")) == fields(payloads.EntityLink)
     assert set(sections.link(link, "x")) == fields(payloads.ListLink)
 
