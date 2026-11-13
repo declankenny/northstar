@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
 /** What a chart needs from the app's look. ECharts takes its colours in JavaScript, so they are read from the CSS variables (`--text`,
- *  `--chart-1` ... `--chart-8` in styles.css) and read again when the theme changes. */
+ *  `--chart-1` ... `--chart-16` in styles.css) and read again when the theme changes. */
 export type ChartTheme = {
   text: string; muted: string; surface: string; border: string;
   series: string[];                              // the categorical slots, in their fixed order
 };
 
-export const SLOTS = 8;
+/** How many colours the palette has. It is a size and never a limit: past it the colours repeat (see `slotFor`). */
+export const SLOTS = 16;
 const FALLBACK = { text: "#888888", muted: "#888888", surface: "#ffffff", border: "#cccccc", series: "#888888" };
 
 export function readChartTheme(root: HTMLElement = document.documentElement): ChartTheme {

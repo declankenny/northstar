@@ -3,18 +3,23 @@
   --text: #e8eaed; --muted: #8b939c; --accent: #6a9fd0; --accent-soft: rgba(106, 159, 208, .22);
   --pill: #20252b; --pill-active: #2b3238; --pos: #7fb08a; --neg: #d98a80; --on-accent: #0f1114;
   --warn: #d9b36a; --warn-soft: rgba(217, 179, 106, .16); --overlay: rgba(0, 0, 0, .55); color-scheme: dark;
-  /* The categorical slots of the charts, in their fixed order: one palette stepped for each theme, checked against the theme's surface
-     (docs/decisions.md, "Reports draw their charts with Apache ECharts"). Never reordered, and never used for status. */
-  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
-  --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
+  /* The categorical colours of the charts, in their fixed order: sixteen, stepped for this theme and checked against its surface. Slots 1 to 8
+     are the chosen hues and 9 to 16 the same hues again, further from their twins (docs/decisions.md, "Chart colours are one fixed palette ...").
+     Never reordered: a colour comes from an entity's id, so a change here changes the colour of what already exists. */
+  --chart-1: #417dc7; --chart-2: #bd6337; --chart-3: #009c79; --chart-4: #b58a14;
+  --chart-5: #c06089; --chart-6: #3b8841; --chart-7: #7161b7; --chart-8: #bd5953;
+  --chart-9: #225fa6; --chart-10: #9c4515; --chart-11: #007a5e; --chart-12: #926d01;
+  --chart-13: #9f426c; --chart-14: #5ba85f; --chart-15: #9384dd; --chart-16: #9c3b37;
 }
 :root[data-theme="light"] {
   --bg: #f6f7f8; --sidebar: #ffffff; --surface: #ffffff; --border: #e3e6e9;
   --text: #1a1d21; --muted: #6a727b; --accent: #3a6d9c; --accent-soft: rgba(58, 109, 156, .16);
   --pill: #eceef0; --pill-active: #ffffff; --pos: #2f7d4f; --neg: #b4443a; --on-accent: #ffffff;
   --warn: #9a6a12; --warn-soft: rgba(154, 106, 18, .12); --overlay: rgba(20, 24, 28, .4); color-scheme: light;
-  --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a; --chart-4: #eda100;
-  --chart-5: #e87ba4; --chart-6: #008300; --chart-7: #6250d6; --chart-8: #e34948;
+  --chart-1: #2769b7; --chart-2: #ad4d18; --chart-3: #04896a; --chart-4: #a77e01;
+  --chart-5: #b14c79; --chart-6: #197326; --chart-7: #5c49a3; --chart-8: #ab413e;
+  --chart-9: #6daeff; --chart-10: #f89161; --chart-11: #5ec8a6; --chart-12: #d5ab47;
+  --chart-13: #f589b6; --chart-14: #63b768; --chart-15: #9b8bec; --chart-16: #f7857e;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
@@ -586,9 +591,10 @@ button.btn.ghost.danger-text { color: var(--neg); }
 .chart-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .chart-item-name { flex: 1; }
 .chart-swatch { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 3px; background: var(--muted); }
-.chart-slot-1 { background: var(--chart-1); } .chart-slot-2 { background: var(--chart-2); } .chart-slot-3 { background: var(--chart-3); }
-.chart-slot-4 { background: var(--chart-4); } .chart-slot-5 { background: var(--chart-5); } .chart-slot-6 { background: var(--chart-6); }
-.chart-slot-7 { background: var(--chart-7); } .chart-slot-8 { background: var(--chart-8); }
+.chart-slot-1 { background: var(--chart-1); } .chart-slot-2 { background: var(--chart-2); } .chart-slot-3 { background: var(--chart-3); } .chart-slot-4 { background: var(--chart-4); }
+.chart-slot-5 { background: var(--chart-5); } .chart-slot-6 { background: var(--chart-6); } .chart-slot-7 { background: var(--chart-7); } .chart-slot-8 { background: var(--chart-8); }
+.chart-slot-9 { background: var(--chart-9); } .chart-slot-10 { background: var(--chart-10); } .chart-slot-11 { background: var(--chart-11); } .chart-slot-12 { background: var(--chart-12); }
+.chart-slot-13 { background: var(--chart-13); } .chart-slot-14 { background: var(--chart-14); } .chart-slot-15 { background: var(--chart-15); } .chart-slot-16 { background: var(--chart-16); }
 .chart-tip { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 140px; font-size: 13px; color: var(--text); }
 .chart-tip-title { font-weight: 650; margin-bottom: 4px; }
 .chart-tip-row { display: flex; align-items: center; gap: 8px; }

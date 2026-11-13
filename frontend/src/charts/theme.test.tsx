@@ -23,7 +23,7 @@ function palette(theme: "dark" | "light") {
 }
 
 describe("the colours of a chart", () => {
-  it("are read from the page's CSS variables, the text and surface colours and the eight categorical slots in order", () => {
+  it("are read from the page's CSS variables, the text and surface colours and the sixteen categorical slots in order", () => {
     paint({ "--text": "#111111", "--muted": "#222222", "--surface": "#333333", "--border": "#444444", "--chart-1": "#aa0000", "--chart-8": "#00aa00" });
     const theme = readChartTheme();
     expect(theme).toMatchObject({ text: "#111111", muted: "#222222", surface: "#333333", border: "#444444" });
@@ -71,7 +71,7 @@ describe("the label on a block", () => {
     expect(onColor("not a colour")).toBe("#ffffff");
   });
 
-  it("is never worse than 3:1 on any slot of either theme, which is the least a large label may have", () => {
+  it("is never worse than 3:1 on any of the sixteen slots of either theme, which is the least a large label may have", () => {
     for (const theme of ["light", "dark"] as const) {
       for (const fill of palette(theme)) expect(contrast(fill!, onColor(fill!)), `${theme} ${fill}`).toBeGreaterThanOrEqual(3);
     }
@@ -84,17 +84,22 @@ describe("the label on a block", () => {
 });
 
 describe("the palette in the stylesheet", () => {
-  // Validated (dataviz validate_palette) against each theme's own surface: light on #ffffff, dark on #1a1e23. Every check passes in both;
-  // the light theme's aqua, yellow and magenta are under 3:1 on white, which is why every chart has direct labels and a list of its data.
-  const LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
-  const DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+  // Palette D, extended to sixteen, validated (dataviz validate_palette, neighbouring slots) against each theme's own surface: light on #ffffff,
+  // dark on #1a1e23. The lightness band, colour floor, colour-blind and normal-vision separation checks all pass on both; the only warning is
+  // that some of the lighter colours are under 3:1 against the surface, which is why every chart has direct labels and a list of its data.
+  // Slots 1 to 8 are the chosen hues and 9 to 16 the same hues again, further from their twins.
+  const LIGHT = ["#2769b7", "#ad4d18", "#04896a", "#a77e01", "#b14c79", "#197326", "#5c49a3", "#ab413e", "#6daeff", "#f89161", "#5ec8a6", "#d5ab47", "#f589b6", "#63b768", "#9b8bec", "#f7857e"];
+  const DARK = ["#417dc7", "#bd6337", "#009c79", "#b58a14", "#c06089", "#3b8841", "#7161b7", "#bd5953", "#225fa6", "#9c4515", "#007a5e", "#926d01", "#9f426c", "#5ba85f", "#9384dd", "#9c3b37"];
 
-  it("has the eight validated slots, in order, for each theme", () => {
+  it("has the sixteen validated slots, in order, for each theme", () => {
     expect(palette("light")).toEqual(LIGHT);
     expect(palette("dark")).toEqual(DARK);
   });
 
-  it("has a class for every slot, and the tooltip and swatches use classes only", () => {
+  it("has a class for every slot and none past them, and the tooltip and swatches use classes only", () => {
+    expect(SLOTS).toBe(16);
+    expect(styles).not.toContain(".chart-slot-17 ");
+    expect(styles).not.toContain("--chart-17:");
     for (let slot = 1; slot <= SLOTS; slot++) expect(styles).toContain(`.chart-slot-${slot} { background: var(--chart-${slot}); }`);
     expect(styles).toMatch(/\.chart-tip \{/);
   });

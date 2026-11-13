@@ -2,9 +2,9 @@ import type { EChartsCoreOption } from "./echarts";
 import { type ChartTheme, onColor, SLOTS } from "./theme";
 import { tooltipOption } from "./tooltip";
 
-/** A node of a hierarchy to draw as a treemap. `size` is the area; `slot` (1 to 8) is the colour, given to the entity and never to its
- *  rank, so a filter that removes a type does not repaint the others. A node without one takes its parent's. A node with children can be
- *  drilled into. */
+/** A node of a hierarchy to draw as a treemap. `size` is the area; `slot` (a whole number from 1: past the palette's size it repeats, see
+ *  `slotFor`) is the colour, given to the entity and never to its rank, so a filter that removes a type does not repaint the others.
+ *  A node without one takes its parent's. A node with children can be drilled into. */
 export type TreeNode = { id: string; name: string; size: number; slot?: number; children?: TreeNode[] };
 
 /** The nodes from the root down the ids of `path`, stopping at the first id that is not there (a filter may have removed it). */
@@ -18,10 +18,13 @@ export function trailOf(root: TreeNode, path: string[]): TreeNode[] {
   return trail;
 }
 
-/** The slot a block takes: its own, else the nearest parent's, else none (drawn in the muted colour). */
+/** The slot a block takes: its own, else the nearest parent's, else none (drawn in the muted colour). The palette has SLOTS colours and a
+ *  report may have more entities than that: slot SLOTS + 1 is slot 1 again. The size of the palette never decides what a report shows
+ *  (whether a report has an "Others" group is its owner's decision), so a colour may repeat, and what tells blocks apart is the label,
+ *  the list and the tooltip. */
 export function slotOf(node: TreeNode, trail: TreeNode[]): number | undefined {
   const own = node.slot ?? [...trail].reverse().find((n) => n.slot !== undefined)?.slot;
-  return own !== undefined && own >= 1 && own <= SLOTS ? own : undefined;
+  return own !== undefined && Number.isInteger(own) && own >= 1 ? ((own - 1) % SLOTS) + 1 : undefined;
 }
 
 /** The ECharts option for the blocks of `nodes` (the children of the node drilled into, whose path is `trail`). Drilling is the caller's
