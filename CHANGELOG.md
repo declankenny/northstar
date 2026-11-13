@@ -6,6 +6,10 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Added
+
+- A Reports page, second in the navigation, with a searchable list of reports, the choices each one asks for (a date, say) and filters. It has no reports yet; they arrive with later changes (#239).
+
 ## [0.5.0] - 2026-11-11
 
 Lists you can shape (#120). Balances, Accounts, Currencies (admins) and an account's own balance history are lists that share one set of controls: search, filters (that you can save, privately or for everyone), sorting by any column, grouping, columns you choose and put in the order you like, paging, and Export CSV of what you see. The Balances list shows every balance across all accounts and opens each one on a page of its own, where it is edited or deleted. The Accounts page is now this kind of list, so it no longer has the Assets and Liabilities totals, the Open and Closed buttons or the row menu (the Dashboard has the totals, and closed accounts are a filter). An upgrade applies nine database changes, with a checked backup first, and needs no change to your settings. See "Upgrading from 0.4 to 0.5" in the operator guide.

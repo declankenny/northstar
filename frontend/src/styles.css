@@ -595,3 +595,67 @@ button.btn.ghost.danger-text { color: var(--neg); }
 .chart-tip-label { flex: 1; color: var(--muted); }
 .chart-tip-value { font-variant-numeric: tabular-nums; }
 .chart-tip-note { margin-top: 4px; color: var(--muted); }
+
+/* The Reports page (frontend/src/reports). The report's name is the page heading and the selector; one row holds the parameters and the Filters
+   button; a report's headline figures sit at the top right of the header; its other sections are cards on a 12-column grid. */
+.rp-top { gap: 24px; flex-wrap: wrap; }
+.rp-head { flex: 1 1 340px; min-width: 0; }
+.rp-title { margin: 4px 0 0; }
+.rp-title .combo { flex: none; width: min(330px, 100%); }
+.rp-title .combo input { width: 100%; font: inherit; font-size: 26px; font-weight: 650; letter-spacing: -.01em; color: var(--text); background: transparent;
+  border: 1px solid transparent; border-radius: 9px; padding: 2px 34px 2px 8px; margin-left: -8px; cursor: pointer; text-overflow: ellipsis; }
+.rp-title .combo input:hover { background: var(--pill); }
+.rp-title .combo input:focus { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--surface); cursor: text; }
+.rp-title .combo::after { content: "▾"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; pointer-events: none; }
+.rp-title .combo-list { left: -8px; right: 0; }
+.rp-desc { color: var(--muted); margin: 6px 0 0; max-width: 72ch; }
+
+/* Headline figures: the row asks for the room its tiles need, so the title and the row never squeeze each other. When both do not fit, the row
+   goes below the title as a whole and shrinks to the page. */
+.rp-summary { flex: 0 1 584px; min-width: 0; max-width: 100%; margin-left: auto; }
+.rp-tiles { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 10px; min-width: 0; }
+.rp-tiles .tile { flex: 0 1 188px; min-width: 0; padding: 12px 14px; }
+.rp-card .rp-tiles { flex-wrap: wrap; justify-content: flex-start; }
+.rp-tiles .tile .val { font-size: 21px; margin-top: 2px; white-space: nowrap; }
+.rp-tiles .tile .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+@media (max-width: 1250px) { .rp-tiles .tile { padding: 10px 12px; } .rp-tiles .tile .val { font-size: 17px; } }
+
+/* One row for what the report is asked about, on one centre line. */
+.rp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 18px; min-height: 38px; }
+.rp-field { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.rp-field input, .rp-field select { height: 38px; font: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 0 10px; }
+.rp-field input:focus, .rp-field select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.rp-field input.bad { border-color: var(--neg); }
+.rp-bar .rp-filters { height: 38px; padding: 0 16px; }
+.rp-error { margin: 6px 0 0; font-size: 13px; color: var(--neg); }
+
+/* The body is the container the grid measures, so a section narrows with the page's own width and not the window's. A section takes 1 to 12
+   of the 12 columns. Below about 1,000px one narrower than half takes half, and below about 680px every section takes the whole width. */
+.rp-body { container-type: inline-size; }
+.rp-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.rp-card { margin: 0; min-width: 0; }
+.rp-note { margin: 0; font-size: 13px; color: var(--muted); }
+.rp-span-1 { grid-column: span 1; }
+.rp-span-2 { grid-column: span 2; }
+.rp-span-3 { grid-column: span 3; }
+.rp-span-4 { grid-column: span 4; }
+.rp-span-5 { grid-column: span 5; }
+.rp-span-6 { grid-column: span 6; }
+.rp-span-7 { grid-column: span 7; }
+.rp-span-8 { grid-column: span 8; }
+.rp-span-9 { grid-column: span 9; }
+.rp-span-10 { grid-column: span 10; }
+.rp-span-11 { grid-column: span 11; }
+.rp-span-12 { grid-column: span 12; }
+@container (max-width: 1000px) { .rp-span-1, .rp-span-2, .rp-span-3, .rp-span-4, .rp-span-5 { grid-column: span 6; } }
+@container (max-width: 680px) { .rp-grid > * { grid-column: span 12; } }
+.rp-state { margin-top: 20px; padding: 28px; text-align: center; }
+.rp-state h2 { margin: 0 0 6px; font-size: 17px; }
+.rp-state p { margin: 4px 0; color: var(--muted); }
+.rp-busy { opacity: .55; }
+
+/* A chart's breadcrumb is a nav element, which the sidebar's own nav style would turn into a dark box: it keeps none of that. In a card it is the
+   card's label, and its current place reads as the title. */
+nav.chart-crumbs { background: none; border: 0; padding: 0; display: flex; flex-direction: row; overflow: visible; }
+.rp-card .chart-crumbs { font-size: 15px; }
+.rp-card .chart-crumbs [aria-current] { font-size: 16px; font-weight: 650; }

@@ -1,11 +1,12 @@
 /** The app's pages. The page is chosen by the address path, so no router library is needed. */
-export type Route = "login" | "setup" | "dashboard" | "profile" | "users" | "accounts" | "account" | "balances" | "balance" | "import" | "types" | "imports" | "currencies" | "currency" | "properties" | "update" | "notfound";
+export type Route = "login" | "setup" | "dashboard" | "reports" | "profile" | "users" | "accounts" | "account" | "balances" | "balance" | "import" | "types" | "imports" | "currencies" | "currency" | "properties" | "update" | "notfound";
 
 /** Where each page without a parameter lives. Links use these, so an address is spelled in one place. */
 export const PATHS = {
   login: "/login",
   setup: "/setup",
   dashboard: "/dashboard",
+  reports: "/reports",
   accounts: "/accounts",
   balances: "/balances",
   update: "/balance-update",
@@ -17,10 +18,14 @@ export const PATHS = {
   profile: "/profile",
 } as const;
 
+const REPORT = /^\/reports\/([a-z][a-z0-9_]*)$/;
 const ACCOUNT = /^\/accounts\/(\d+)$/;
 const BALANCE = /^\/balances\/(\d+)$/;
 const CURRENCY = /^\/currencies\/([A-Z]{3})$/;
 const IMPORT = /^\/accounts\/(\d+)\/import$/;
+
+/** The address of one report. A report's key is a plain lowercase name, and the address names the report and nothing else. */
+export const reportPath = (key: string) => `/reports/${key}`;
 
 /** The address of one account's page. */
 export const accountPath = (id: number) => `/accounts/${id}`;
@@ -39,6 +44,7 @@ export const importPath = (id: number) => `/accounts/${id}/import`;
 export function routeFromPath(path: string): Route {
   const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
   if (clean === "/" || clean === PATHS.dashboard) return "dashboard";
+  if (clean === PATHS.reports || REPORT.test(clean)) return "reports";
   if (clean === PATHS.login) return "login";
   if (clean === PATHS.setup) return "setup";
   if (clean === PATHS.profile) return "profile";
@@ -55,6 +61,13 @@ export function routeFromPath(path: string): Route {
   if (CURRENCY.test(clean)) return "currency";
   if (IMPORT.test(clean)) return "import";
   return "notfound";
+}
+
+/** The report key in /reports/assets_liabilities, or null for any other address (/reports alone names no report). */
+export function reportKeyFromPath(path: string): string | null {
+  const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const match = REPORT.exec(clean);
+  return match ? match[1] : null;
 }
 
 /** The account id in /accounts/12, or null for any other address. */

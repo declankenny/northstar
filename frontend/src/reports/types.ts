@@ -31,6 +31,8 @@ export type ReportSectionDeclaration = {
   title: string;
   /** A hierarchy only: its leaves carry a size, and the server adds each parent's. */
   sized: boolean;
+  /** How many of the page's 12 columns the section takes, 1 to 12: 12 is the whole width, 6 half, 4 a third, 3 a quarter. */
+  columns: number;
 };
 
 /** `GET /api/reports/{key}`: public metadata only. */

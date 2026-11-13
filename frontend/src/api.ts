@@ -57,7 +57,7 @@ export async function fetchLocales(signal?: AbortSignal): Promise<LocaleChoices>
 }
 
 /** Go to the sign-in page, which brings the person back to this page afterwards. */
-function signIn() {
+export function signIn() {
   window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
 }
 

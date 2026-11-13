@@ -12,6 +12,7 @@ import { Dashboard } from "./Dashboard";
 import { ImportBalances } from "./ImportBalances";
 import { Imports } from "./Imports";
 import { Profile } from "./Profile";
+import { ReportsPage } from "./reports/ReportsPage";
 import { SignIn } from "./SignIn";
 import { Setup } from "./Setup";
 import { SystemProperties } from "./SystemProperties";
@@ -112,6 +113,7 @@ function Shell() {
       <nav>
         <Brand />
         <Link className={route === "dashboard" ? "active" : ""} to={PATHS.dashboard}>Dashboard</Link>
+        <Link className={route === "reports" ? "active" : ""} to={PATHS.reports}>Reports</Link>
         <Link className={route === "accounts" || route === "account" ? "active" : ""} to={PATHS.accounts}>Accounts</Link>
         <Link className={route === "balances" || route === "balance" ? "active" : ""} to={PATHS.balances}>Balances</Link>
         <Link className={route === "update" ? "active" : ""} to={PATHS.update}>Update balances</Link>
@@ -134,6 +136,8 @@ function Shell() {
       <main>
         {route === "dashboard" ? (
           <Dashboard isAdmin={me?.is_admin ?? false} />
+        ) : route === "reports" ? (
+          <ReportsPage isAdmin={me?.is_admin ?? false} />
         ) : route === "accounts" ? (
           <AccountsList isAdmin={me?.is_admin ?? false} />
         ) : route === "balances" ? (

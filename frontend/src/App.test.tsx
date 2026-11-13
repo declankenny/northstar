@@ -54,3 +54,24 @@ describe("the signed-in shell", () => {
     expect(fetchMe).not.toHaveBeenCalled();
   });
 });
+
+describe("the navigation", () => {
+  it("has Reports second, between the Dashboard and Accounts, and marks it when a report is open", async () => {
+    vi.mocked(fetchMe).mockResolvedValue(me());
+    window.history.replaceState(null, "", "/profile");
+    const { container } = render(<App />);
+    await screen.findByRole("link", { name: "Accounts" });
+    const links = [...container.querySelectorAll("nav > a")].map((a) => a.textContent);
+    expect(links.slice(0, 5)).toEqual(["Dashboard", "Reports", "Accounts", "Balances", "Update balances"]);
+    expect(screen.getByRole("link", { name: "Reports" }).getAttribute("href")).toBe("/reports");
+    expect(screen.getByRole("link", { name: "Reports" }).className).toBe("");
+  });
+
+  it("marks Reports as the current page at /reports", async () => {
+    vi.mocked(fetchMe).mockResolvedValue(me());
+    window.history.replaceState(null, "", "/reports");
+    render(<App />);
+    await screen.findByRole("link", { name: "Accounts" });
+    expect(screen.getByRole("link", { name: "Reports" }).className).toBe("active");
+  });
+});

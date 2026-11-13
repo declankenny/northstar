@@ -82,7 +82,7 @@ function placesFor(node: FieldNode): number | null {
 }
 
 /** A real calendar day as YYYY-MM-DD. Date.parse alone accepts 2026-02-30 (as March 2), so the day must read back as itself. */
-const isDay = (text: unknown): text is string => {
+export const isDay = (text: unknown): text is string => {
   if (typeof text !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
   const parsed = new Date(`${text}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
