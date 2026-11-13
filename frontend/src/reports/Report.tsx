@@ -73,7 +73,7 @@ function ReportBody({ definition, reports, isAdmin, onPick }: { definition: Repo
   const nodes = useMemo(() => new Map(flatten(tree).map((n) => [n.key, n])), [tree]);
   const { named, ensureChoices } = useChoiceNames(definition.key, (field) => fetchReportChoices(definition.key, field), filters, nodes);
 
-  const shown = valid ? answer.data : null;                          // nothing stale is shown under parameters that cannot be asked for
+  const shown = valid && !answer.error ? answer.data : null;         // nothing stale is shown under parameters that cannot be asked for, or after a request that failed
   const result = shown && "result" in shown ? shown.result : null;
   const failure = shown && "failure" in shown ? shown.failure : null;
   const header = result ? definition.sections.find((s) => s.kind === "summary") : undefined;
@@ -122,7 +122,10 @@ function ReportBody({ definition, reports, isAdmin, onPick }: { definition: Repo
           <p className="rp-desc">{definition.description}</p>
         </div>
         {Header && header && result && (
-          <div className={busy ? "rp-summary rp-busy" : "rp-summary"}><Header section={header} data={result.sections[header.key]} currency={{ ...result.currency, name: result.currency.code }} /></div>
+          <div className={busy ? "rp-summary rp-busy" : "rp-summary"}>
+            <Header section={header} data={result.sections[header.key]} currency={{ ...result.currency, name: result.currency.code }} />
+            {result.notes.filter((n) => n.section === header.key).map((n) => <p className="rp-note" key={n.code}>{n.text}</p>)}
+          </div>
         )}
       </div>
       <div className="rp-bar">

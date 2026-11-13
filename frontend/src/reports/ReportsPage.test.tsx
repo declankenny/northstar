@@ -201,6 +201,23 @@ describe("a report's page", () => {
     expect(within(container.querySelector('[aria-label="Detail"]') as HTMLElement).getByText("One account is overdrawn.")).toBeTruthy();
   });
 
+  it("shows the headline's own notes with the headline, in the header and not in the grid", async () => {
+    vi.mocked(calculateReport).mockResolvedValue(result({ notes: [{ code: "basis", text: "Figures use the latest balance.", section: "headline" }] }));
+    const { container } = show("/reports/synthetic_as_of");
+    expect(await screen.findByText("Figures use the latest balance.")).toBeTruthy();
+    expect(container.querySelector(".rp-summary")!.textContent).toContain("Figures use the latest balance.");
+    expect(container.querySelector(".rp-grid")!.textContent).not.toContain("Figures use the latest balance.");
+  });
+
+  it("draws a hierarchy as a table without failing the page", async () => {
+    vi.mocked(fetchReportDefinition).mockResolvedValue({ ...DEFINITION, sections: [{ key: "tree", kind: "hierarchy", view: "table", title: "Tree", sized: false, columns: 12 }] });
+    vi.mocked(calculateReport).mockResolvedValue(result({ sections: { tree: { nodes: [{ id: "a", label: "Savings", value: 300, children: [{ id: "a1", label: "Emergency fund", value: 300 }] }] } } }));
+    show("/reports/synthetic_as_of");
+    expect(await screen.findByRole("heading", { name: "Tree" })).toBeTruthy();
+    expect(screen.getByText("Emergency fund")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Report" })).toBeTruthy();            // the page is still there
+  });
+
   it("says there is nothing to show when every section is empty, and offers to clear the filters when there are some", async () => {
     const empty = result({}, 0);
     empty.sections = { headline: { items: [] }, composition: { nodes: [] }, detail: { columns: [], rows: [] }, trend: { series: [] } };
@@ -249,6 +266,17 @@ describe("when a report cannot be worked out", () => {
     expect(screen.queryByText("$1,234.56")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("$1,234.56")).toBeTruthy();
+  });
+
+  it("leaves no figures on screen, the headline's included, when a later request fails to reach the server", async () => {
+    vi.mocked(calculateReport).mockResolvedValueOnce(RESULT).mockRejectedValueOnce(new Error("Failed to fetch"));
+    const { container } = show("/reports/synthetic_as_of");
+    await screen.findByText("$1,234.56");
+    fireEvent.change(date(), { target: { value: "2026-06-30" } });
+    expect(await screen.findByRole("heading", { name: "The report could not be worked out" })).toBeTruthy();
+    expect(screen.queryByText("$1,234.56")).toBeNull();
+    expect(container.querySelector(".rp-tiles")).toBeNull();
+    expect(container.querySelector(".rp-grid")).toBeNull();
   });
 
   it("treats an answer that is not a report's (a network failure) as a failure too, never as figures", async () => {

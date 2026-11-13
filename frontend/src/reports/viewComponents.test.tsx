@@ -144,3 +144,50 @@ describe("a hierarchy drawn as a treemap", () => {
     expect(window.location.pathname).toBe("/reports/probe");
   });
 });
+
+describe("a hierarchy drawn as a table", () => {
+  const data: HierarchyData = { nodes: [
+    { id: "a", label: "Savings", value: 59_000, children: [{ id: "a1", label: "Emergency fund", value: 60_000, link: { to: "account", id: 9 } }, { id: "a2", label: "Overdrawn", value: -1_000 }] },
+    { id: "b", label: "Checking", value: 30_000 },
+  ] };
+
+  it("lists every node in order with its value, a child indented under its parent and a parent marked, and links a node that has a target", () => {
+    render(<TableView {...props(["hierarchy", "table"], data, { title: "Assets" })} />);
+    expect(screen.getByRole("heading", { name: "Assets" })).toBeTruthy();
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.textContent)).toEqual(["Savings$590.00", "Emergency fund$600.00", "Overdrawn-$10.00", "Checking$300.00"]);
+    expect(rows.map((r) => r.className)).toEqual(["rp-parent", "", "", ""]);
+    expect(rows[1].querySelector("span")!.className).toBe("rp-depth-1");
+    expect(rows[0].querySelector("span")!.className).toBe("");
+    expect(screen.getByRole("link", { name: "Emergency fund" }).getAttribute("href")).toBe("/accounts/9");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByRole("columnheader", { name: "Value" }).className).toBe("r");
+  });
+
+  it("says so when it is empty, and never needs the columns and rows of a table of rows", () => {
+    render(<TableView {...props(["hierarchy", "table"], { nodes: [] }, { title: "Assets" })} />);
+    expect(screen.getByText("Nothing to list.")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("every view with every kind of section the server allows it", () => {
+  const DATA: Record<string, ViewProps["data"]> = {
+    summary: { items: [{ key: "n", label: "N", kind: "count", value: 1 }] },
+    series: { series: [{ key: "s", label: "S", kind: "money", points: [{ x: "2026-01-01", value: 1 }] }] },
+    hierarchy: { nodes: [{ id: "a", label: "A", value: 1, size: 1, children: [{ id: "a1", label: "A1", value: 1, size: 1 }] }] },
+    rows: { columns: [{ key: "c", label: "C", kind: "text" }], rows: [{ id: "r", cells: { c: "x" } }] },
+  };
+
+  it("draws without failing, because a view is given the payload of the kind that names it and may be given more than one kind", () => {
+    for (const [kind, views] of Object.entries(VIEWS)) {
+      for (const view of views) {
+        const View = VIEW_COMPONENTS[view];
+        const { container } = render(<View {...props([kind as ReportSectionDeclaration["kind"], view], DATA[kind], { sized: kind === "hierarchy" })} />);
+        expect(container.textContent, `${kind} as ${view}`).not.toBe("");
+        cleanup();
+      }
+    }
+  });
+});
+

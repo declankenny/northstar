@@ -23,3 +23,11 @@ describe("the grid a report's sections are laid out on", () => {
     expect(styles).toMatch(/nav\.chart-crumbs \{ background: none; border: 0; padding: 0;/);
   });
 });
+
+describe("a hierarchy drawn as a table", () => {
+  it("indents a child by its depth, up to the deepest a hierarchy may be, and marks a parent", () => {
+    for (let n = 1; n <= 8; n++) expect(styles).toContain(`.rp-depth-${n} { padding-left: ${n * 20}px; }`);
+    expect(styles).toContain(".lf-table tr.rp-parent td { font-weight: 600; }");
+  });
+});
+

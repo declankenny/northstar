@@ -65,8 +65,43 @@ function cellText(cell: RowCell, kind: RowsData["columns"][number]["kind"], curr
   return String(cell);
 }
 
-/** Rows as a table. A row with a drill target makes its first cell a link. */
+/** Every node of a hierarchy, parents before their children, with how deep each is. */
+function flatten(nodes: HierarchyNode[], depth = 0): { node: HierarchyNode; depth: number }[] {
+  return nodes.flatMap((node) => [{ node, depth }, ...flatten(node.children ?? [], depth + 1)]);
+}
+
+/** A hierarchy as a table: its nodes in order, each child indented under its parent, with the value a person reads (signed, and
+ *  a parent's the sum of its children's). A node with a drill target makes its name a link. */
+function HierarchyTable({ section, data, currency }: { section: ReportSectionDeclaration; data: HierarchyData; currency: Currency }) {
+  const lines = flatten(data.nodes);
+  return (
+    <>
+      <h2>{section.title}</h2>
+      {lines.length === 0 ? <p className="empty">Nothing to list.</p> : (
+        <div className="gcard">
+          <table className="num lf-table">
+            <thead><tr><th>Name</th><th className="r">Value</th></tr></thead>
+            <tbody>
+              {lines.map(({ node, depth }, i) => {
+                const href = linkHref(node.link);
+                return (
+                  <tr key={i} className={node.children?.length ? "rp-parent" : undefined}>
+                    <td><span className={depth > 0 ? `rp-depth-${Math.min(depth, 8)}` : undefined}>{href ? <Link to={href}>{node.label}</Link> : node.label}</span></td>
+                    <td className="r">{money(node.value, currency)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Rows as a table (or a hierarchy as one, which has its own payload). A row with a drill target makes its first cell a link. */
 export function TableView({ section, data, currency }: ViewProps) {
+  if ("nodes" in data) return <HierarchyTable section={section} data={data} currency={currency} />;
   const { columns, rows } = data as RowsData;
   const numeric = (kind: string) => kind === "money" || kind === "native_money" || kind === "count";
   return (
