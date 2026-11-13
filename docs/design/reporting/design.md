@@ -26,10 +26,10 @@ The Net Worth Bridge is **not** in v0.6; its design below is kept for the next r
 
 ## Agreed product direction
 
-- One **Reports** entry in the main left-hand navigation.
-- A searchable report selector in the Reports page header. Opening it shows all available reports; typing narrows the choices. The selected report is prominent.
+- One **Reports** entry in the main left-hand navigation, second, between Dashboard and Accounts.
+- The report's name is the page's heading and is also the searchable report selector, with a small ▾ beside it. Opening it lists the available reports, each with its one-line description, and typing narrows the choices. With one report, the list has one entry.
 - One report visible at a time, with its own address for direct linking and bookmarking.
-- Report parameters appear in a common area beneath the report selector.
+- Report parameters and the Filters button share one row beneath the header.
 - All filters use the existing lists filtering experience in the right-side drawer. There are no special header controls for filters.
 - Applied-filter chips remain visible above the report and support individual removal.
 - Filters apply to the entire report: headline figures, visualization and supporting detail.
@@ -41,13 +41,13 @@ The Net Worth Bridge is **not** in v0.6; its design below is kept for the next r
 
 The page has five shared regions:
 
-1. **Header:** report selector and a concise description of the selected report.
-2. **Parameters:** typed, labeled controls declared by the report, plus the Filters entry point and active-filter count.
+1. **Header:** the report's name, which is the selector, a concise description, and the report's headline figures at the top right.
+2. **Parameters:** one row: typed, labeled controls declared by the report, then the Filters button with the active-filter count.
 3. **Applied filters:** the same readable, removable conditions used by lists.
 4. **Report body:** coordinated summary figures, visualization and supporting detail as the report declares.
 5. **Filter drawer:** the existing condition-building, Apply, Cancel and Clear interaction, without saved-filter controls.
 
-The selector replaces a permanent second navigation column, leaving room for charts and tables. At narrow widths the parameter controls wrap and the drawer uses the available width. Keyboard access, focus restoration, loading states and error presentation are shared behavior.
+The selector replaces a permanent second navigation column, leaving room for charts and tables. At narrow widths the parameter controls wrap and the drawer uses the available width; at tablet widths the headline figures drop below the title as one row and the report's cards stack. A phone layout is out of scope for v0.6: the application's navigation is a fixed-width sidebar on every page, and a phone layout is separate work for the whole shell (#66 covers only balance entry). Keyboard access, focus restoration, loading states and error presentation are shared behavior.
 
 Each report's address identifies the report, not a persisted configuration. Opening or reloading a report initializes its declared parameter and filter defaults and resets presentation state. Do not restore prior parameters, filters or expansion state from URLs, local storage or user preferences. The Reports entry initially opens the first report in the list; there is no last-report restoration in the initial release.
 
@@ -159,6 +159,7 @@ Criteria:
 - **CSP:** the default tooltip writes `style` attributes, which the app's policy blocks (21 violations in the prototype). Every ECharts chart uses a shared tooltip formatter that emits class names only. Load, hover and re-theming produced no violations with it. Any other feature that produces HTML (toolbox, data zoom, custom components) is checked under the CSP before it is used.
 - **Renderer:** use the SVG renderer, so charts can be styled and tested. It mounts in jsdom, so chart code is tested as DOM (see the decisions entry for #238).
 - **Theming:** ECharts takes colors in JavaScript, so the shared chart wrapper reads the app's CSS variables and re-applies them when the theme changes.
+- **Colour:** the palette is fixed, 16 colours per theme (Option D extended: slots 1 to 8 as chosen, slots 9 to 16 the same hues further from their twins), checked with the validator on each theme's own surface. A colour comes from the entity's id alone, `(id − 1) mod 16`, so it is the same in every report and filter and nothing is stored on a record. The palette's size never decides what a report shows: past 16 entities the colours repeat, and the label, the list and the tooltip carry identity. Whether a report has an "Others" group is its owner's decision. Green and red are ordinary categorical colours. The semantic roles (sequential, diverging, positive, negative, neutral, accent, status) are defined when the first chart needs each ([#248](https://github.com/declankenny/northstar/issues/248)).
 - **Accessibility:** the aria description is on, but ECharts gives no keyboard-focusable marks. Keyboard access to the bridge's expand and collapse controls, and a data-table fallback, are ours to build. The treemap's drill-down is the app's own state, with a breadcrumb and a list of the same data as buttons, and the chart is only a picture of it.
 - **Waterfall:** ECharts has no waterfall series, but the stacked-bar construction is a well-known pattern (an invisible base series plus increase and decrease series, with connectors) that other projects use successfully, and the bridge keeps the waterfall as its presentation. Points the build must handle: bars that cross zero (split into a negative and a positive segment) and negative running totals, connectors between steps, signed labels so meaning does not depend on color, horizontal scrolling for large account sets, and replacing a type's bar with its accounts on expansion. The expand and collapse controls are real HTML controls beside the chart (keyboard accessible, outside ECharts' canvas), and the supporting detail table, with a link per row, is the accessible and drill-down route. A table with inline bars is the fallback presentation if the construction proves too awkward. Not yet tried in a prototype; proved when the bridge is built, and the shared wrapper hides ECharts from the reports.
 
@@ -199,13 +200,15 @@ The shared account-positions calculation at one date, using the same valuation r
 
 ### Presentation
 
-- **Summary tiles:** assets, liabilities and net worth, with the as-at date.
-- **Two treemaps**, assets and liabilities, each a hierarchy of account type then account, sized by the system-currency value. Blocks are **colored by account type**, with one stable color per type used by both treemaps and the table, and a tint variation across the accounts of a type. Type labels are drawn on the blocks, so color is never the only carrier.
-- **Drill:** the treemap opens at types (ECharts `leafDepth: 1`, with a breadcrumb to go back); clicking a type shows its accounts, and clicking an account goes to its account page. A type can also link to the Accounts list filtered by that type.
-- **Tooltip:** path, value and share of the whole, through the shared class-only formatter.
-- **Supporting detail:** the same hierarchy as a table, with type subtotals and, per account, the value, share, native balance and currency and the balance date, with a link per row. Freshness (days since the balance, the stale flag) is not part of this report. This is the keyboard-accessible route to every number and link.
-- **Negative balances:** a block cannot be negative. An overdrawn asset or overpaid liability is left out of its treemap, kept in the table, and named in a note under the chart with its count and total, so the treemap and its note reconcile to the summary tile. Zero balances appear only in the table.
-- **States:** an empty population, no assets, or no liabilities has its own honest message, not an empty chart.
+The layout was agreed from a mockup built with the application's real styles.
+
+- **Header figures:** three tiles at the top right of the page header, assets, liabilities and net worth, each with its account count (the counts add up). The report has no default filters, and the as-at date defaults to today.
+- **Two treemaps side by side** (stacked on narrower screens), assets and liabilities, each a hierarchy of account type then account, sized by the system-currency value. A block is colored by its account type with the framework's id-based colour, one colour per type, and its accounts take their type's colour. There is no card heading: the breadcrumb is each card's label ("Assets", then "Assets › Savings" after drilling in). A block too small to hold its label shows none.
+- **Drill:** the treemap opens at types. Clicking a type, or its entry in the list, shows its accounts, and the breadcrumb goes back; clicking an account goes to its account page. Drilling is the page's own state (not ECharts'), and focus moves to the current place in the breadcrumb.
+- **List:** under each treemap, the same hierarchy as real buttons, largest first at every level, each with its value. Drilling into a type lists every account in it. This is the keyboard route to every number and every account page.
+- **Tooltip:** a type shows its value and the number of accounts it holds; an account shows its value and its balance date (or "no balance"). The colour square sits in the title row. It uses the shared class-only formatter.
+- **Negative and empty balances:** a block cannot be negative or empty, so an overdrawn asset or overpaid liability, and an account with no balance, are left out of the chart and kept in the list, last in their type and marked "not in the chart". A type's value and account count include them, so the lists add up to the headline figures.
+- **States:** a missing exchange rate shows no figures and says which rate, with a link to Currencies for an admin; a date in the future is refused with an explanation and no report; an empty population ("No accounts match these filters", with Clear filters) and no liabilities each have their own message; while recalculating, the old figures are dimmed. Freshness (days since the balance, the stale flag) is not part of this report.
 
 ## Next report (not in v0.6): Net Worth Bridge
 
@@ -284,7 +287,7 @@ The Accounts list already has Stale and days-since columns and a Stale filter, s
 3. **Add ECharts and the shared chart wrapper:** tree-shaken imports, SVG renderer, CSP-safe tooltip formatter, theme from the CSS variables, aria description, a unit-test approach, and the decisions entry.
 4. **Build the report shell:** navigation, searchable selector, parameter renderer, transient view state, default initialization, request lifecycle, states. Validate with synthetic definitions.
 5. **Shared account-positions calculation:** with tests against `net_worth_on`, the rate date settled (the rate on or before the valuation date), and `account_days` extended with where each figure came from.
-6. **Assets & Liabilities report:** calculation on the shared positions, then the two treemaps, summary and supporting table. This is the first report through the shell.
+6. **Assets & Liabilities report:** calculation on the shared positions, then the header figures, the two treemaps and their lists. This is the first report through the shell.
 7. **Validate and document:** targeted tests; update the specification and decisions log when the design is approved and implementation lands.
 
 Step 5 depends only on existing valuation code, so it may run earlier than its position if useful.
@@ -305,10 +308,10 @@ Framework:
 Assets & Liabilities:
 
 - Assets, liabilities and net worth equal `net_worth_on` for the same date and population, verified against a hand calculation on synthetic data.
-- Filtering changes the summary, both treemaps and the table together; an as-at date in the future is rejected and explained.
-- Type colors are consistent across both treemaps and the table; drilling in and back out leaves the figures unchanged.
+- Filtering changes the figures, both treemaps and the lists together; an as-at date in the future is rejected and explained.
+- A type has the same colour in the chart, the list and the tooltip, and in every report (assigned by its id); drilling in and back out leaves the figures unchanged and moves focus to the current place.
 - Negative and zero balances, accounts with no balance by the date, closed and deleted accounts, carried-forward balances and rates, rounding, and a missing required rate behave as described, with no partial totals shown.
-- A type with one account, many accounts, and very long account names all stay readable; the table gives the keyboard route to every number and link.
+- A type with one account, many accounts, and very long account names all stay readable; the list gives the keyboard route to every number and account page.
 
 Net Worth Bridge:
 
@@ -335,6 +338,8 @@ Net Worth Bridge:
 10. **Confirmed:** Apache ECharts is the chart library, chosen up front for all planned chart types including pie, treemap and Sankey, with the constraints listed under Chart library selection.
 11. **Confirmed:** the release goal is the framework; reports exist to prove it, and #57's original questions are not requirements.
 12. **Confirmed:** the v0.6 proof of concept is Assets & Liabilities: an as-at date and two treemaps (assets, liabilities) colored by account type. The Net Worth Bridge and Freshness are not in v0.6.
+13. **Confirmed:** the report page: the report's name is the selector, and Reports is second in the navigation; one row for the date and Filters; three tiles top right; two treemaps side by side with a breadcrumb as each card's label; a list under each treemap; no detail table; no default filters for Assets & Liabilities, and its date defaults to today; Reports at phone width is out of scope for v0.6.
+14. **Confirmed:** chart colours: a fixed 16-colour palette per theme, assigned by entity id, repeating past 16 and never deciding what a report shows; semantic roles are defined when a chart first needs them (#248).
 
 ## Related design references
 
