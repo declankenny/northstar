@@ -10,7 +10,7 @@ import { isDrawn, slotOf, tooLittleRoom, type TreeNode, trailOf, treemapOption }
  *  breadcrumb), and Tab from there reaches what is inside it. A node with nothing inside it calls `onLeaf` (a report opens the record it stands for). `format` says a node's value.
  *
  *  A block cannot be negative or empty, so a node with no area (`size` 0) is kept in the list, last where the report put it, marked "not in the chart",
- *  and is not drawn. A block too small to hold its label shows none: the list and the tooltip still name it. Nothing inside the node drilled into
+ *  and is not drawn, and its note is in the list too, since the tooltip has no block to hang it on. A block too small to hold its label shows none: the list and the tooltip still name it. Nothing inside the node drilled into
  *  draws no chart and no list, and the caller says why (a note on its section). */
 export function TreemapDrill({ root, format, label, onLeaf }: { root: TreeNode; format: (node: TreeNode) => string; label: string; onLeaf?: (node: TreeNode) => void }) {
   const theme = useChartTheme();
@@ -25,10 +25,19 @@ export function TreemapDrill({ root, format, label, onLeaf }: { root: TreeNode; 
   const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = frame.current?.querySelector<HTMLElement>(".chart-canvas");
-    const chart = el && echarts.getInstanceByDom(el);
-    if (!chart) return;
-    const small = tooLittleRoom(chart, drawn);
-    setUnlabelled((before) => (before.length === small.length && before.every((id, i) => id === small[i]) ? before : small));
+    if (!el) return;
+    // Which blocks have room depends on the size the chart has now, so it is worked out again whenever the chart is resized. The chart's own
+    // observer (in Chart.tsx) was registered first, so by the time this one runs the layout is the new one.
+    const measure = () => {
+      const chart = echarts.getInstanceByDom(el);
+      if (!chart) return;
+      const small = tooLittleRoom(chart, drawn);
+      setUnlabelled((before) => (before.length === small.length && before.every((id, i) => id === small[i]) ? before : small));
+    };
+    measure();
+    const watcher = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    watcher?.observe(el);
+    return () => watcher?.disconnect();
   }, [option, drawn]);
 
   const here = useRef<HTMLSpanElement>(null);
@@ -71,7 +80,8 @@ export function TreemapDrill({ root, format, label, onLeaf }: { root: TreeNode; 
             <li key={node.id}>
               <button className="chart-item" onClick={() => open(node)}>
                 <span className={`chart-swatch${slot ? ` chart-slot-${slot}` : ""}`} aria-hidden="true" />
-                <span className="chart-item-name">{node.name}{node.children?.length ? <span className="m"> ▸</span> : null}{isDrawn(node) ? null : <span className="m"> · not in the chart</span>}</span>
+                <span className="chart-item-name">{node.name}{node.children?.length ? <span className="m"> ▸</span> : null}{isDrawn(node) ? null : <span className="m"> · not in the chart</span>}
+                  {node.note && <span className="chart-item-note">{node.note}</span>}</span>
                 <span className="num">{format(node)}</span>
               </button>
             </li>

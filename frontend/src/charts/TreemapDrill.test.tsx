@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { giveBoxesASize } from "./chartTesting";
 import { TreemapDrill } from "./TreemapDrill";
@@ -97,7 +97,30 @@ describe("what is drawn, what is only listed, and what is labelled", () => {
     expect(option.series[0].data.map((d) => d.id)).toEqual(["big", "tiny"]);
     render(<TreemapDrill root={root} format={format} label="Assets" />);
     expect(list().getAllByRole("button").map((b) => b.textContent)).toEqual(
-      ["Big$10.00", "Tiny$0.01", "Overdrawn · not in the chart$0.00", "Empty · not in the chart$0.00"]);
+      ["BigBalance 1 Mar$10.00", "TinyBalance 2 Mar$0.01", "Overdrawn · not in the chartBalance 3 Mar$0.00", "Empty · not in the chartNo balance$0.00"]);
+  });
+
+  it("keeps an undrawn account's note in the list, where it is the only place to tell no balance from a recorded zero", () => {
+    render(<TreemapDrill root={MIXED()} format={format} label="Assets" />);
+    const entry = (name: RegExp) => list().getByRole("button", { name }).textContent;
+    expect(entry(/Empty/)).toContain("No balance");
+    expect(entry(/Overdrawn/)).toContain("Balance 3 Mar");
+  });
+
+  it("works out which blocks have room again when the chart is resized, both ways", () => {
+    const callbacks: (() => void)[] = [];
+    vi.stubGlobal("ResizeObserver", class { constructor(cb: () => void) { callbacks.push(cb); } observe() {} disconnect() {} });
+    const { container } = render(<TreemapDrill root={MIXED()} format={format} label="Assets" />);
+    expect(labels(container)).toContain("Big");                               // 640 wide: room
+    restoreSizes();
+    restoreSizes = giveBoxesASize(60, 40);                                    // shrunk below 78 by 50
+    act(() => { callbacks.forEach((cb) => cb()); });
+    expect(labels(container)).not.toContain("Big");
+    restoreSizes();
+    restoreSizes = giveBoxesASize(640, 360);                                  // and enlarged again
+    act(() => { callbacks.forEach((cb) => cb()); });
+    expect(labels(container)).toContain("Big");
+    vi.unstubAllGlobals();
   });
 
   it("has no chart at all when nothing in the node can be drawn, and still lists everything", () => {
