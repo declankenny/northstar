@@ -84,10 +84,13 @@ function ReportBody({ definition, reports, isAdmin, onPick }: { definition: Repo
     if (answer.error) return <Failure error={new ReportRequestError(answer.error, "other", 0)} isAdmin={isAdmin} onRetry={answer.reload} />;
     if (failure) return <Failure error={failure} isAdmin={isAdmin} onRetry={answer.reload} />;
     if (!result) return <p className="empty" role="status">Calculating…</p>;
-    if (definition.sections.every((s) => isEmpty(result.sections[s.key]))) {
+    // A report says it has nothing at all with the note `no_data` (its headline figures are zeros, so no section is empty); otherwise it is
+    // empty when every section is.
+    const noData = result.notes.find((n) => !n.section && n.code === "no_data");
+    if (noData || definition.sections.every((s) => isEmpty(result.sections[s.key]))) {
       return (
         <div className="panel rp-state"><h2>Nothing to show</h2>
-          <p>{filters.length > 0 ? "Nothing matches these filters." : "There is nothing to show for these choices."}</p>
+          <p>{noData ? noData.text : filters.length > 0 ? "Nothing matches these filters." : "There is nothing to show for these choices."}</p>
           {filters.length > 0 && <p><button className="link" onClick={() => setFilters([])}>Clear filters</button></p>}
         </div>
       );

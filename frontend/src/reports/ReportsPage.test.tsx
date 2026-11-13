@@ -218,6 +218,14 @@ describe("a report's page", () => {
     expect(screen.getByRole("combobox", { name: "Report" })).toBeTruthy();            // the page is still there
   });
 
+  it("says what the report says when it reports `no_data`, though its headline has figures, and offers to clear the filters", async () => {
+    vi.mocked(calculateReport).mockResolvedValue(result({ notes: [{ code: "no_data", text: "There are no accounts to show." }] }, 0));
+    show("/reports/synthetic_as_of");
+    expect(await screen.findByRole("heading", { name: "Nothing to show" })).toBeTruthy();
+    expect(screen.getByText("There are no accounts to show.")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Composition" })).toBeNull();
+  });
+
   it("says there is nothing to show when every section is empty, and offers to clear the filters when there are some", async () => {
     const empty = result({}, 0);
     empty.sections = { headline: { items: [] }, composition: { nodes: [] }, detail: { columns: [], rows: [] }, trend: { series: [] } };

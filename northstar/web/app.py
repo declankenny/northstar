@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+import northstar.reportdefs  # noqa: F401  the household's reports register themselves when it is imported
 from northstar import config, db, identities, scheduler, sessions, setup, system_properties, throttle, users
 from northstar.web import (account_api, api_routes, auth_routes, currencies_api, errors, import_api, imports_api, lists_api, oidc_routes, profile_api, reports_api, security_headers,
                            setup_api, system_properties_api, types_api, update_api, users_api, version_api)

@@ -8,7 +8,8 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Added
 
-- A Reports page, second in the navigation, with a searchable list of reports, the choices each one asks for (a date, say) and filters. It has no reports yet; they arrive with later changes (#239).
+- Assets & Liabilities, the first report (#240): what you own and what you owe on a date you choose (today by default), as three figures with their account counts and two treemaps, assets and liabilities, each by account type and then account. Click a type, or its entry in the list under the chart, to see its accounts, and an account to open it. An overdrawn account, or one with no balance by the date, is not drawn but stays in the list, marked "not in the chart", so the lists add up to the figures. The figures equal the Dashboard's net worth for the same date. You can filter it by any account field except dates.
+- A Reports page, second in the navigation, with a searchable list of reports, the choices each one asks for (a date, say) and filters. Reports arrive with later changes, starting with Assets & Liabilities (#239).
 
 ## [0.5.0] - 2026-11-11
 

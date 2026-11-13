@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { giveBoxesASize } from "./chartTesting";
 import { TreemapDrill } from "./TreemapDrill";
-import { slotOf, type TreeNode, trailOf, treemapOption } from "./treemap";
+import { slotOf, tooLittleRoom, type TreeNode, trailOf, treemapOption } from "./treemap";
 import { readChartTheme } from "./theme";
 
 let restoreSizes: () => void;
@@ -75,6 +75,89 @@ describe("the nodes and slots", () => {
     expect(yellow.series[0].data[0].label.color).toBe("#0b0b0b");
     const none = treemapOption([{ id: "n", name: "N", size: 1 }], [root], theme, format) as typeof option;
     expect(none.series[0].data[0].itemStyle.color).toBe("#898781");
+  });
+});
+
+describe("what is drawn, what is only listed, and what is labelled", () => {
+  // A type with three accounts: one that fills most of the chart, a tiny one, an overdrawn one and one with no balance (no area).
+  const MIXED = (): TreeNode => ({
+    id: "assets", name: "Assets", size: 1_001, children: [
+      { id: "big", name: "Big", size: 1_000, slot: 1, note: "Balance 1 Mar" },
+      { id: "tiny", name: "Tiny", size: 1, slot: 1, note: "Balance 2 Mar" },
+      { id: "over", name: "Overdrawn", size: 0, slot: 1, note: "Balance 3 Mar" },
+      { id: "none", name: "Empty", size: 0, slot: 1, note: "No balance" },
+    ],
+  });
+  const theme = readChartTheme();
+  type Opt = { series: { data: { id: string; label: { show: boolean } }[] }[]; tooltip: { formatter: (p: unknown) => string } };
+
+  it("draws only the nodes that have an area, and lists every node, marking the ones that are not drawn", () => {
+    const root = MIXED();
+    const option = treemapOption(root.children!, [root], theme, format) as unknown as Opt;
+    expect(option.series[0].data.map((d) => d.id)).toEqual(["big", "tiny"]);
+    render(<TreemapDrill root={root} format={format} label="Assets" />);
+    expect(list().getAllByRole("button").map((b) => b.textContent)).toEqual(
+      ["BigBalance 1 Mar$10.00", "TinyBalance 2 Mar$0.01", "Overdrawn · not in the chartBalance 3 Mar$0.00", "Empty · not in the chartNo balance$0.00"]);
+  });
+
+  it("keeps an undrawn account's note in the list, where it is the only place to tell no balance from a recorded zero", () => {
+    render(<TreemapDrill root={MIXED()} format={format} label="Assets" />);
+    const entry = (name: RegExp) => list().getByRole("button", { name }).textContent;
+    expect(entry(/Empty/)).toContain("No balance");
+    expect(entry(/Overdrawn/)).toContain("Balance 3 Mar");
+  });
+
+  it("works out which blocks have room again when the chart is resized, both ways", () => {
+    const callbacks: (() => void)[] = [];
+    vi.stubGlobal("ResizeObserver", class { constructor(cb: () => void) { callbacks.push(cb); } observe() {} disconnect() {} });
+    const { container } = render(<TreemapDrill root={MIXED()} format={format} label="Assets" />);
+    expect(labels(container)).toContain("Big");                               // 640 wide: room
+    restoreSizes();
+    restoreSizes = giveBoxesASize(60, 40);                                    // shrunk below 78 by 50
+    act(() => { callbacks.forEach((cb) => cb()); });
+    expect(labels(container)).not.toContain("Big");
+    restoreSizes();
+    restoreSizes = giveBoxesASize(640, 360);                                  // and enlarged again
+    act(() => { callbacks.forEach((cb) => cb()); });
+    expect(labels(container)).toContain("Big");
+    vi.unstubAllGlobals();
+  });
+
+  it("has no chart at all when nothing in the node can be drawn, and still lists everything", () => {
+    const root: TreeNode = { id: "r", name: "Assets", size: 0, children: [{ id: "a", name: "A", size: 0 }, { id: "b", name: "B", size: 0 }] };
+    const { container } = render(<TreemapDrill root={root} format={format} label="Assets" />);
+    expect(container.querySelector(".chart-canvas")).toBeNull();
+    expect(list().getAllByRole("button")).toHaveLength(2);
+  });
+
+  it("gives a label only to a block with room for it: the small one is named by the list and the tooltip", () => {
+    const { container } = render(<TreemapDrill root={MIXED()} format={format} label="Assets" />);
+    expect(labels(container)).toEqual(expect.arrayContaining(["Big", "$10.00"]));
+    expect(labels(container)).not.toContain("Tiny");
+    expect(list().getByRole("button", { name: /Tiny/ })).toBeTruthy();
+  });
+
+  it("finds the blocks with too little room from the layout: under 78 wide or 50 high, and not a block that has none", () => {
+    const layouts = [{ width: 640, height: 360 }, { width: 200, height: 100 }, { width: 77, height: 100 }, { width: 200, height: 49 }, { width: 78, height: 50 }, undefined];
+    const chart = { getModel: () => ({ getSeriesByIndex: () => ({ getData: () => ({ getItemLayout: (i: number) => layouts[i] }) }) }) };
+    const nodes = ["roomy", "narrow", "short", "just enough", "unplaced"].map((id) => ({ id, name: id, size: 1 }));
+    expect(tooLittleRoom(chart, nodes)).toEqual(["narrow", "short"]);              // the first layout item is the root, so the nodes start at 1
+  });
+
+  it("lets a label be hidden by the ids it is given, and shows the others", () => {
+    const root = MIXED();
+    const option = treemapOption(root.children!, [root], theme, format, new Set(["tiny"])) as unknown as Opt;
+    expect(option.series[0].data.map((d) => [d.id, d.label.show])).toEqual([["big", true], ["tiny", false]]);
+  });
+
+  it("puts the colour square in the tooltip's title row, with the value and the node's own note, and no square on the rows", () => {
+    const root = MIXED();
+    const option = treemapOption(root.children!, [root], theme, format) as unknown as Opt;
+    const html = option.tooltip.formatter({ name: "Big", data: option.series[0].data[0] });
+    expect(html).toContain('<div class="chart-tip-title"><span class="chart-swatch chart-slot-1"></span><span>Big</span></div>');
+    expect(html).toContain("$10.00");
+    expect(html).toContain("Balance 1 Mar");
+    expect(html.match(/chart-swatch/g)).toHaveLength(1);
   });
 });
 
