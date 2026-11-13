@@ -17,7 +17,7 @@ afterEach(() => { cleanup(); restore(); vi.restoreAllMocks(); });
 
 const USD = { code: "USD", name: "USD", minor_units: 2 };
 const section = (kind: ReportSectionDeclaration["kind"], view: ReportSectionDeclaration["view"], over: Partial<ReportSectionDeclaration> = {}): ReportSectionDeclaration =>
-  ({ key: "s", kind, view, title: "Section", sized: false, columns: 12, ...over });
+  ({ key: "s", kind, view, title: "Section", sized: false, columns: 12, expanded: true, ...over });
 const props = (kindView: [ReportSectionDeclaration["kind"], ReportSectionDeclaration["view"]], data: ViewProps["data"], over: Partial<ReportSectionDeclaration> = {}): ViewProps =>
   ({ section: section(kindView[0], kindView[1], over), data, currency: USD });
 
@@ -175,13 +175,65 @@ describe("a hierarchy drawn as a table", () => {
     render(<TableView {...props(["hierarchy", "table"], data, { title: "Assets" })} />);
     expect(screen.getByRole("heading", { name: "Assets" })).toBeTruthy();
     const rows = screen.getAllByRole("row").slice(1);
-    expect(rows.map((r) => r.textContent)).toEqual(["Savings$590.00", "Emergency fund$600.00", "Overdrawn-$10.00", "Checking$300.00"]);
+    expect(rows.map((r) => r.textContent)).toEqual(["▾ Savings$590.00", "Emergency fund$600.00", "Overdrawn-$10.00", "Checking$300.00"]);
     expect(rows.map((r) => r.className)).toEqual(["rp-parent", "", "", ""]);
     expect(rows[1].querySelector("span")!.className).toBe("rp-depth-1");
     expect(rows[0].querySelector("span")!.className).toBe("");
     expect(screen.getByRole("link", { name: "Emergency fund" }).getAttribute("href")).toBe("/accounts/9");
     expect(screen.getAllByRole("link")).toHaveLength(1);
     expect(screen.getByRole("columnheader", { name: "Value" }).className).toBe("r");
+  });
+
+  it("opens and closes a parent with a button that says which it is, and a parent with nothing in it has none", () => {
+    render(<TableView {...props(["hierarchy", "table"], data, { title: "Assets" })} />);
+    const toggle = () => screen.getByRole("button", { name: /Savings/ });
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Emergency fund")).toBeNull();
+    expect(screen.getByText("Checking")).toBeTruthy();
+    expect(screen.getAllByRole("button")).toHaveLength(1);                      // Checking has nothing inside it
+    fireEvent.click(toggle());
+    expect(screen.getByText("Emergency fund")).toBeTruthy();
+  });
+
+  it("starts collapsed when the section says so, and keeps what a person opened when the report is worked out again", () => {
+    const { rerender } = render(<TableView {...props(["hierarchy", "table"], data, { title: "Assets", expanded: false })} />);
+    expect(screen.queryByText("Emergency fund")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Savings/ }));
+    expect(screen.getByText("Emergency fund")).toBeTruthy();
+    const again: HierarchyData = { nodes: [{ ...data.nodes[0], value: 59_500 }, data.nodes[1]] };
+    rerender(<TableView {...props(["hierarchy", "table"], again, { title: "Assets", expanded: false })} />);
+    expect(screen.getByText("Emergency fund")).toBeTruthy();                   // still open
+    expect(screen.getByText("$595.00")).toBeTruthy();
+  });
+
+  describe("comparing two dates", () => {
+    const compared: HierarchyData = { nodes: [
+      { id: "t", label: "Savings", value: 1_500, opening: 10_000, closing: 11_500, note: "2 accounts", children: [
+        { id: "a", label: "Alpha", value: 2_000, opening: 5_000, closing: 7_000, note: "1 Mar 2026 → 3 Jun 2026", link: { to: "account", id: 4 } },
+        { id: "b", label: "Beta", value: -500, opening: 5_000, closing: 4_500, note: "No balance on 31 May 2026" }] },
+    ] };
+    const open = () => render(<TableView {...props(["hierarchy", "table"], compared, { title: "Detail", expanded: false })} />);
+
+    it("shows the opening, closing and change of each node and the balances behind them, once a type is opened", () => {
+      open();
+      expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Type and account", "Opening", "Closing", "Change", "Balances used"]);
+      expect(screen.getAllByRole("row").slice(1).map((r) => r.textContent)).toEqual(["▸ Savings$100.00$115.00+$15.002 accounts"]);
+      fireEvent.click(screen.getByRole("button", { name: /Savings/ }));
+      expect(screen.getAllByRole("row").slice(1).map((r) => r.textContent)).toEqual([
+        "▾ Savings$100.00$115.00+$15.002 accounts", "Alpha$50.00$70.00+$20.001 Mar 2026 → 3 Jun 2026", "Beta$50.00$45.00-$5.00No balance on 31 May 2026"]);
+      expect(screen.getByRole("link", { name: "Alpha" }).getAttribute("href")).toBe("/accounts/4");
+    });
+
+    it("colours a change by its direction and always writes its sign", () => {
+      open();
+      fireEvent.click(screen.getByRole("button", { name: /Savings/ }));
+      const direction = (text: string) => screen.getByText(text).className;
+      expect(direction("+$20.00")).toBe("p");
+      expect(direction("-$5.00")).toBe("n");
+      expect(direction("+$15.00")).toBe("p");
+    });
   });
 
   it("says so when it is empty, and never needs the columns and rows of a table of rows", () => {

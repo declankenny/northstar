@@ -14,10 +14,9 @@ three sections: the headline figures, and two hierarchies, assets and liabilitie
 * The report is filtered by every account field except dates (it has a date of its own) and opens with no filters.
 """
 
-import json
-
 from northstar import locales
 from northstar.networth import ASSET, LIABILITY
+from northstar.reportdefs.common import account_names, accounts_text
 from northstar.positions import AccountPosition, account_positions, totals
 from northstar.reports import loader, params
 from northstar.reports.reportdef import FilterDecl, ReportContext, ReportDef, ReportResult
@@ -25,18 +24,6 @@ from northstar.reports.sections import SectionDef
 
 KEY = "assets_liabilities"
 TYPE_KIND = "account_type"
-
-
-def _accounts_text(count: int) -> str:
-    return "1 account" if count == 1 else f"{count:,} accounts"
-
-
-def _names(ctx: ReportContext) -> dict[int, tuple[str, int, str]]:
-    """Each account's name, its type's id and its type's name, for the accounts counted."""
-    ids = json.dumps(list(ctx.population.account_ids()))
-    return {row["id"]: (row["name"], row["type_id"], row["type_name"]) for row in ctx.conn.execute(
-        "SELECT a.id, a.name, a.type_id, t.name AS type_name FROM live_accounts a JOIN account_types t ON t.id = a.type_id "
-        "WHERE a.id IN (SELECT value FROM json_each(?))", (ids,))}
 
 
 def _balance_note(position: AccountPosition) -> str:
@@ -57,7 +44,7 @@ def _hierarchy(positions: list[AccountPosition], names: dict[int, tuple[str, int
     nodes = []
     for type_id, (type_name, leaves) in types.items():
         leaves.sort(key=lambda n: (-n["value"], n["label"].casefold(), n["id"]))
-        nodes.append({"id": f"type_{type_id}", "label": type_name, "value": sum(n["value"] for n in leaves), "note": _accounts_text(len(leaves)),
+        nodes.append({"id": f"type_{type_id}", "label": type_name, "value": sum(n["value"] for n in leaves), "note": accounts_text(len(leaves)),
                       "colour": {"kind": TYPE_KIND, "id": type_id}, "children": leaves})
     nodes.sort(key=lambda n: (-n["value"], n["label"].casefold(), n["id"]))
     return {"nodes": nodes}
@@ -66,14 +53,14 @@ def _hierarchy(positions: list[AccountPosition], names: dict[int, tuple[str, int
 def calculate(ctx: ReportContext) -> ReportResult:
     day = ctx.parameters["as_at"]
     positions = list(account_positions(ctx.conn, ctx.population, [day])[day])        # a missing rate stops the whole report
-    names = _names(ctx)
+    names = account_names(ctx)
     assets = [p for p in positions if p.class_name == ASSET]
     liabilities = [p for p in positions if p.class_name == LIABILITY]
     figures = totals(positions)
     headline = {"items": [
-        {"key": "assets", "label": "Assets", "kind": "money", "value": figures.assets, "note": _accounts_text(len(assets))},
-        {"key": "liabilities", "label": "Liabilities", "kind": "money", "value": figures.liabilities, "note": _accounts_text(len(liabilities))},
-        {"key": "net_worth", "label": "Net worth", "kind": "money", "value": figures.net_worth, "note": _accounts_text(len(positions))},
+        {"key": "assets", "label": "Assets", "kind": "money", "value": figures.assets, "note": accounts_text(len(assets))},
+        {"key": "liabilities", "label": "Liabilities", "kind": "money", "value": figures.liabilities, "note": accounts_text(len(liabilities))},
+        {"key": "net_worth", "label": "Net worth", "kind": "money", "value": figures.net_worth, "note": accounts_text(len(positions))},
     ]}
     notes = []
     if not positions:

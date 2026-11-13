@@ -33,6 +33,8 @@ export type ReportSectionDeclaration = {
   sized: boolean;
   /** How many of the page's 12 columns the section takes, 1 to 12: 12 is the whole width, 6 half, 4 a third, 3 a quarter. */
   columns: number;
+  /** A hierarchy shown as a table opens with every parent expanded (false: collapsed). */
+  expanded: boolean;
 };
 
 /** `GET /api/reports/{key}`: public metadata only. */
@@ -80,6 +82,9 @@ export type HierarchyNode = {
   value: number;
   size?: number;
   link?: ReportLink;
+  /** A comparison between two dates: the amount at each end, of which `value` is the change. A parent's is the sum of its children's. */
+  opening?: number;
+  closing?: number;
   /** One short line the report writes (a balance date, say), shown beside the node. */
   note?: string;
   /** The entity the colour comes from (an account names its type), turned into a slot by `slotFor`. Without one a node takes its parent's. */

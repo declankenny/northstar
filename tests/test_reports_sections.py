@@ -303,3 +303,37 @@ def test_a_section_takes_the_whole_width_unless_it_says_otherwise_and_may_take_a
 def test_a_section_that_takes_no_columns_more_than_twelve_or_not_a_whole_number_is_a_fault_in_the_report(columns):
     with pytest.raises(ReportDefinitionError, match="columns"):
         sections.check("probe", (SectionDef("r", "rows", "table", "R", columns=columns),))
+
+
+# -- a comparison between two dates: opening and closing amounts --
+
+def compared():
+    return {"nodes": [{"id": "t", "label": "T", "value": 30, "opening": 100, "closing": 130, "children": [
+        {"id": "a", "label": "A", "value": 50, "opening": 40, "closing": 90, "size": 1}, {"id": "b", "label": "B", "value": -20, "opening": 60, "closing": 40, "size": 1}]}]}
+
+
+def test_a_node_may_carry_its_amount_at_each_of_two_dates_and_a_parents_is_the_sum_of_its_childrens():
+    got = sections.validate(TREE, compared())["nodes"][0]
+    assert (got["opening"], got["closing"]) == (100, 130) and got["children"][0]["opening"] == 40
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda d: d["nodes"][0].update(opening=101),                              # a parent that is not the sum of its children
+    lambda d: d["nodes"][0].update(closing=129),
+    lambda d: d["nodes"][0]["children"][1].pop("opening"),                    # a child without it under a parent that has it
+    lambda d: d["nodes"][0].pop("closing"),                                   # a parent without it over children that have it
+    lambda d: d["nodes"][0].update(opening=True), lambda d: d["nodes"][0].update(opening=1.5), lambda d: d["nodes"][0].update(closing=2 ** 53),
+])
+def test_opening_and_closing_that_do_not_add_up_or_are_not_whole_amounts_are_a_defect(mutate):
+    data = compared()
+    mutate(data)
+    with pytest.raises(ReportDefectError):
+        sections.validate(TREE, data)
+
+
+def test_a_section_says_whether_its_table_opens_expanded_and_only_a_hierarchy_may_say_collapsed():
+    assert SectionDef("h", "hierarchy", "table", "H").expanded is True
+    sections.check("r", (SectionDef("h", "hierarchy", "table", "H", expanded=False),))
+    for bad in (SectionDef("s", "summary", "tiles", "S", expanded=False), SectionDef("h", "hierarchy", "table", "H", expanded="no")):
+        with pytest.raises(ReportDefinitionError):
+            sections.check("r", (bad,))

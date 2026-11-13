@@ -45,10 +45,10 @@ const DEFINITION: ReportDefinition = {
   key: "synthetic_as_of", title: "Synthetic as-of", description: "An as-of date with a summary, a treemap and a table.", today: "2026-11-11",
   parameters: [{ key: "as_at", label: "As at", kind: "date", default: "2026-11-11", choices: [], minimum: null, maximum: null, rules: [{ rule: "not_future" }] }],
   sections: [
-    { key: "headline", kind: "summary", view: "tiles", title: "Headline", sized: false, columns: 12 },
-    { key: "composition", kind: "hierarchy", view: "treemap", title: "Composition", sized: true, columns: 6 },
-    { key: "detail", kind: "rows", view: "table", title: "Detail", sized: false, columns: 6 },
-    { key: "trend", kind: "series", view: "line", title: "Trend", sized: false, columns: 12 },
+    { key: "headline", kind: "summary", view: "tiles", title: "Headline", sized: false, columns: 12, expanded: true },
+    { key: "composition", kind: "hierarchy", view: "treemap", title: "Composition", sized: true, columns: 6, expanded: true },
+    { key: "detail", kind: "rows", view: "table", title: "Detail", sized: false, columns: 6, expanded: true },
+    { key: "trend", kind: "series", view: "line", title: "Trend", sized: false, columns: 12, expanded: true },
   ],
   filters: { enabled: true, fields: TREE, defaults: [] },
 };
@@ -210,7 +210,7 @@ describe("a report's page", () => {
   });
 
   it("draws a hierarchy as a table without failing the page", async () => {
-    vi.mocked(fetchReportDefinition).mockResolvedValue({ ...DEFINITION, sections: [{ key: "tree", kind: "hierarchy", view: "table", title: "Tree", sized: false, columns: 12 }] });
+    vi.mocked(fetchReportDefinition).mockResolvedValue({ ...DEFINITION, sections: [{ key: "tree", kind: "hierarchy", view: "table", title: "Tree", sized: false, columns: 12, expanded: true }] });
     vi.mocked(calculateReport).mockResolvedValue(result({ sections: { tree: { nodes: [{ id: "a", label: "Savings", value: 300, children: [{ id: "a1", label: "Emergency fund", value: 300 }] }] } } }));
     show("/reports/synthetic_as_of");
     expect(await screen.findByRole("heading", { name: "Tree" })).toBeTruthy();

@@ -79,8 +79,8 @@ def test_the_shape_of_a_filter_declaration_is_checked_when_it_is_registered():
 def test_an_unknown_report_is_not_found_and_an_admin_only_report_is_hidden_from_others():
     with pytest.raises(NotFoundError):
         loader.get_report("nothing")
-    assert [d.key for d in loader.visible_to(ADMIN)] == ["assets_liabilities", "synthetic_as_of", "synthetic_none", "synthetic_pair", "synthetic_range"]
-    assert [d.key for d in loader.visible_to(MEMBER)] == ["assets_liabilities", "synthetic_as_of", "synthetic_pair", "synthetic_range"]
+    assert [d.key for d in loader.visible_to(ADMIN)] == ["assets_liabilities", "net_worth_bridge", "synthetic_as_of", "synthetic_none", "synthetic_pair", "synthetic_range"]
+    assert [d.key for d in loader.visible_to(MEMBER)] == ["assets_liabilities", "net_worth_bridge", "synthetic_as_of", "synthetic_pair", "synthetic_range"]
 
 
 def test_the_framework_never_imports_a_definition():
@@ -101,7 +101,7 @@ def test_a_report_is_described_with_its_defaults_resolved_for_the_servers_today(
     described = engine.describe(PAIR, TODAY)
     assert described["today"] == "2026-11-11"
     assert {p["key"]: p["default"] for p in described["parameters"]} == {"opening": "2025-11-11", "closing": "2026-11-11"}
-    assert described["sections"] == [{"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False, "columns": 12}]
+    assert described["sections"] == [{"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False, "columns": 12, "expanded": True}]
     assert described["filters"] == {"enabled": False}
 
 

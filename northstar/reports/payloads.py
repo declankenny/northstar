@@ -72,6 +72,8 @@ class HierarchyNode(TypedDict):
     value: int                                      # signed financial value; a parent equals the sum of its children
     size: NotRequired[int]                          # a leaf of a sized section only; the framework adds each parent's
     link: NotRequired[Link]
+    opening: NotRequired[int]                       # a comparison between two dates: the amount at each end, of which `value` is the change
+    closing: NotRequired[int]
     note: NotRequired[str]                          # one short line the report writes, such as a balance date
     colour: NotRequired[Colour]                     # the entity the colour comes from; without one a node takes its parent's
     children: NotRequired[list["HierarchyNode"]]

@@ -73,4 +73,4 @@ Steps with no dependency can be taken in any order. The suggested order is the t
 
 ## Later
 
-The Net Worth Bridge, Freshness, net worth over time, currency exposure and the transaction-level reports are added as definitions on this framework in later releases. Each gets its own issue when it is planned.
+The Net Worth Bridge joined v0.6 (issues #253, #254 and #255). Freshness, net worth over time, currency exposure and the transaction-level reports are added as definitions on this framework in later releases. Each gets its own issue when it is planned.
