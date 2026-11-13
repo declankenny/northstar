@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountIdFromPath, accountPath, balanceIdFromPath, balancePath, currencyCodeFromPath, currencyPath, importAccountIdFromPath, importPath, PATHS, routeFromPath } from "./routes";
+import { accountIdFromPath, accountPath, balanceIdFromPath, balancePath, currencyCodeFromPath, currencyPath, importAccountIdFromPath, importPath, PATHS, reportKeyFromPath, reportPath, routeFromPath } from "./routes";
 
 describe("routeFromPath", () => {
   it("opens each page at its own address", () => {
@@ -86,5 +86,24 @@ describe("a balance's page", () => {
     expect(balanceIdFromPath("/balances/12")).toBe(12);
     expect(balanceIdFromPath("/balances/12/")).toBe(12);
     for (const path of ["/balances", "/balances/x", "/balances/12/edit", "/accounts/12", "/balances/-1"]) expect(balanceIdFromPath(path), path).toBeNull();
+  });
+});
+
+describe("the Reports page", () => {
+  it("is at /reports, and a report at /reports/<key>", () => {
+    expect(PATHS.reports).toBe("/reports");
+    expect(routeFromPath("/reports")).toBe("reports");
+    expect(routeFromPath("/reports/")).toBe("reports");
+    expect(routeFromPath("/reports/assets_liabilities")).toBe("reports");
+    expect(routeFromPath("/reports/assets_liabilities/")).toBe("reports");
+    expect(reportPath("assets_liabilities")).toBe("/reports/assets_liabilities");
+  });
+
+  it("names the report by its key, and only a plain lowercase key", () => {
+    expect(reportKeyFromPath("/reports/assets_liabilities")).toBe("assets_liabilities");
+    expect(reportKeyFromPath("/reports/assets_liabilities/")).toBe("assets_liabilities");
+    expect(reportKeyFromPath("/reports")).toBeNull();
+    for (const bad of ["/reports/Assets", "/reports/1a", "/reports/a-b", "/reports/a/b", "/reports/a b", "/report/a", "/accounts/12"]) expect(reportKeyFromPath(bad), bad).toBeNull();
+    for (const bad of ["/reports/Assets", "/reports/a-b", "/reports/a/b"]) expect(routeFromPath(bad), bad).toBe("notfound");
   });
 });

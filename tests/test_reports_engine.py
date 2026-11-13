@@ -101,7 +101,7 @@ def test_a_report_is_described_with_its_defaults_resolved_for_the_servers_today(
     described = engine.describe(PAIR, TODAY)
     assert described["today"] == "2026-11-11"
     assert {p["key"]: p["default"] for p in described["parameters"]} == {"opening": "2025-11-11", "closing": "2026-11-11"}
-    assert described["sections"] == [{"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False}]
+    assert described["sections"] == [{"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False, "columns": 12}]
     assert described["filters"] == {"enabled": False}
 
 

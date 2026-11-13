@@ -81,7 +81,7 @@ def test_the_definition_carries_resolved_defaults_and_nothing_private(client):
     assert body["today"] == "2026-11-11"
     assert {p["key"]: p["default"] for p in body["parameters"]} == {"opening": "2025-11-11", "closing": "2026-11-11"}
     assert body["filters"] == {"enabled": False}
-    assert body["sections"][0] == {"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False}
+    assert body["sections"][0] == {"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False, "columns": 12}
     assert not {"calculate", "population", "population_ids", "query", "sql"} & set(body)
 
 

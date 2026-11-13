@@ -252,3 +252,17 @@ def test_a_note_has_a_code_a_text_and_may_name_a_declared_section():
                 [{"code": "x", "text": "t", "other": 1}], "not a list"):
         with pytest.raises(ReportDefectError):
             sections.validate_notes(bad, declared)
+
+
+# -- how wide a section is on the page --
+
+def test_a_section_takes_the_whole_width_unless_it_says_otherwise_and_may_take_any_whole_number_of_the_twelve_columns():
+    assert SectionDef("r", "rows", "table", "R").columns == 12
+    for columns in range(1, 13):
+        sections.check("probe", (SectionDef("r", "rows", "table", "R", columns=columns),))
+
+
+@pytest.mark.parametrize("columns", [0, 13, -1, 100, True, False, 6.0, 6.5, "6", None])
+def test_a_section_that_takes_no_columns_more_than_twelve_or_not_a_whole_number_is_a_fault_in_the_report(columns):
+    with pytest.raises(ReportDefinitionError, match="columns"):
+        sections.check("probe", (SectionDef("r", "rows", "table", "R", columns=columns),))

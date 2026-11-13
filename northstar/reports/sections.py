@@ -44,6 +44,7 @@ SERIES_KINDS = ("money", "count")
 COLUMN_KINDS = ("text", "money", "native_money", "date", "count")
 LINK_TARGETS = ("account", "balance", "list")
 MAX_DEPTH = 8
+GRID_COLUMNS = 12                                  # the page lays a report's sections out on this many columns
 MAX_NODES = 10_000
 _KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -59,6 +60,7 @@ class SectionDef:
     sized: bool = False                             # a hierarchy only: its leaves carry a size
     unit: str = "money"                             # a hierarchy only: what its values are
     additive: bool = True                           # a hierarchy only: a parent equals the sum of its children
+    columns: int = GRID_COLUMNS                     # how many of the page's 12 columns the section takes: 12 is the whole width, 6 half, 4 a third, 3 a quarter
 
 
 def check(report_key: str, sections: tuple[SectionDef, ...]) -> None:
@@ -81,6 +83,8 @@ def check(report_key: str, sections: tuple[SectionDef, ...]) -> None:
         if s.kind not in KINDS:
             problems.append(f"{name} has the unknown kind {s.kind!r}")
             continue
+        if isinstance(s.columns, bool) or not isinstance(s.columns, int) or not 1 <= s.columns <= GRID_COLUMNS:
+            problems.append(f"{name} takes {s.columns!r} columns; a section takes a whole number from 1 to {GRID_COLUMNS}")
         if s.view not in VIEWS[s.kind]:
             problems.append(f"{name} has the view {s.view!r}, which a {s.kind} cannot be drawn as")
         if s.view in NEEDS_SIZE and not (s.kind == "hierarchy" and s.sized):
