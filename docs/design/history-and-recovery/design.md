@@ -34,6 +34,15 @@ Show the most recent change first. Each row shows:
 
 The action targets the resulting amount shown in that row. Mark the current value clearly and do not offer a redundant restoration. Show the recorded baseline as the earliest known value; do not imply that changes before recording began are available. Note-only changes can remain visible as changes with an unchanged amount.
 
+### How the list is built
+
+The History list is a fixed list (`ListView` with `fixed`), as the account page's balance list is: sortable and pageable, with no search, filters, grouping, choice of columns, page size or export, and nothing saved for it. It is drawn in an `.acct-panel` under the Balance and Details panels, and its rows are the list's own markup.
+
+- **A view over the change log.** The list framework never lists `sys_` tables, so the list reads a new view, `balance_history`, with its own `TableDef` in `northstar/listdefs/tables.py`, in the way `account_balances` and `currency_summaries` are views with entries of their own. The view takes `sys_record_changes` rows for `balances`, extracts the amount, note and source from `old_json` and `new_json` with `json_extract`, and joins the operation for who, when and kind. It leaves out balances of deleted accounts, the same rule as `live_balances`, and a test fails on any other read.
+- **Columns:** When, By, Previous, Amount (the resulting amount, in the account's currency) and How (the operation kind, with the import file's base name where there is one). The current row and the earliest recorded row are marked in the When cell through `config.cell`.
+- **The earliest recorded row.** A view over the log cannot produce a row the log does not have. For a balance that was never edited, or that predates the log, the view `UNION`s the live balance's own row as the earliest known value. For an edited balance the first `INSERT` entry is the earliest row. Decide before building whether the `UNION` is in SQL or built in Python.
+- **Restore is a row menu item** (step 2), not an inline button, and is absent on the current row and on note-only rows. The earliest recorded row can be restored, since it is a real recorded amount.
+
 ### Restoring a value
 
 Selecting **Restore this value** shows the account, balance date, current amount and proposed amount before confirmation. For example: “Replace $1,250.00 with $1,100.00 for this balance?”
