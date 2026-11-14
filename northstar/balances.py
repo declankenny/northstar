@@ -306,6 +306,37 @@ def update_balance(op: Operation, balance_id: int, date_text: str | None,
         return "updated"
 
 
+def restore_reference(conn: sqlite3.Connection, balance_id: int, history_id: int, expected_version: int) -> dict:
+    """What a restore of one row of a balance's history says about where its value came from, for the operation's header: the row's
+    id and the UTC date of the change. A balance changed or deleted since the person opened it is a ConflictingEdit, as for the
+    restore itself, and a row that is not in this balance's history is a NotFoundError."""
+    require_version(conn, balance_id, expected_version)
+    row = conn.execute("SELECT changed_at FROM balance_history WHERE id = ? AND balance_id = ?", (history_id, balance_id)).fetchone()
+    if row is None:
+        raise NotFoundError("That change is not in this balance's history.")
+    return {"history_id": history_id, "from": row["changed_at"][:10]}
+
+
+def restore_value(op: Operation, balance_id: int, history_id: int, expected_version: int) -> None:
+    """Put the amount of an earlier row of a balance's history back, as a new change by the person restoring it. Only the amount
+    changes: the note, the date and every other balance are left alone, and nothing in the history is removed. It refuses with
+    ConflictingEdit, before anything else, if the balance has been written since the person opened it, and a closed account and a
+    row whose amount cannot be restored (the current amount, or a change of the note alone) are refused. The operation's detail
+    comes from `restore_reference`."""
+    conn = op.conn
+    with db.write_transaction(conn):
+        require_version(conn, balance_id, expected_version)
+        balance = get_balance(conn, balance_id)
+        require_open({"name": balance["account_name"], "is_open": balance["is_open"]})
+        row = conn.execute("SELECT amount_cents, restorable FROM balance_history WHERE id = ? AND balance_id = ?",
+                           (history_id, balance_id)).fetchone()
+        if row is None:
+            raise NotFoundError("That change is not in this balance's history.")
+        if not row["restorable"]:
+            raise ValidationError("That value cannot be restored: it is the balance's current amount, or a change of the note alone.")
+        writer.update(op, "balances", balance_id, {"amount_cents": row["amount_cents"]})
+
+
 def delete_balance(op: Operation, balance_id: int, expected_version=UNCHECKED) -> int:
     """Delete a balance and return its account's id. Given the version the caller loaded, it refuses with ConflictingEdit if
     the balance has changed since."""

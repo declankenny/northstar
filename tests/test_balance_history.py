@@ -160,7 +160,7 @@ def test_a_balance_that_does_not_exist_is_not_found(client):
 def test_it_is_a_fixed_list_with_the_agreed_columns_twelve_to_a_page(client, account):
     add(client, account, "2026-01-31", "1000.00")
     body = history(client, account, "2026-01-31")
-    assert [c["label"] for c in body["columns"]] == ["When", "By", "Amount", "Current", "How"]
+    assert [c["label"] for c in body["columns"]] == ["When", "By", "Amount", "Current", "How", "Restorable"]
     assert body["sort"] == {"field": "changed_at", "direction": "desc"}
     assert (body["page_size"], body["customisable"], body["filters"]) == (12, False, [])
 
@@ -190,7 +190,7 @@ def test_the_upgrade_gives_a_balance_that_the_log_never_saw_one_baseline_row_and
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith("0029"):
+        if not file.name.startswith(("0029", "0030")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -204,7 +204,7 @@ def test_the_upgrade_gives_a_balance_that_the_log_never_saw_one_baseline_row_and
     log_before = conn.execute("SELECT COUNT(*) FROM sys_record_changes").fetchone()[0]
     conn.close()
 
-    assert db.upgrade(path) == ["0029_balance_history"]
+    assert db.upgrade(path) == ["0029_balance_history", "0030_restore_balance_value"]
     conn = db.connect(path)
     rows = [tuple(r) for r in conn.execute("SELECT balance_id, amount_cents, how, is_current FROM balance_history ORDER BY balance_id")]
     assert rows == [(1, 100_000, "Entered", 1), (2, 120_000, "Entered", 1)]

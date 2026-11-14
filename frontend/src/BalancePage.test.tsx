@@ -6,11 +6,11 @@ import { BalancePage } from "./BalancePage";
 import { navigate } from "./router";
 
 vi.mock("./api", async (original) => ({
-  ...(await original<typeof import("./api")>()), fetchBalance: vi.fn(), fetchNeighbours: vi.fn(), editBalance: vi.fn(), deleteBalance: vi.fn(), fetchList: vi.fn(),
+  ...(await original<typeof import("./api")>()), fetchBalance: vi.fn(), fetchNeighbours: vi.fn(), editBalance: vi.fn(), deleteBalance: vi.fn(), fetchList: vi.fn(), restoreBalanceValue: vi.fn(),
 }));
 vi.mock("./router", async (original) => ({ ...(await original<typeof import("./router")>()), goBack: vi.fn() }));
 
-import { deleteBalance, editBalance, fetchBalance, fetchList, fetchNeighbours } from "./api";
+import { deleteBalance, editBalance, fetchBalance, fetchList, fetchNeighbours, restoreBalanceValue } from "./api";
 import { goBack } from "./router";
 
 const EUR = { code: "EUR", name: "Euro", minor_units: 2 };
@@ -36,10 +36,11 @@ const HISTORY_COLUMNS: ListColumn[] = [
   { key: "amount_cents", label: "Amount", path_label: "Amount", kind: "amount", scale: null, linked: false, groupable: false },
   { key: "is_current", label: "Current", path_label: "Current", kind: "yes_no", scale: null, linked: false, groupable: true },
   { key: "how", label: "How", path_label: "How", kind: "text", scale: null, linked: false, groupable: true },
+  { key: "restorable", label: "Restorable", path_label: "Restorable", kind: "yes_no", scale: null, linked: false, groupable: true },
 ];
 const historyRow = (id: number, over: Partial<ListRow> = {}): ListRow => ({
   _id: id, changed_at: "2026-11-12 10:00:00", by_name: "Sample Admin", amount_cents: { value: 30000, scale: 2, unit: "EUR" }, is_current: 1,
-  how: "Manual edit", _links: {}, ...over,
+  how: "Manual edit", restorable: 0, _links: {}, ...over,
 });
 const historyPage = (rows: ListRow[]): ListPage => ({
   columns: HISTORY_COLUMNS, rows, total: rows.length, page: 1, pages: 1, page_size: 12, group: null,
@@ -55,7 +56,7 @@ const shown = async () => { render(<BalancePage id={12} />); return screen.findB
 beforeEach(() => {
   window.history.replaceState(null, "", "/balances/12");
   vi.mocked(fetchBalance).mockResolvedValue(page());
-  vi.mocked(fetchList).mockResolvedValue(historyPage([historyRow(-5), historyRow(-3, { is_current: 0, amount_cents: { value: 25000, scale: 2, unit: "EUR" } })]));
+  vi.mocked(fetchList).mockResolvedValue(historyPage([historyRow(-5), historyRow(-3, { is_current: 0, restorable: 1, changed_at: "2026-10-03 09:00:00", amount_cents: { value: 25000, scale: 2, unit: "EUR" } })]));
 });
 afterEach(() => {
   cleanup();
@@ -68,7 +69,7 @@ describe("the history", () => {
   it("lists this balance's changes in a panel of its own, under the form, asking for this balance only", async () => {
     await shown();
     const table = await screen.findByRole("table");
-    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▾▲▼]/g, "").trim())).toEqual(["When", "By", "Amount", "Current", "How"]);
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▾▲▼]/g, "").trim())).toEqual(["When", "By", "Amount", "Current", "How", ""]);
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
     expect(within(rows[0]).getByText("Yes")).toBeTruthy();
@@ -100,6 +101,84 @@ describe("the history", () => {
     await shown();
     await screen.findByRole("table");
     expect(screen.queryByText(/before history/i)).toBeNull();
+  });
+});
+
+const restoreButton = () => screen.getByRole("button", { name: "Restore the value of Oct 3, 2026" }) as HTMLButtonElement;
+
+describe("restoring a value", () => {
+  it("offers Restore on a row that can be restored and on no other, and draws no column for what decides it", async () => {
+    await shown();
+    await screen.findByRole("table");
+    expect(screen.getAllByRole("button", { name: /^Restore the value of/ })).toHaveLength(1);
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▾▲▼]/g, "").trim())).toEqual(["When", "By", "Amount", "Current", "How", ""]);
+  });
+
+  it("asks first, with the account, the date, both amounts and what stays", async () => {
+    await shown();
+    await screen.findByRole("table");
+    fireEvent.click(restoreButton());
+    const dialog = await screen.findByRole("dialog", { name: "Restore this value?" });
+    const text = dialog.textContent!.replace(/\s/g, " ");              // an amount keeps its currency code and number together with a no-break space
+    expect(text).toContain("Test euros · Apr 20, 2026");
+    expect(text).toContain("Replace EUR 300.00 with EUR 250.00 for this balance?");
+    expect(text).toContain("Only the amount is restored: the note, “Statement balance”, stays as it is.");
+    expect(text).toContain("recorded as a new change, and nothing in the history is removed");
+    expect(restoreBalanceValue).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(restoreBalanceValue).not.toHaveBeenCalled();
+  });
+
+  it("restores the chosen row with the version the page opened at, then shows the new value, reads the history again and says Restored", async () => {
+    await shown();
+    await screen.findByRole("table");
+    vi.mocked(restoreBalanceValue).mockResolvedValue(undefined as never);
+    vi.mocked(fetchBalance).mockResolvedValue(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 25000, note: "Statement balance", version: 8 } }));
+    const before = vi.mocked(fetchList).mock.calls.length;
+    fireEvent.click(restoreButton());
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(restoreBalanceValue).toHaveBeenCalledWith(12, -3, 7));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(amountBox().value).toBe("250.00");
+    expect(screen.getByText("Restored")).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(fetchList).mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it("says what changed when the balance was changed meanwhile, restores nothing and offers only Close", async () => {
+    await shown();
+    await screen.findByRole("table");
+    vi.mocked(restoreBalanceValue).mockRejectedValue(refusal(conflict()));
+    fireEvent.click(restoreButton());
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("Nothing was restored.");
+    expect(dialog.textContent!.replace(/\s/g, " ")).toContain("was changed by Declan on Nov 10, 2026. It is now EUR 310.00 (you opened it at EUR 300.00).");
+    expect(within(dialog).queryByRole("button", { name: "Restore" })).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeTruthy();
+  });
+
+  it("is greyed out with the reason on a closed account", async () => {
+    vi.mocked(fetchBalance).mockResolvedValue(page({ account: account({ is_open: false }) }));
+    await shown();
+    await screen.findByRole("table");
+    expect(restoreButton().disabled).toBe(true);
+    expect(restoreButton().title).toBe("Reopen the account to change its balances.");
+  });
+
+  it("is greyed out while the form has changes that are not saved, so they are not thrown away", async () => {
+    await shown();
+    await screen.findByRole("table");
+    fireEvent.change(amountBox(), { target: { value: "999,00" } });
+    expect(restoreButton().disabled).toBe(true);
+    expect(restoreButton().title).toBe("Save or cancel your changes first.");
+  });
+
+  it("writes the date a restore put back in the person's format", async () => {
+    vi.mocked(fetchList).mockResolvedValue(historyPage([historyRow(-9, { how: "Restored · value of 2026-10-03" })]));
+    await shown();
+    const cell = (await screen.findByText("Restored")).closest("td")!;
+    expect(cell.textContent).toBe("Restored · value of Oct 3, 2026");
   });
 });
 
