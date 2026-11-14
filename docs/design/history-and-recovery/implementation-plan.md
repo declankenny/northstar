@@ -27,7 +27,8 @@ The order puts the cleanup job before the two recovery screens, so nothing ships
 
 ## Step 2: restore this value
 
-- **Scope:** the `restore` operation kind, the amount-only restore with the confirmation text, the stale check by version in the same transaction, the record of the historical reference as provenance, and the refusal on a closed account.
+- **Before it starts:** the review of the existing lists' row actions (see `design.md`, "Review of the existing lists"), a table in this folder. TODO: its own issue.
+- **Scope:** the row actions declaration for `ListConfig` (a fixed array, one action drawn as a button), then the `restore` operation kind, the amount-only restore with the confirmation text, the stale check by version in the same transaction, the record of the historical reference as provenance, and the refusal on a closed account.
 - **Tests:** current note kept, other dates and accounts unchanged, a stale confirmation refused with the new value shown, the current value offers no restore.
 - **Docs:** the spec rule, a decisions entry, the changelog.
 
