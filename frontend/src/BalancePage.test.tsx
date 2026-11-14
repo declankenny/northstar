@@ -163,8 +163,10 @@ describe("restoring a value", () => {
     await screen.findByRole("table");
     vi.mocked(restoreBalanceValue).mockRejectedValueOnce(refusal(conflict()));
     fireEvent.click(restoreButton());
+    const asked = vi.mocked(fetchBalance).mock.calls.length;
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Restore" }));
     await screen.findByRole("alert");
+    await waitFor(() => expect(vi.mocked(fetchBalance).mock.calls.length).toBeGreaterThan(asked));       // the page has noted the refusal and read the details
     vi.mocked(fetchBalance).mockResolvedValue(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 31000, note: "Declan's correction", version: 9 } }));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(amountBox().value).toBe("310.00"));
