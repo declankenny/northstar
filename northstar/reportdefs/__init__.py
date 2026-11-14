@@ -4,3 +4,4 @@ file. Each report registers itself when its module is imported, and this package
 
 from northstar.reports import loader  # noqa: F401  (the place definitions register themselves)
 from northstar.reportdefs import assets_liabilities  # noqa: F401,E402
+from northstar.reportdefs import net_worth_bridge  # noqa: F401,E402

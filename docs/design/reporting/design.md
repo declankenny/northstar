@@ -22,7 +22,7 @@ A configurable exploratory workspace, draggable widgets, user-authored reports a
 - **First consumers**, curated full-page reports chosen to exercise different parts of the framework, not to answer any particular question:
   - **Assets & Liabilities**, the proof of concept: one as-at date, a hierarchy section, and two treemaps colored by account type. It proves the shell, the as-of date shape, the shared account-positions calculation, the filter drawer and the chart wrapper on the simplest calculation. Other date shapes and result sections are checked with small synthetic report definitions in tests.
 
-The Net Worth Bridge is **not** in v0.6; its design below is kept for the next release. Other reports (Freshness, net worth over time, currency exposure) are expected later and are used now only to test the contracts. #57's original questions ("why did net worth change?", "how current is the information?") are not release requirements: the framework is.
+The **Net Worth Bridge is also in v0.6** (decided on November 13, 2026, after Assets & Liabilities), built in three steps: the report with a table (#253), the waterfall chart (#254) and expanding types in it (#255). It was agreed from a mockup, and where the agreed design differs from the first design below, the text says **Agreed from the mockup**. Other reports (Freshness, net worth over time, currency exposure) are expected later and are used now only to test the contracts. #57's original questions ("why did net worth change?", "how current is the information?") are not release requirements: the framework is.
 
 ## Agreed product direction
 
@@ -210,11 +210,11 @@ The layout was agreed from a mockup built with the application's real styles.
 - **Negative and empty balances:** a block cannot be negative or empty, so an overdrawn asset or overpaid liability, and an account with no balance, are left out of the chart and kept in the list, last in their type and marked "not in the chart". A type's value and account count include them, so the lists add up to the headline figures.
 - **States:** a missing exchange rate shows no figures and says which rate, with a link to Currencies for an admin; a date in the future is refused with an explanation and no report; an empty population ("No accounts match these filters", with Clear filters) and no liabilities each have their own message; while recalculating, the old figures are dimmed. Freshness (days since the balance, the stale flag) is not part of this report.
 
-## Next report (not in v0.6): Net Worth Bridge
+## Net Worth Bridge (v0.6, after Assets & Liabilities)
 
 ### Question answered
 
-**Why is my net worth different between these two dates?**
+**Why did my net worth change?** The report's one-line description is "Why your net worth changed."
 
 The report starts with opening net worth, adds the signed contribution of each account or account type, and ends at closing net worth. It explains balance changes, not investment performance, spending or cash flow.
 
@@ -254,7 +254,7 @@ Each contribution includes both native balance change and FX translation, explai
 - Opening and closing totals anchor the baseline; intermediate bars float from the preceding running total with thin connectors.
 - Positive and negative contributions have distinct, theme-aware styles, with signs and labels so meaning does not depend on color.
 - Axes identify the currency. Hover and focus detail gives exact values; totals and labels are available without hover.
-- Summary figures show opening net worth, net change and closing net worth with explicit dates.
+- Summary figures, at the top right of the page header, are **Opening balance**, **Change** and **Closing balance**, the first and last with their dates and the change with its share of the opening figure. (Agreed from the mockup: the first design called them opening net worth, net change and closing net worth.)
 - Supporting detail shows opening, closing and change per group, with account detail, and the balance and rate dates behind each contribution. Accounts with no opening balance are marked, which covers #57's "first appear during the comparison".
 
 Example (illustrative USD): opening 498,708.80, Cash and savings +1,888.35, Investments +31,000.00, Mortgage reduction +12,000.00, Other debt reduction +3,301.61, Property +15,000.00, closing 561,898.76. Expanding Investments replaces its +31,000 step with Brokerage −5,000 then Retirement +36,000, in name order; the running total after the accounts equals the total after the collapsed type.
@@ -263,7 +263,7 @@ Example (illustrative USD): opening 498,708.80, Cash and savings +1,888.35, Inve
 
 - Load with account types in alphabetical order, all collapsed. Expansion **replaces** a type's aggregate bar with its nonzero accounts, alphabetical by name, with a visible type label and collapse control. Multiple types expand independently; never count a parent with its children. Use stable IDs for expansion state and name-tie breaks.
 - Expansion is a presentation interaction, not a parameter or filter, and reload collapses all types.
-- Omit zero-change account steps but keep them in supporting detail. A type with zero net change but offsetting nonzero accounts stays visible and expandable. A type whose accounts are all unchanged may be omitted from chart steps. If everything is unchanged, show equal opening and closing totals.
+- Never show a zero-change account. A type with zero net change but offsetting nonzero accounts stays visible and expandable. A type whose accounts are all unchanged is removed. If everything is unchanged, show equal opening and closing totals.
 - Show every nonzero contribution; scroll horizontally when needed. No truncation and no automatic Other grouping. The scrollable region is keyboard accessible without forcing page overflow.
 
 ## Candidate: Freshness (not committed to v0.6)
@@ -317,7 +317,7 @@ Net Worth Bridge:
 
 - Filtering changes the opening total, closing total, contributions and detail together.
 - Collapsed, expanded and mixed views reconcile exactly to the same net change without counting aggregates and children together; multiple type controls work independently.
-- Types and accounts are alphabetical. Zero-change accounts stay in detail; zero-net types with offsetting accounts stay visible and expandable; all-unchanged data shows equal totals.
+- Types and accounts are alphabetical. An account with zero change is never shown, in the chart or the detail, and a type with none left is removed; a type whose accounts offset to zero stays visible and expandable; all-unchanged data shows equal totals. (Agreed from the mockup: the first design kept zero-change accounts in the detail.)
 - Every nonzero contribution stays available through horizontal scrolling; no Other grouping or truncation.
 - Per-account contributions sum exactly to the change in net worth, verified against a hand calculation on synthetic data.
 - Coverage: growing and shrinking assets, debt repayment and increase, negative net worth, sign crossings, zero movement, missing opening balances, closed and deleted accounts, current classification changes; carried-forward balances and rates, rounding boundaries, FX-only changes, missing required rates.
@@ -332,12 +332,12 @@ Net Worth Bridge:
 4. Closing date defaults to today and opening to one calendar year earlier, with February 28 as the leap-day fallback; closing after opening; no future dates.
 5. No saved filters for reports; reports reload with defaults and changes apply only to the current view.
 6. Alphabetical order: account types first, accounts within an expanded type.
-7. Omit zero-change account steps but keep detail; zero-net types with offsetting accounts stay expandable; unchanged types are omitted; an unchanged population shows equal totals.
+7. Never show a zero-change account; a type with none left is removed; zero-net types with offsetting accounts stay expandable; an unchanged population shows equal totals.
 8. Preserve every nonzero contribution, with horizontal scrolling and no automatic Other grouping.
 9. No breakdown parameter: types load collapsed and expand in place; multiple types expand independently; reload collapses all.
 10. **Confirmed:** Apache ECharts is the chart library, chosen up front for all planned chart types including pie, treemap and Sankey, with the constraints listed under Chart library selection.
 11. **Confirmed:** the release goal is the framework; reports exist to prove it, and #57's original questions are not requirements.
-12. **Confirmed:** the v0.6 proof of concept is Assets & Liabilities: an as-at date and two treemaps (assets, liabilities) colored by account type. The Net Worth Bridge and Freshness are not in v0.6.
+12. **Confirmed:** the v0.6 proof of concept is Assets & Liabilities: an as-at date and two treemaps (assets, liabilities) colored by account type. Freshness is not in v0.6, and the Net Worth Bridge was added to it afterwards (see the top of this document).
 13. **Confirmed:** the report page: the report's name is the selector, and Reports is second in the navigation; one row for the date and Filters; three tiles top right; two treemaps side by side with a breadcrumb as each card's label; a list under each treemap; no detail table; no default filters for Assets & Liabilities, and its date defaults to today; Reports at phone width is out of scope for v0.6.
 14. **Confirmed:** chart colours: a fixed 16-colour palette per theme, assigned by entity id, repeating past 16 and never deciding what a report shows; semantic roles are defined when a chart first needs them (#248).
 

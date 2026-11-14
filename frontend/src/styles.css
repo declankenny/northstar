@@ -651,6 +651,7 @@ button.btn.ghost.danger-text { color: var(--neg); }
 .rp-depth-7 { padding-left: 140px; }
 .rp-depth-8 { padding-left: 160px; }
 .lf-table tr.rp-parent td { font-weight: 600; }
+.lf-table td.m { white-space: normal; }                                 /* a note on a row (which balances a figure rests on) wraps and is not cut off */
 .rp-note { margin: 0; font-size: 13px; color: var(--muted); }
 .rp-span-1 { grid-column: span 1; }
 .rp-span-2 { grid-column: span 2; }

@@ -8,6 +8,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Added
 
+- Net Worth Bridge, a second report (#253): why your net worth changed between two dates (closing today and opening a year earlier to begin with). It shows your opening balance, the change and your closing balance, and a table of the account types that changed, which opens to show each account with its opening and closing figures and the balances they rest on. An account that did not change is not shown. A change includes the change in the balance and in exchange rates. The waterfall chart comes next (#254, #255). You can filter it by any account field except dates.
 - Assets & Liabilities, the first report (#240): what you own and what you owe on a date you choose (today by default), as three figures with their account counts and two treemaps, assets and liabilities, each by account type and then account. Click a type, or its entry in the list under the chart, to see its accounts, and an account to open it. An overdrawn account, or one with no balance by the date, is not drawn but stays in the list, marked "not in the chart", so the lists add up to the figures. The figures equal the Dashboard's net worth for the same date. You can filter it by any account field except dates.
 - A Reports page, second in the navigation, with a searchable list of reports, the choices each one asks for (a date, say) and filters. Reports arrive with later changes, starting with Assets & Liabilities (#239).
 

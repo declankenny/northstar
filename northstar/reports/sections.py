@@ -11,7 +11,8 @@ Money is an integer of minor units with the currency stated once in the result, 
 own. Every amount, and every total made from amounts, is a whole number that is not a boolean and whose size is at most
 2**53 - 1, so JavaScript reads it exactly.
 
-A hierarchy node may carry a `note` (one short line the report writes, shown beside the node) and a `colour` (the kind and id of the
+A hierarchy node may carry the amount at each of two dates (`opening` and `closing`, of which `value` is the change; a parent's is
+the sum of its children's), a `note` (one short line the report writes, shown beside the node) and a `colour` (the kind and id of the
 entity its colour comes from, so an account can take its type's). A hierarchy's `value` is signed financial value and stays so: a negative balance is negative. Its parents' values are supplied and
 checked to equal the sum of their children, in the same unit. Area is a separate thing: in a `sized` section every leaf carries a
 non-negative `size`, chosen by the report, and the framework adds each parent's size as the sum of its leaves. A view that needs size
@@ -47,6 +48,7 @@ LINK_TARGETS = ("account", "balance", "list")
 MAX_DEPTH = 8
 GRID_COLUMNS = 12                                  # the page lays a report's sections out on this many columns
 MAX_NODES = 10_000
+COMPARED = ("opening", "closing")                  # optional on a hierarchy node: the amount at each of two dates
 MAX_NOTE = 120                                      # a node's note is one short line
 _KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -62,6 +64,7 @@ class SectionDef:
     sized: bool = False                             # a hierarchy only: its leaves carry a size
     unit: str = "money"                             # a hierarchy only: what its values are
     additive: bool = True                           # a hierarchy only: a parent equals the sum of its children
+    expanded: bool = True                           # a hierarchy only: a table of it opens with every parent expanded (False: collapsed)
     columns: int = GRID_COLUMNS                     # how many of the page's 12 columns the section takes: 12 is the whole width, 6 half, 4 a third, 3 a quarter
 
 
@@ -91,7 +94,9 @@ def check(report_key: str, sections: tuple[SectionDef, ...]) -> None:
             problems.append(f"{name} has the view {s.view!r}, which a {s.kind} cannot be drawn as")
         if s.view in NEEDS_SIZE and not (s.kind == "hierarchy" and s.sized):
             problems.append(f"{name} is drawn as {s.view!r}, which needs a sized hierarchy")
-        if s.kind != "hierarchy" and (s.sized or s.unit != "money" or not s.additive):
+        if not isinstance(s.expanded, bool):
+            problems.append(f"{name} is expanded or collapsed, nothing else")
+        if s.kind != "hierarchy" and (s.sized or s.unit != "money" or not s.additive or not s.expanded):
             problems.append(f"{name} is not a hierarchy but declares hierarchy settings")
         if s.kind == "hierarchy":
             if s.unit != "money":
@@ -272,7 +277,7 @@ def _hierarchy(section: SectionDef, data: object, where: str) -> dict:
         count[0] += 1
         if count[0] > MAX_NODES:
             _fail(where, f"has more than {MAX_NODES} nodes")
-        _only(raw, {"id", "label", "value", "size", "link", "note", "colour", "children"}, at, {"id", "label", "value"})
+        _only(raw, {"id", "label", "value", "size", "link", "note", "colour", "opening", "closing", "children"}, at, {"id", "label", "value"})
         ident = raw["id"]
         if not isinstance(ident, str) or not ident.strip():
             _fail(at, "has no id")
@@ -281,6 +286,13 @@ def _hierarchy(section: SectionDef, data: object, where: str) -> dict:
         seen.add(ident)
         value = whole(raw["value"], f"{at}.value")
         out = {"id": ident, "label": _text(raw["label"], f"{at}.label"), "value": value}
+        for name in COMPARED:                       # a comparison between two dates: the value at each end, of which `value` is the change
+            if name in raw:
+                out[name] = whole(raw[name], f"{at}.{name}")
+        if ("opening" in raw) != ("closing" in raw):
+            _fail(at, "has one of opening and closing but not both")
+        if "opening" in out and out["closing"] - out["opening"] != value:
+            _fail(at, "has a value that is not its closing minus its opening")
         children = _list(raw.get("children", []), f"{at}.children")
         size = 0
         if children:
@@ -295,6 +307,13 @@ def _hierarchy(section: SectionDef, data: object, where: str) -> dict:
             if total_value != value:
                 _fail(at, "has a value that is not the sum of its children")
             whole(total_value, f"{at} (sum of its children)")
+            for name in COMPARED:                   # like the value, a parent's is the sum of its children's, and all or none have it
+                if name in raw and not all(name in kid for kid in kids):
+                    _fail(at, f"has {name} but a child lacks it")
+                if name not in raw and any(name in kid for kid in kids):
+                    _fail(at, f"lacks {name} but a child has it")
+                if name in raw and sum(kid[name] for kid in kids) != out[name]:
+                    _fail(at, f"has {name} that is not the sum of its children")
             out["children"] = kids
         elif section.sized:
             if "size" not in raw:

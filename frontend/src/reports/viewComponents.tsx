@@ -1,4 +1,4 @@
-import { type ComponentType, useMemo } from "react";
+import { type ComponentType, useMemo, useState } from "react";
 import { slotFor } from "../charts/colour";
 import { TreemapDrill } from "../charts/TreemapDrill";
 import type { TreeNode } from "../charts/treemap";
@@ -66,29 +66,56 @@ function cellText(cell: RowCell, kind: RowsData["columns"][number]["kind"], curr
   return String(cell);
 }
 
-/** Every node of a hierarchy, parents before their children, with how deep each is. */
-function flatten(nodes: HierarchyNode[], depth = 0): { node: HierarchyNode; depth: number }[] {
-  return nodes.flatMap((node) => [{ node, depth }, ...flatten(node.children ?? [], depth + 1)]);
+/** The nodes of a hierarchy that are showing, parents before their children, with how deep each is: a parent's children are showing only while it
+ *  is open. */
+function visible(nodes: HierarchyNode[], isOpen: (node: HierarchyNode) => boolean, depth = 0): { node: HierarchyNode; depth: number }[] {
+  return nodes.flatMap((node) => [{ node, depth }, ...(node.children?.length && isOpen(node) ? visible(node.children, isOpen, depth + 1) : [])]);
 }
 
-/** A hierarchy as a table: its nodes in order, each child indented under its parent, with the value a person reads (signed, and
- *  a parent's the sum of its children's). A node with a drill target makes its name a link. */
+/** A change, with its sign and the colour of its direction (a sign too, so the colour is never all there is). */
+function Change({ value, currency }: { value: number; currency: Currency }) {
+  return <span className="delta"><span className={value > 0 ? "p" : value < 0 ? "n" : "m"}>{value > 0 ? "+" : ""}{money(value, currency)}</span></span>;
+}
+
+/** A hierarchy as a table: its nodes in order, each child indented under its parent, with the value a person reads (signed, and a parent's the sum
+ *  of its children's). A parent opens and closes with a button, expanded or collapsed to begin with as the section says, and keeps the way a
+ *  person left it when the report is worked out again. A node with a drill target makes its name a link. A hierarchy that compares two dates
+ *  (its nodes have `opening` and `closing`) shows both, the change, and the note, which says which balances they rest on. */
 function HierarchyTable({ section, data, currency }: { section: ReportSectionDeclaration; data: HierarchyData; currency: Currency }) {
-  const lines = flatten(data.nodes);
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());              // the parents whose state is not the section's
+  const isOpen = (node: HierarchyNode) => section.expanded !== flipped.has(node.id);
+  const flip = (id: string) => setFlipped((before) => { const next = new Set(before); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const compared = data.nodes.some((n) => n.opening !== undefined);
+  const lines = visible(data.nodes, isOpen);
   return (
     <>
       <h2>{section.title}</h2>
-      {lines.length === 0 ? <p className="empty">Nothing to list.</p> : (
+      {data.nodes.length === 0 ? <p className="empty">Nothing to list.</p> : (
         <div className="gcard">
           <table className="num lf-table">
-            <thead><tr><th>Name</th><th className="r">Value</th></tr></thead>
+            <thead><tr>
+              <th>{compared ? "Type and account" : "Name"}</th>
+              {compared ? <><th className="r">Opening</th><th className="r">Closing</th><th className="r">Change</th><th>Balances used</th></> : <th className="r">Value</th>}
+            </tr></thead>
             <tbody>
-              {lines.map(({ node, depth }, i) => {
+              {lines.map(({ node, depth }) => {
                 const href = linkHref(node.link);
+                const parent = !!node.children?.length;
                 return (
-                  <tr key={i} className={node.children?.length ? "rp-parent" : undefined}>
-                    <td><span className={depth > 0 ? `rp-depth-${Math.min(depth, 8)}` : undefined}>{href ? <Link to={href}>{node.label}</Link> : node.label}</span></td>
-                    <td className="r">{money(node.value, currency)}</td>
+                  <tr key={node.id} className={parent ? "rp-parent" : undefined}>
+                    <td><span className={depth > 0 ? `rp-depth-${Math.min(depth, 8)}` : undefined}>
+                      {parent
+                        ? <button className="link rp-expander" aria-expanded={isOpen(node)} onClick={() => flip(node.id)}><span aria-hidden="true">{isOpen(node) ? "▾" : "▸"}</span> {node.label}</button>
+                        : href ? <Link to={href}>{node.label}</Link> : node.label}
+                    </span></td>
+                    {compared ? (
+                      <>
+                        <td className="r">{node.opening === undefined ? "" : money(node.opening, currency)}</td>
+                        <td className="r">{node.closing === undefined ? "" : money(node.closing, currency)}</td>
+                        <td className="r"><Change value={node.value} currency={currency} /></td>
+                        <td className="m">{node.note}</td>
+                      </>
+                    ) : <td className="r">{money(node.value, currency)}</td>}
                   </tr>
                 );
               })}

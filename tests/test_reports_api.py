@@ -61,9 +61,9 @@ def test_the_endpoints_need_a_signed_in_person(anon_client):
 
 def test_the_list_hides_admin_only_reports_from_a_member(client, member_client):
     assert [r["key"] for r in client.get("/api/reports").json()["reports"]] == [
-        "assets_liabilities", "synthetic_as_of", "synthetic_none", "synthetic_pair", "synthetic_range"]
+        "assets_liabilities", "net_worth_bridge", "synthetic_as_of", "synthetic_none", "synthetic_pair", "synthetic_range"]
     listed = member_client.get("/api/reports").json()["reports"]
-    assert [r["key"] for r in listed] == ["assets_liabilities", "synthetic_as_of", "synthetic_pair", "synthetic_range"]
+    assert [r["key"] for r in listed] == ["assets_liabilities", "net_worth_bridge", "synthetic_as_of", "synthetic_pair", "synthetic_range"]
     assert set(listed[0]) == {"key", "title", "description"}
 
 
@@ -82,7 +82,7 @@ def test_the_definition_carries_resolved_defaults_and_nothing_private(client):
     assert body["today"] == "2026-11-11"
     assert {p["key"]: p["default"] for p in body["parameters"]} == {"opening": "2025-11-11", "closing": "2026-11-11"}
     assert body["filters"] == {"enabled": False}
-    assert body["sections"][0] == {"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False, "columns": 12}
+    assert body["sections"][0] == {"key": "detail", "kind": "rows", "view": "table", "title": "Detail", "sized": False, "columns": 12, "expanded": True}
     assert not {"calculate", "population", "population_ids", "query", "sql"} & set(body)
 
 

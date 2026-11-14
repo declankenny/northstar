@@ -43,7 +43,7 @@ def describe(definition: ReportDef, today: date, conn: sqlite3.Connection | None
              "choices": [{"value": value, "label": label} for value, label in p.choices],
              "minimum": p.minimum, "maximum": p.maximum, "rules": params_module.describe_rules(p)}
             for p in definition.params],
-        "sections": [{"key": s.key, "kind": s.kind, "view": s.view, "title": s.title, "sized": s.sized, "columns": s.columns} for s in definition.sections],
+        "sections": [{"key": s.key, "kind": s.kind, "view": s.view, "title": s.title, "sized": s.sized, "columns": s.columns, "expanded": s.expanded} for s in definition.sections],
         "filters": {"enabled": False} if definition.filters is None else filters_module.prepare(conn, definition).describe(),
     }
 
