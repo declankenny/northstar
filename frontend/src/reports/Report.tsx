@@ -8,6 +8,7 @@ import { PATHS } from "../routes";
 import { ReportFilterDrawer } from "../ReportFilterDrawer";
 import { useChoiceNames } from "../useChoiceNames";
 import { useRequest } from "../useRequest";
+import { ExpansionProvider } from "./expansion";
 import { calculateReport, fetchReportChoices, fetchReportDefinition, ReportRequestError } from "./api";
 import { ParameterControls, parametersFor, problems, initialValues, type Values } from "./parameters";
 import type { ReportDefinition, ReportListItem, ReportResult, SectionData } from "./types";
@@ -99,6 +100,7 @@ function ReportBody({ definition, reports, isAdmin, onPick }: { definition: Repo
     return (
       <div className={busy ? "rp-body rp-busy" : "rp-body"} aria-busy={busy}>
         {general.map((n) => <p className="notice info" role="status" key={n.code}>{n.text}</p>)}
+        <ExpansionProvider>
         <div className="rp-grid">
           {definition.sections.filter((s) => s !== header).map((section) => {
             const View = VIEW_COMPONENTS[section.view];
@@ -111,6 +113,7 @@ function ReportBody({ definition, reports, isAdmin, onPick }: { definition: Repo
             );
           })}
         </div>
+        </ExpansionProvider>
       </div>
     );
   };

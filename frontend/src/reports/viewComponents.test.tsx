@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { giveBoxesASize } from "../charts/chartTesting";
 import { formatDate } from "../dates";
+import { ExpansionProvider } from "./expansion";
 import { linkHref, TableView, TilesView, TreemapView, UnavailableView, VIEW_COMPONENTS, type ViewProps, WaterfallView } from "./viewComponents";
 import type { ReportSectionDeclaration, RowsData, SummaryData, HierarchyData } from "./types";
 import { VIEWS } from "./views";
@@ -110,8 +111,13 @@ describe("a hierarchy drawn as a waterfall", () => {
       { id: "account_1", label: "Index fund", value: 700_000, opening: 1_000_000, closing: 1_700_000 }, { id: "account_2", label: "Stocks", value: -100_000, opening: 0, closing: -100_000 }] },
     { id: "type_2", label: "Mortgage", value: -200_000, opening: 500_000, closing: 300_000, note: "1 account" },
   ] };
+  const colours = () => {
+    document.documentElement.style.setProperty("--pos", "#118811");
+    document.documentElement.style.setProperty("--neg", "#cc2222");
+    document.documentElement.style.setProperty("--accent", "#2233cc");
+  };
   const waterfall = (d: HierarchyData, over: Partial<ReportSectionDeclaration> = {}) =>
-    render(<WaterfallView {...props(["hierarchy", "waterfall"], d, { title: "How it changed", ...over })} />);
+    render(<WaterfallView {...props(["hierarchy", "waterfall"], d, { title: "How it changed", expanded: false, ...over })} />);
 
   it("draws the opening balance, a step for each type and the closing balance, with its title", () => {
     const { container } = waterfall(data);
@@ -131,6 +137,98 @@ describe("a hierarchy drawn as a waterfall", () => {
     const { container } = waterfall({ ...data, opening: 2_500_000, closing: 2_900_000 });
     const label = container.querySelector(".bridge-scroll .chart-canvas")!.getAttribute("aria-label")!;
     expect(label).toBe("How it changed: Opening balance $25,000.00, Brokerage +$6,000.00, Mortgage -$2,000.00, Closing balance $29,000.00");
+  });
+
+  const tree: HierarchyData = { nodes: [
+    { id: "type_1", label: "Brokerage", value: 600_000, opening: 1_000_000, closing: 1_600_000, note: "2 accounts", children: [
+      { id: "account_1", label: "Index fund", value: 700_000, opening: 1_000_000, closing: 1_700_000, link: { to: "account", id: 11 } },
+      { id: "account_2", label: "Stocks", value: -100_000, opening: 0, closing: -100_000, link: { to: "account", id: 12 } }] },
+    { id: "type_2", label: "Mortgage", value: -200_000, opening: 500_000, closing: 300_000, note: "1 account", children: [
+      { id: "account_3", label: "Home loan", value: -200_000, opening: 500_000, closing: 300_000, link: { to: "account", id: 13 } }] },
+  ] };
+  const both = () => render(
+    <ExpansionProvider>
+      <WaterfallView {...props(["hierarchy", "waterfall"], tree, { key: "bridge", title: "How it changed", expanded: false })} />
+      <TableView {...props(["hierarchy", "table"], tree, { key: "changes", title: "Detail", expanded: false })} />
+    </ExpansionProvider>);
+  const chartText = (container: HTMLElement) => container.querySelector(".bridge-scroll")!.textContent!;
+  const rowsOf = (container: HTMLElement) => [...container.querySelectorAll("tbody tr")].map((r) => r.textContent!.trim());
+
+  it("starts with every type closed, in the chart and in the table, when its section starts collapsed", () => {
+    const { container } = both();
+    expect(chartText(container)).not.toContain("Index fund");
+    expect(chartText(container)).toContain("▸ Brokerage");
+    expect(rowsOf(container)).toHaveLength(2);
+  });
+
+  it("opens a type in the chart when it is opened in the table, and in the table when it is opened in the chart, so the two agree", () => {
+    const { container } = both();
+    fireEvent.click(screen.getByRole("button", { name: /Brokerage/ }));                        // the table's button
+    expect(chartText(container)).toContain("Index fund");
+    expect(chartText(container)).toContain("▾ Brokerage");
+    expect(rowsOf(container)).toHaveLength(4);
+    expect(rowsOf(container).some((r) => r.startsWith("Index fund"))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /Brokerage/ }));                        // closed again
+    expect(chartText(container)).not.toContain("Index fund");
+    expect(rowsOf(container)).toHaveLength(2);
+  });
+
+  it("has Expand all and Collapse all above the chart, which open and close every type in the chart and in the table", () => {
+    const { container } = both();
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    for (const name of ["Index fund", "Stocks", "Home loan"]) expect(chartText(container)).toContain(name);
+    expect(rowsOf(container)).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /Brokerage|Mortgage/ }).every((b) => b.getAttribute("aria-expanded") === "true")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(chartText(container)).not.toContain("Index fund");
+    expect(rowsOf(container)).toHaveLength(2);
+  });
+
+  it("keeps the totals and the net change the same whichever types are open", () => {
+    const { container } = both();
+    const label = () => container.querySelector(".bridge-scroll .chart-canvas")!.getAttribute("aria-label")!;
+    const ends = () => [/Opening balance \$[\d,.]+/.exec(label())![0], /Closing balance \$[\d,.]+/.exec(label())![0]];
+    const before = ends();
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(ends()).toEqual(before);
+  });
+
+  it("offers Expand all and Collapse all only when there is something to open", () => {
+    waterfall({ nodes: [{ id: "x", label: "X", value: 5, opening: 1, closing: 6 }] });
+    expect(screen.queryByRole("button", { name: "Expand all" })).toBeNull();
+  });
+
+  it("starts open, and Expand all and Collapse all still mean open and closed, when its section starts expanded", () => {
+    const { container } = waterfall(tree, { expanded: true });
+    expect(chartText(container)).toContain("Index fund");
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(chartText(container)).not.toContain("Index fund");
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(chartText(container)).toContain("Index fund");
+  });
+
+  it("works without a report around it: a view on its own keeps its own state", () => {
+    const { container } = waterfall(tree);
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(chartText(container)).toContain("Home loan");
+  });
+
+  it("goes to an account's page when its bar is clicked, and opens a closed type instead of leaving the page", () => {
+    colours();
+    const { container } = waterfall(tree);
+    const svg = () => container.querySelector(".bridge-scroll .chart-canvas svg")!;
+    const press = (x: number, y: number) => { for (const type of ["mouseMove", "mouseDown", "mouseUp", "click"] as const) fireEvent[type](svg(), { clientX: x, clientY: y }); };
+    const middleOf = (fill: string) => {
+      const path = [...svg().querySelectorAll("path")].find((p) => p.getAttribute("fill")?.toLowerCase() === fill)!;
+      const points = [...(path.getAttribute("d") ?? "").matchAll(/[ML]([\d.-]+) ([\d.-]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+      const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+      return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+    };
+    press(...(middleOf("#118811") as [number, number]));                                    // Brokerage, closed: it opens
+    expect(window.location.pathname).toBe("/reports/probe");
+    expect(chartText(container)).toContain("Index fund");
+    press(...(middleOf("#118811") as [number, number]));                                    // Index fund, the first green bar: its page
+    expect(window.location.pathname).toBe("/accounts/11");
   });
 
   it("says there is nothing to chart when nothing changed, instead of an empty chart", () => {

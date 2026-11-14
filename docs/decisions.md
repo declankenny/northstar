@@ -777,3 +777,14 @@ The waterfall is drawn by ECharts' custom series, one rectangle, label and conne
 - **Short amounts** (`formatCompact`, and `formatWhole` for the totals' labels) are for the chart's labels and scale only. They are rounded, are never added up, and are worked out with whole units, so no fraction of an amount is computed; the exact amounts are in the table and the tooltip.
 - **The theme gives a chart the positive and negative colours and the accent** (`--pos`, `--neg`, `--accent`), read again when the theme changes, so a chart's meaning follows the app's. The semantic roles #248 asks for are these two for now.
 - **A screen reader is given the chart's figures in its description**, since its marks cannot be reached by keyboard; the table beside it is the route for keyboard and drill-down.
+
+### Opening types in the Net Worth Bridge chart: one state for the page, no contract change (#255, v0.6)
+
+Opening a type in the waterfall replaces its bar with its accounts' bars from the same nodes the report already sends, so the running total after them is the total after the type and no total changes whichever types are open. Nothing was added to the report contract.
+
+- **What is open belongs to the report page, not to a view.** The chart and the table are two sections of one report showing the same nodes, so the page keeps the set of parents that are not as their section starts (`reports/expansion.tsx`, keyed by node id) and both read it: opening a type in one opens it in the other, and Expand all and Collapse all act on both. A view outside a report keeps its own. The bridge's chart section starts collapsed, as its table does (`expanded=False`).
+- **A bracket's colour is the type's own change**, not its accounts', so a type that fell is red even when one account rose.
+- **The chart wrapper passes axis-label clicks through** (`ChartClick.axis`), beside clicks on marks. The waterfall's categories are the bars' ids and the names are written by the axis label formatter, so a click on a name says which bar it is, even when two accounts share a name.
+- **The scale is worked out again from the bars showing**, and the scale column has the same room below as the chart (more when a bracket is drawn), so the two stay lined up.
+- **Keyboard and screen readers:** the chart's marks still cannot be reached. The table's expand buttons and the two buttons above the chart do everything the chart does, and the chart's description lists the bars showing.
+- **The name stays "Net Worth Bridge" although a filter changes its totals.** Filtering chooses the population, and the opening and closing balances are those accounts' net worth, so opening plus the changes still equals closing and both equal the Dashboard's for the same accounts. The chart's tooltip on a total says "Balance", as the header figures do.

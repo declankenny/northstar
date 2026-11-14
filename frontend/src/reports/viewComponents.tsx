@@ -1,12 +1,13 @@
-import { type ComponentType, useMemo, useState } from "react";
+import { type ComponentType, useCallback, useMemo } from "react";
 import { slotFor } from "../charts/colour";
 import { TreemapDrill } from "../charts/TreemapDrill";
 import type { TreeNode } from "../charts/treemap";
 import { WaterfallChart } from "../charts/WaterfallChart";
-import type { Words } from "../charts/waterfall";
+import type { StepNode, Words } from "../charts/waterfall";
 import { formatDate } from "../dates";
 import { listAddress, parseListView, withFilters } from "../listState";
 import { formatInteger } from "../locale";
+import { allFlipped, useExpansion } from "./expansion";
 import { type Currency, formatCents, formatCompact, formatWhole } from "../money";
 import { navigate, Link } from "../router";
 import { accountPath, balancePath } from "../routes";
@@ -81,12 +82,11 @@ function Change({ value, currency }: { value: number; currency: Currency }) {
 
 /** A hierarchy as a table: its nodes in order, each child indented under its parent, with the value a person reads (signed, and a parent's the sum
  *  of its children's). A parent opens and closes with a button, expanded or collapsed to begin with as the section says, and keeps the way a
- *  person left it when the report is worked out again. A node with a drill target makes its name a link. A hierarchy that compares two dates
+ *  person left it when the report is worked out again; what is open is the report's, shared with its other views of the same nodes. A node with a drill target makes its name a link. A hierarchy that compares two dates
  *  (its nodes have `opening` and `closing`) shows both, the change, and the note, which says which balances they rest on. */
 function HierarchyTable({ section, data, currency }: { section: ReportSectionDeclaration; data: HierarchyData; currency: Currency }) {
-  const [flipped, setFlipped] = useState<Set<string>>(new Set());              // the parents whose state is not the section's
+  const { flipped, flip } = useExpansion();                                    // the parents whose state is not the section's, shared with the report's other views
   const isOpen = (node: HierarchyNode) => section.expanded !== flipped.has(node.id);
-  const flip = (id: string) => setFlipped((before) => { const next = new Set(before); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const compared = data.nodes.some((n) => n.opening !== undefined);
   const lines = visible(data.nodes, isOpen);
   return (
@@ -191,6 +191,14 @@ export function TreemapView({ section, data, currency }: ViewProps) {
   );
 }
 
+/** The steps of a waterfall from the nodes of a report: each node and, inside it, its own, with the place each goes when it is clicked. */
+function toSteps(nodes: HierarchyNode[]): StepNode[] {
+  return nodes.map((n) => ({
+    id: n.id, name: n.label, value: n.value, opening: n.opening ?? 0, closing: n.closing ?? 0, note: n.note, href: linkHref(n.link) ?? undefined,
+    children: n.children?.length ? toSteps(n.children) : undefined,
+  }));
+}
+
 /** How a waterfall writes an amount: exact (a tooltip), with its sign (a change), and short (a label with little room, or the scale). */
 function wordsFor(currency: Currency): Words {
   const sign = (value: number, text: (n: number) => string) => (value > 0 ? "+" : "") + text(value);
@@ -208,11 +216,23 @@ export function WaterfallView({ section, data, currency }: ViewProps) {
   const { nodes, opening, closing } = data as HierarchyData;
   const words = useMemo(() => wordsFor(currency), [currency]);
   const whole = useMemo(() => (opening === undefined || closing === undefined ? undefined : { opening, closing }), [opening, closing]);
-  const steps = useMemo(() => nodes.map((n) => ({ id: n.id, name: n.label, value: n.value, opening: n.opening ?? 0, closing: n.closing ?? 0, note: n.note })), [nodes]);
+  const steps = useMemo(() => toSteps(nodes), [nodes]);
+  const { flipped, flip, set } = useExpansion();
+  const isOpen = useCallback((id: string) => section.expanded !== flipped.has(id), [section.expanded, flipped]);
+  const canOpen = steps.some((s) => s.children?.length);
   return (
     <>
-      <h2>{section.title}</h2>
-      {steps.length === 0 ? <p className="empty">Nothing to chart.</p> : <WaterfallChart nodes={steps} whole={whole} words={words} label={section.title} />}
+      <div className="bridge-head">
+        <h2>{section.title}</h2>
+        {canOpen && (
+          <div className="acts">
+            <button className="link" onClick={() => set(allFlipped(nodes, section.expanded, true))}>Expand all</button>
+            <button className="link" onClick={() => set(allFlipped(nodes, section.expanded, false))}>Collapse all</button>
+          </div>
+        )}
+      </div>
+      {steps.length === 0 ? <p className="empty">Nothing to chart.</p>
+        : <WaterfallChart nodes={steps} whole={whole} words={words} label={section.title} isOpen={isOpen} onToggle={flip} onOpen={navigate} />}
     </>
   );
 }

@@ -70,6 +70,8 @@ h1 { margin: 4px 0 0; font-size: 26px; font-weight: 650; letter-spacing: -.01em;
 .tile .val .delta { font-size: inherit; font-weight: inherit; margin-top: 0; }          /* a signed figure in a tile is the tile's size */
 
 /* A waterfall: the scale is a column of its own that does not scroll, beside the bars, which scroll sideways when there are many. */
+.bridge-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.bridge-head .acts { display: flex; gap: 14px; font-size: 13px; }
 .bridge-chart { display: flex; }
 .bridge-axis { flex: none; width: 64px; }
 .bridge-scroll { flex: 1; min-width: 0; overflow-x: auto; padding-bottom: 6px; }

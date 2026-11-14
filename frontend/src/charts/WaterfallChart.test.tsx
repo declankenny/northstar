@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { giveBoxesASize, startCspGuard } from "./chartTesting";
 import { echarts } from "./echarts";
@@ -144,5 +144,110 @@ describe("a waterfall", () => {
     await waitFor(() => expect(svgOf(charts(container)[1]).toLowerCase()).toContain("#33bb55"));
     expect(svgOf(charts(container)[1]).toLowerCase()).not.toContain("#118811");
     expect(guard.stop()).toEqual([]);
+  });
+});
+
+// ---- opening and closing types ----
+
+/** Press and release at a point of the chart, the way ECharts is told a click is made (see Chart.test.tsx). */
+const clickAt = (container: HTMLElement, x: number, y: number) => {
+  const svg = charts(container)[1].querySelector("svg")!;
+  for (const type of ["mouseMove", "mouseDown", "mouseUp", "click"] as const) fireEvent[type](svg, { clientX: x, clientY: y });
+};
+/** Where the text with these words is, from what ECharts wrote: its transform, or its own x and y. */
+const textPoint = (container: HTMLElement, words: string): [number, number] => {
+  const text = [...charts(container)[1].querySelectorAll("text")].find((t) => t.textContent === words);
+  if (!text) throw new Error(`no text ${words}`);
+  const moved = /translate\(([\d.-]+) ([\d.-]+)\)/.exec(text.getAttribute("transform") ?? "");
+  return moved ? [Number(moved[1]), Number(moved[2]) + 7] : [Number(text.getAttribute("x")), Number(text.getAttribute("y"))];
+};
+/** The middle of the bar drawn in this colour (the Nth of that colour), from the corners of its path. */
+const barPoint = (container: HTMLElement, fill: string, nth = 0): [number, number] => {
+  const paths = [...charts(container)[1].querySelectorAll("path")].filter((p) => p.getAttribute("fill")?.toLowerCase() === fill);
+  const points = [...(paths[nth].getAttribute("d") ?? "").matchAll(/[ML]([\d.-]+) ([\d.-]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+};
+
+const TYPES: StepNode[] = [
+  { id: "t1", name: "Brokerage", value: 600, opening: 1000, closing: 1600, note: "2 accounts", children: [
+    { id: "a1", name: "Index fund", value: 700, opening: 1000, closing: 1700, note: "Oct 1 → Oct 31", href: "/accounts/1" },
+    { id: "a2", name: "Stocks", value: -100, opening: 0, closing: -100, note: "No balance on Oct 1", href: "/accounts/2" }] },
+  { id: "t2", name: "Mortgage", value: -200, opening: 500, closing: 300, note: "1 account", children: [
+    { id: "a3", name: "Home loan", value: -200, opening: 500, closing: 300, href: "/accounts/3" }] },
+  { id: "t3", name: "Cash", value: 90, opening: 10, closing: 100, note: "no accounts inside" },
+];
+const rendered = (open: string[] = []) => {
+  colours();
+  const calls = { toggle: vi.fn(), open: vi.fn() };
+  const view = render(<WaterfallChart nodes={TYPES} words={WORDS} label="x" isOpen={(id) => open.includes(id)} onToggle={calls.toggle} onOpen={calls.open} />);
+  return { ...view, ...calls };
+};
+
+describe("opening and closing types in the chart", () => {
+  it("opens a type when its bar is clicked", () => {
+    const { container, toggle, open } = rendered();
+    clickAt(container, ...barPoint(container, "#118811"));                       // the one type that rose in the Brokerage colour is the first green bar
+    expect(toggle).toHaveBeenCalledWith("t1");
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("opens a type when its name under the axis is clicked, and says on the name that it can be opened", () => {
+    const { container, toggle } = rendered();
+    clickAt(container, ...textPoint(container, "▸ Brokerage"));
+    expect(toggle).toHaveBeenCalledWith("t1");
+    clickAt(container, ...textPoint(container, "▸ Mortgage"));
+    expect(toggle).toHaveBeenLastCalledWith("t2");
+  });
+
+  it("does nothing for the name of a step with nothing inside it, which has no sign that it can be opened", () => {
+    const { container, toggle, open } = rendered();
+    expect([...charts(container)[1].querySelectorAll("text")].some((t) => t.textContent === "Cash")).toBe(true);
+    clickAt(container, ...textPoint(container, "Cash"));
+    expect(toggle).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("shows an open type as its accounts, with a bracket under them named for the type", () => {
+    const { container } = rendered(["t1"]);
+    const text = charts(container)[1].textContent!;
+    for (const expected of ["Index fund", "Stocks", "▾ Brokerage", "▸ Mortgage"]) expect(text).toContain(expected);
+    expect(text).not.toContain("▸ Brokerage");
+    expect(charts(container)[1].getAttribute("aria-label")).toContain("Index fund +$700");
+  });
+
+  it("closes an open type when the name on its bracket is clicked", () => {
+    const { container, toggle } = rendered(["t1"]);
+    clickAt(container, ...textPoint(container, "▾ Brokerage"));
+    expect(toggle).toHaveBeenCalledWith("t1");
+  });
+
+  it("opens an account when its bar is clicked, and not when its name under the axis is", () => {
+    const { container, toggle, open } = rendered(["t2"]);
+    clickAt(container, ...textPoint(container, "Home loan"));
+    expect(open).not.toHaveBeenCalled();
+    clickAt(container, ...barPoint(container, "#cc2222"));
+    expect(open).toHaveBeenCalledWith("/accounts/3");
+    expect(toggle).not.toHaveBeenCalled();
+  });
+
+  it("colours a bracket by what the type itself did, and writes it in that colour", () => {
+    const { container } = rendered(["t2"]);                                       // the mortgage fell
+    const bracket = [...charts(container)[1].querySelectorAll("text")].find((t) => t.textContent === "▾ Mortgage")!;
+    expect(bracket.getAttribute("fill")?.toLowerCase()).toBe("#cc2222");
+    cleanup();
+    const up = rendered(["t1"]);
+    expect([...charts(up.container)[1].querySelectorAll("text")].find((t) => t.textContent === "▾ Brokerage")!.getAttribute("fill")?.toLowerCase()).toBe("#118811");
+  });
+
+  it("leaves the scale column the same height as the chart when a bracket needs more room below", () => {
+    const shut = rendered();
+    const shutBottom = echarts.getInstanceByDom(charts(shut.container)[0])!.getOption().grid as { bottom: number }[];
+    cleanup();
+    const open = rendered(["t1"]);
+    const chart = echarts.getInstanceByDom(charts(open.container)[1])!.getOption().grid as { bottom: number }[];
+    const scale = echarts.getInstanceByDom(charts(open.container)[0])!.getOption().grid as { bottom: number }[];
+    expect(chart[0].bottom).toBe(scale[0].bottom);
+    expect(scale[0].bottom).toBeGreaterThan(shutBottom[0].bottom);
   });
 });
