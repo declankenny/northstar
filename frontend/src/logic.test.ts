@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addMonths, dayNumber, formatDate, isoFromDay } from "./dates";
-import { centsToInput, formatCents, parseCents, percentChange } from "./money";
+import { centsToInput, formatCents, formatCompact, formatWhole, parseCents, percentChange } from "./money";
 import { PERIOD, RANGES, rangeStart } from "./ranges";
 
 describe("dates", () => {
@@ -43,6 +43,25 @@ describe("money", () => {
     expect(formatCents(-5)).toBe("-$0.05");
     expect(formatCents(-123456)).toBe("-$1,234.56");
     expect(formatCents(12345678900)).toBe("$123,456,789.00");
+  });
+
+  it("shortens an amount for a label with little room, in whole units and with the same mark", () => {
+    expect(formatCompact(75_000_000)).toBe("$750K");
+    expect(formatCompact(130_000_000)).toBe("$1.3M");
+    expect(formatCompact(-31_800_000)).toBe("-$318K");
+    expect(formatCompact(99_900)).toBe("$999");
+    expect(formatCompact(0)).toBe("$0");
+    expect(formatCompact(-40)).toBe("$0");                                     // under a whole unit: no minus on a zero
+    expect(formatCompact(500, { code: "JPY", name: "Yen", minor_units: 0 })).toMatch(/^JPY\s500$/);   // the mark comes first, spaced as the locale spaces it
+  });
+
+  it("writes an amount in whole units, rounded half up, for a label that has room for the figure and not its cents", () => {
+    expect(formatWhole(14_993_849)).toBe("$149,938");
+    expect(formatWhole(14_993_850)).toBe("$149,939");
+    expect(formatWhole(-14_993_850)).toBe("-$149,939");
+    expect(formatWhole(49)).toBe("$0");
+    expect(formatWhole(-49)).toBe("$0");
+    expect(formatWhole(1_234, { code: "JPY", name: "Yen", minor_units: 0 })).toMatch(/^JPY\s1,234$/);
   });
 
   it("has no percent change from a zero base, and uses the size of a negative base", () => {

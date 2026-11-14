@@ -47,6 +47,23 @@ describe("the chart", () => {
     expect(svg.getAttribute("height")).toBe("360");
   });
 
+  it("draws a custom series on a grid as SVG, which is how a waterfall is drawn: its shapes, its text and its axis labels", () => {
+    const option: EChartsCoreOption = {
+      grid: { left: 0, right: 0, top: 0, bottom: 30 }, xAxis: { type: "category", data: ["One", "Two"] }, yAxis: { type: "value", min: 0, max: 10 },
+      series: [{
+        type: "custom", data: [{ id: "a", value: [0, 4] }, { id: "b", value: [1, 8] }],
+        renderItem: (params: { dataIndex: number }, api: { coord: (v: number[]) => number[]; size: (v: number[]) => number[] }) => {
+          const [x, y] = api.coord([params.dataIndex, params.dataIndex === 0 ? 4 : 8]);
+          return { type: "group", children: [{ type: "rect", shape: { x: x - 10, y, width: 20, height: 30 }, style: { fill: "#2a78d6" } }, { type: "text", style: { text: `bar${params.dataIndex}`, x, y: y - 4 } }] };
+        },
+      }],
+    };
+    const { container } = render(<Chart option={option} label="Bars" />);
+    const svg = container.querySelector("svg")!;
+    expect(svg.innerHTML).toContain("#2a78d6");
+    expect([...svg.querySelectorAll("text")].map((t) => t.textContent)).toEqual(expect.arrayContaining(["bar0", "bar1", "One", "Two"]));
+  });
+
   it("is an image to a screen reader, described by its label", () => {
     const { container } = render(<Chart option={treemap()} label="Assets, by account type" />);
     const box = canvas(container);

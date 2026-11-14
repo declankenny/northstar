@@ -64,7 +64,7 @@ export type ReportLink =
   | { to: "list"; list: string; filters: { field: string; operator: string; value?: unknown }[] };
 
 export type SummaryItem =
-  | { key: string; label: string; kind: "money"; value: number; currency?: string; note?: string }
+  | { key: string; label: string; kind: "money"; value: number; currency?: string; note?: string; signed?: boolean }
   | { key: string; label: string; kind: "count"; value: number; note?: string }
   | { key: string; label: string; kind: "date" | "text"; value: string; note?: string };
 
@@ -92,7 +92,9 @@ export type HierarchyNode = {
   children?: HierarchyNode[];
 };
 
-export type HierarchyData = { nodes: HierarchyNode[] };
+/** `opening` and `closing`, when there, are the whole's amount at each end of a comparison: the nodes are what changed, so they may not add up to
+ *  them (an account that did not change is in the whole and in no node), but their changes add up to the difference. */
+export type HierarchyData = { nodes: HierarchyNode[]; opening?: number; closing?: number };
 
 export type ColumnKind = "text" | "money" | "native_money" | "date" | "count";
 export type RowCell = string | number | { minor: number; currency: string } | null;

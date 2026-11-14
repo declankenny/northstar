@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { giveBoxesASize } from "../charts/chartTesting";
 import { formatDate } from "../dates";
-import { linkHref, TableView, TilesView, TreemapView, UnavailableView, VIEW_COMPONENTS, type ViewProps } from "./viewComponents";
+import { linkHref, TableView, TilesView, TreemapView, UnavailableView, VIEW_COMPONENTS, type ViewProps, WaterfallView } from "./viewComponents";
 import type { ReportSectionDeclaration, RowsData, SummaryData, HierarchyData } from "./types";
 import { VIEWS } from "./views";
 
@@ -75,6 +75,68 @@ describe("headline figures", () => {
   it("never guess the decimal places of an amount in another currency: it says what it was given", () => {
     render(<TilesView {...props(["summary", "tiles"], items)} />);
     expect(within(screen.getByText("In euros").closest(".tile") as HTMLElement).getByText("EUR 5,000 (minor units)")).toBeTruthy();
+  });
+});
+
+describe("a signed headline figure", () => {
+  const change = (value: number, over: object = {}): SummaryData => ({ items: [{ key: "change", label: "Change", kind: "money", value, signed: true, ...over }] });
+  const figure = (container: HTMLElement) => container.querySelector(".tile .val .delta span")!;
+
+  it("is a change: shown with its sign and coloured by its direction, in the tile's own size", () => {
+    const up = render(<TilesView {...props(["summary", "tiles"], change(300_000))} />);
+    expect(figure(up.container).textContent).toBe("+$3,000.00");
+    expect(figure(up.container).className).toBe("p");
+    cleanup();
+    const down = render(<TilesView {...props(["summary", "tiles"], change(-5_000))} />);
+    expect(figure(down.container).textContent).toBe("-$50.00");
+    expect(figure(down.container).className).toBe("n");
+    cleanup();
+    expect(figure(render(<TilesView {...props(["summary", "tiles"], change(0))} />).container).className).toBe("m");
+  });
+
+  it("is not coloured when the report does not say it is a change, or when it is in another currency", () => {
+    const plain = render(<TilesView {...props(["summary", "tiles"], change(300_000, { signed: undefined }))} />);
+    expect(plain.container.querySelector(".delta")).toBeNull();
+    expect(plain.container.querySelector(".val")!.textContent).toBe("$3,000.00");
+    cleanup();
+    const foreignFigure = render(<TilesView {...props(["summary", "tiles"], change(5_000, { currency: "EUR" }))} />);
+    expect(foreignFigure.container.querySelector(".delta")).toBeNull();
+  });
+});
+
+describe("a hierarchy drawn as a waterfall", () => {
+  const data: HierarchyData = { nodes: [
+    { id: "type_1", label: "Brokerage", value: 600_000, opening: 1_000_000, closing: 1_600_000, note: "2 accounts", children: [
+      { id: "account_1", label: "Index fund", value: 700_000, opening: 1_000_000, closing: 1_700_000 }, { id: "account_2", label: "Stocks", value: -100_000, opening: 0, closing: -100_000 }] },
+    { id: "type_2", label: "Mortgage", value: -200_000, opening: 500_000, closing: 300_000, note: "1 account" },
+  ] };
+  const waterfall = (d: HierarchyData, over: Partial<ReportSectionDeclaration> = {}) =>
+    render(<WaterfallView {...props(["hierarchy", "waterfall"], d, { title: "How it changed", ...over })} />);
+
+  it("draws the opening balance, a step for each type and the closing balance, with its title", () => {
+    const { container } = waterfall(data);
+    expect(screen.getByRole("heading", { name: "How it changed" })).toBeTruthy();
+    const text = container.querySelector(".bridge-scroll")!.textContent!;
+    for (const expected of ["Opening balance", "Brokerage", "Mortgage", "Closing balance", "$15,000", "$19,000", "+$6K", "-$2K"]) expect(text).toContain(expected);
+  });
+
+  it("describes the figures for a screen reader, in the report's currency, and does not draw an account of a type as a step of its own", () => {
+    const { container } = waterfall(data);
+    const label = container.querySelector(".bridge-scroll .chart-canvas")!.getAttribute("aria-label")!;
+    expect(label).toBe("How it changed: Opening balance $15,000.00, Brokerage +$6,000.00, Mortgage -$2,000.00, Closing balance $19,000.00");
+    expect(label).not.toContain("Index fund");
+  });
+
+  it("starts and ends at the whole the report gives, since an account that did not change is in the whole and in no type", () => {
+    const { container } = waterfall({ ...data, opening: 2_500_000, closing: 2_900_000 });
+    const label = container.querySelector(".bridge-scroll .chart-canvas")!.getAttribute("aria-label")!;
+    expect(label).toBe("How it changed: Opening balance $25,000.00, Brokerage +$6,000.00, Mortgage -$2,000.00, Closing balance $29,000.00");
+  });
+
+  it("says there is nothing to chart when nothing changed, instead of an empty chart", () => {
+    const { container } = waterfall({ nodes: [] });
+    expect(screen.getByText("Nothing to chart.")).toBeTruthy();
+    expect(container.querySelector(".chart-canvas")).toBeNull();
   });
 });
 

@@ -37,10 +37,11 @@ RESERVED = ("flows",)
 VIEWS = {
     "summary": ("tiles",),
     "series": ("line",),
-    "hierarchy": ("treemap", "table"),
+    "hierarchy": ("treemap", "waterfall", "table"),
     "rows": ("table",),
 }
 NEEDS_SIZE = frozenset({"treemap"})                 # views that draw by size, and so need a sized section
+NEEDS_COMPARISON = frozenset({"waterfall"})         # views that draw a change between two dates, so every node carries `opening` and `closing`
 SUMMARY_KINDS = ("money", "date", "count", "text")
 SERIES_KINDS = ("money", "count")
 COLUMN_KINDS = ("text", "money", "native_money", "date", "count")
@@ -213,7 +214,7 @@ def _summary(data: object, where: str) -> dict:
     items, seen = [], set()
     for index, item in enumerate(_list(data["items"], f"{where}.items")):
         at = f"{where}.items[{index}]"
-        _only(item, {"key", "label", "kind", "value", "currency", "note"}, at, {"key", "label", "kind", "value"})
+        _only(item, {"key", "label", "kind", "value", "currency", "note", "signed"}, at, {"key", "label", "kind", "value"})
         key = _identifier(item["key"], f"{at}.key")
         if key in seen:
             _fail(at, "repeats a key")
@@ -224,6 +225,10 @@ def _summary(data: object, where: str) -> dict:
         if kind != "money" and "currency" in item:
             _fail(at, "names a currency but is not money")
         out = {"key": key, "label": _text(item["label"], f"{at}.label"), "kind": kind}
+        if "signed" in item:                        # a figure that is a change: shown with its sign and coloured by its direction
+            if kind != "money" or not isinstance(item["signed"], bool):
+                _fail(at, "is signed but is not money, or says so with something other than true or false")
+            out["signed"] = item["signed"]
         if kind == "money":
             out["value"] = whole(item["value"], f"{at}.value")
             if "currency" in item:
@@ -266,7 +271,7 @@ def _series(data: object, where: str) -> dict:
 
 
 def _hierarchy(section: SectionDef, data: object, where: str) -> dict:
-    data = _only(data, {"nodes"}, where, {"nodes"})
+    data = _only(data, {"nodes", *COMPARED}, where, {"nodes"})
     seen: set[str] = set()
     count = [0]
 
@@ -289,6 +294,8 @@ def _hierarchy(section: SectionDef, data: object, where: str) -> dict:
         for name in COMPARED:                       # a comparison between two dates: the value at each end, of which `value` is the change
             if name in raw:
                 out[name] = whole(raw[name], f"{at}.{name}")
+        if section.view in NEEDS_COMPARISON and "opening" not in raw:
+            _fail(at, f"has no opening and closing, which the view {section.view!r} draws")
         if ("opening" in raw) != ("closing" in raw):
             _fail(at, "has one of opening and closing but not both")
         if "opening" in out and out["closing"] - out["opening"] != value:
@@ -332,7 +339,19 @@ def _hierarchy(section: SectionDef, data: object, where: str) -> dict:
         return out, value, size
 
     nodes = [node(raw, 1, f"{where}.nodes[{index}]")[0] for index, raw in enumerate(_list(data["nodes"], f"{where}.nodes"))]
-    return {"nodes": nodes}
+    result: dict = {"nodes": nodes}
+    # The whole's own amount at each end, which a node may not add up to: the nodes of a comparison are only what changed, and what did not
+    # is in the whole. A chart of the change starts and ends at these.
+    for name in COMPARED:
+        if name in data:
+            result[name] = whole(data[name], f"{where}.{name}")
+    if ("opening" in data) != ("closing" in data):
+        _fail(where, "has one of opening and closing but not both")
+    if section.view in NEEDS_COMPARISON and "opening" not in data:
+        _fail(where, f"has no opening and closing, which the view {section.view!r} draws")
+    if "opening" in result and result["closing"] - result["opening"] != sum(n["value"] for n in nodes):
+        _fail(where, "has a closing that is not its opening plus the changes of its nodes")
+    return result
 
 
 def _rows(data: object, where: str) -> dict:

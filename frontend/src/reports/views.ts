@@ -3,7 +3,7 @@
 export const VIEWS = {
   summary: ["tiles"],
   series: ["line"],
-  hierarchy: ["treemap", "table"],
+  hierarchy: ["treemap", "waterfall", "table"],
   rows: ["table"],
 } as const;
 

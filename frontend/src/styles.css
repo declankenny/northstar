@@ -67,6 +67,12 @@ h1 { margin: 4px 0 0; font-size: 26px; font-weight: 650; letter-spacing: -.01em;
 .tile.main .val { font-size: 34px; }
 .delta { margin-top: 4px; font-size: 13px; }
 .delta .p { color: var(--pos); } .delta .n { color: var(--neg); } .delta .m { color: var(--muted); }
+.tile .val .delta { font-size: inherit; font-weight: inherit; margin-top: 0; }          /* a signed figure in a tile is the tile's size */
+
+/* A waterfall: the scale is a column of its own that does not scroll, beside the bars, which scroll sideways when there are many. */
+.bridge-chart { display: flex; }
+.bridge-axis { flex: none; width: 64px; }
+.bridge-scroll { flex: 1; min-width: 0; overflow-x: auto; padding-bottom: 6px; }
 
 .charthead { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
 .charthead .label { color: var(--muted); font-size: 13px; }
