@@ -27,8 +27,11 @@ def test_the_payload_fields_are_the_fields_the_validators_accept():
     assert set(sections.link({"to": "account", "id": 1}, "x")) == fields(payloads.EntityLink)
     assert set(sections.link(link, "x")) == fields(payloads.ListLink)
 
-    item = {"key": "m", "label": "M", "kind": "money", "value": 1, "currency": "EUR", "note": "n"}
+    item = {"key": "m", "label": "M", "kind": "money", "value": 1, "currency": "EUR", "note": "n", "signed": True}
     assert set(sections.validate(SectionDef("s", "summary", "tiles", "S"), {"items": [item]})["items"][0]) == fields(payloads.SummaryItem)
+
+    whole = sections.validate(SectionDef("c", "hierarchy", "table", "C", sized=True), {"nodes": [node], "opening": 100, "closing": 101})
+    assert set(whole) == fields(payloads.HierarchyData)
 
     line = {"key": "a", "label": "A", "kind": "money", "points": [{"x": "2026-01-01", "value": 1}]}
     checked = sections.validate(SectionDef("t", "series", "line", "T"), {"series": [line]})["series"][0]

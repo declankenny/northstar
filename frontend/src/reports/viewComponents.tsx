@@ -2,10 +2,12 @@ import { type ComponentType, useMemo, useState } from "react";
 import { slotFor } from "../charts/colour";
 import { TreemapDrill } from "../charts/TreemapDrill";
 import type { TreeNode } from "../charts/treemap";
+import { WaterfallChart } from "../charts/WaterfallChart";
+import type { Words } from "../charts/waterfall";
 import { formatDate } from "../dates";
 import { listAddress, parseListView, withFilters } from "../listState";
 import { formatInteger } from "../locale";
-import { type Currency, formatCents } from "../money";
+import { type Currency, formatCents, formatCompact, formatWhole } from "../money";
 import { navigate, Link } from "../router";
 import { accountPath, balancePath } from "../routes";
 import type {
@@ -49,7 +51,7 @@ export function TilesView({ data, currency }: ViewProps) {
       {items.map((item) => (
         <div className="tile" key={item.key}>
           <div className="label">{item.label}</div>
-          <div className="val num">{summaryValue(item, currency)}</div>
+          <div className="val num">{item.kind === "money" && item.signed && !item.currency ? <Change value={item.value} currency={currency} /> : summaryValue(item, currency)}</div>
           {item.note && <div className="sub">{item.note}</div>}
         </div>
       ))}
@@ -189,6 +191,32 @@ export function TreemapView({ section, data, currency }: ViewProps) {
   );
 }
 
+/** How a waterfall writes an amount: exact (a tooltip), with its sign (a change), and short (a label with little room, or the scale). */
+function wordsFor(currency: Currency): Words {
+  const sign = (value: number, text: (n: number) => string) => (value > 0 ? "+" : "") + text(value);
+  return {
+    amount: (value) => money(value, currency), change: (value) => sign(value, (n) => money(n, currency)),
+    short: (value) => formatCompact(value, currency), shortChange: (value) => sign(value, (n) => formatCompact(n, currency)),
+    whole: (value) => formatWhole(value, currency),
+  };
+}
+
+/** A hierarchy that compares two dates, drawn as a waterfall: the opening balance, a step for each top-level node (its change, from the
+ *  running total) and the closing balance. The report gives the whole at each end (accounts that did not change are in it and in no node),
+ *  so the chart does no arithmetic of its own beyond adding the steps' changes to place the bars. */
+export function WaterfallView({ section, data, currency }: ViewProps) {
+  const { nodes, opening, closing } = data as HierarchyData;
+  const words = useMemo(() => wordsFor(currency), [currency]);
+  const whole = useMemo(() => (opening === undefined || closing === undefined ? undefined : { opening, closing }), [opening, closing]);
+  const steps = useMemo(() => nodes.map((n) => ({ id: n.id, name: n.label, value: n.value, opening: n.opening ?? 0, closing: n.closing ?? 0, note: n.note })), [nodes]);
+  return (
+    <>
+      <h2>{section.title}</h2>
+      {steps.length === 0 ? <p className="empty">Nothing to chart.</p> : <WaterfallChart nodes={steps} whole={whole} words={words} label={section.title} />}
+    </>
+  );
+}
+
 /** A view the page has no drawing for yet. It says so, so a report that names it shows an honest message and not nothing. */
 export function UnavailableView({ section }: ViewProps) {
   return (
@@ -205,5 +233,6 @@ export const VIEW_COMPONENTS: Record<View, ComponentType<ViewProps>> = {
   tiles: TilesView,
   line: UnavailableView,
   treemap: TreemapView,
+  waterfall: WaterfallView,
   table: TableView,
 };

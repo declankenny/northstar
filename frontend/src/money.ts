@@ -34,13 +34,37 @@ export function currencyMark(currency: Currency = current): string {
 /** 123456 becomes "$1,234.56" for US dollars in US English, "EUR 1,234.56" otherwise, and "1.234,56 EUR" where the locale puts
  *  the currency after the number. A negative amount has its minus at the very start. */
 export function formatCents(cents: number, currency: Currency = current): string {
-  const locale = getLocale();
   const abs = Math.abs(cents);
-  const number = formatInteger(Math.floor(abs / 10 ** currency.minor_units)) + decimals(abs, currency.minor_units);
-  const minus = cents < 0 ? "-" : "";
+  return marked(cents < 0, formatInteger(Math.floor(abs / 10 ** currency.minor_units)) + decimals(abs, currency.minor_units), currency);
+}
+
+/** A number with its currency mark in the place the person's locale puts it, and the minus at the very start. */
+function marked(negative: boolean, number: string, currency: Currency): string {
+  const locale = getLocale();
+  const minus = negative ? "-" : "";
   if (currency.code === "USD" && locale.tag === "en-US") return `${minus}$${number}`;
   const spacing = locale.currency_code_spacing;
   return minus + (locale.currency_position === "prefix" ? `${currency.code}${spacing}${number}` : `${number}${spacing}${currency.code}`);
+}
+
+/** An amount in whole units, rounded half up and with no minor part ($149,938), for a label with room for the figure but not its cents. Like
+ *  `formatCompact` it is rounded, so it is never a figure to add up, and it is worked out with whole numbers. */
+export function formatWhole(cents: number, currency: Currency = current): string {
+  const unit = 10 ** currency.minor_units;
+  const abs = Math.abs(cents);
+  const whole = Math.floor((2 * abs + unit) / (2 * unit));
+  return marked(cents < 0 && whole > 0, formatInteger(whole), currency);
+}
+
+/** An amount in a few characters, for a label that has little room (a chart's axis and bars): the whole units, shortened the way the
+ *  person's locale shortens them ($1.3M, $750K), with the same mark as `formatCents`. It is rounded, so it is never a figure to add
+ *  up: the exact amount is in the table and the tooltip. The units are whole numbers, so no fraction of an amount is ever computed. */
+export function formatCompact(cents: number, currency: Currency = current): string {
+  const unit = 10 ** currency.minor_units;
+  const abs = Math.abs(cents);
+  const whole = (abs - (abs % unit)) / unit;
+  const number = new Intl.NumberFormat(getLocale().tag, { notation: "compact", maximumFractionDigits: 1 }).format(whole);
+  return marked(cents < 0 && whole > 0, number, currency);
 }
 
 /** An exchange rate as the server stores it ("1234.5000": digits and a point) the way the person reads numbers: the whole part

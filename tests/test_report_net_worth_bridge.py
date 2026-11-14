@@ -86,7 +86,7 @@ def test_it_is_registered_and_opens_with_closing_today_and_opening_a_year_earlie
     described = engine.describe(REPORT, TODAY, conn)
     assert [(p["key"], p["default"]) for p in described["parameters"]] == [("opening", "2025-11-11"), ("closing", "2026-11-11")]
     assert [(s["key"], s["kind"], s["view"], s["expanded"], s["columns"]) for s in described["sections"]] == [
-        ("headline", "summary", "tiles", True, 12), ("changes", "hierarchy", "table", False, 12)]
+        ("headline", "summary", "tiles", True, 12), ("bridge", "hierarchy", "waterfall", True, 12), ("changes", "hierarchy", "table", False, 12)]
     assert described["filters"]["enabled"] is True and described["filters"]["defaults"] == []
 
 
@@ -103,6 +103,29 @@ def test_the_headline_is_opening_change_and_closing_with_their_dates_and_the_cha
     assert (got["opening"]["label"], got["change"]["label"], got["closing"]["label"]) == ("Opening balance", "Change", "Closing balance")
     assert (got["opening"]["value"], got["change"]["value"], got["closing"]["value"]) == (146_938, 3_000, 149_938)
     assert (got["opening"]["note"], got["change"]["note"], got["closing"]["note"]) == (fmt(OPENING), "+2.0%", fmt(CLOSING))
+
+
+def test_the_change_figure_says_it_is_a_change_so_the_page_shows_its_sign_and_direction(conn, household):
+    got = items(run(conn))
+    assert got["change"]["signed"] is True
+    assert "signed" not in got["opening"] and "signed" not in got["closing"]
+
+
+def test_the_chart_draws_the_same_nodes_as_the_table_so_both_reconcile_to_the_same_totals(conn, household):
+    result = run(conn)
+    bridge = result["sections"]["bridge"]
+    assert bridge["nodes"] == result["sections"]["changes"]["nodes"]
+    assert (bridge["opening"], bridge["closing"]) == (items(result)["opening"]["value"], items(result)["closing"]["value"])
+    assert bridge["opening"] + sum(n["value"] for n in bridge["nodes"]) == bridge["closing"]
+    # An account that did not change is in the totals and in no node, so the chart starts from the whole and not from the sum of what changed.
+    assert sum(n["opening"] for n in bridge["nodes"]) != bridge["opening"]
+
+
+def test_the_chart_is_empty_and_the_table_is_empty_when_nothing_changed(conn, household):
+    result = run(conn, "2026-06-10", "2026-06-30")
+    got = items(result)
+    assert result["sections"]["bridge"] == {"nodes": [], "opening": got["opening"]["value"], "closing": got["closing"]["value"]}
+    assert result["sections"]["changes"] == {"nodes": []}
 
 
 def test_opening_and_closing_equal_the_dashboards_net_worth_on_both_dates(conn, household):

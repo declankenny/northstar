@@ -33,6 +33,7 @@ class SummaryItem(TypedDict):
     value: int | str
     currency: NotRequired[str]                      # money only, when it is not in the system currency
     note: NotRequired[str]
+    signed: NotRequired[bool]                       # money only: a change, shown with its sign and coloured by its direction
 
 
 class SummaryData(TypedDict):
@@ -81,6 +82,8 @@ class HierarchyNode(TypedDict):
 
 class HierarchyData(TypedDict):
     nodes: list[HierarchyNode]
+    opening: NotRequired[int]                       # a comparison: the whole's amount at each end, and the nodes' changes add up to the difference
+    closing: NotRequired[int]
 
 
 # -- rows --

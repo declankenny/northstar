@@ -32,9 +32,14 @@ describe("the colours of a chart", () => {
     expect(theme.series[7]).toBe("#00aa00");
   });
 
+  it("include what raises a value, what lowers it and the accent, from the page's own variables", () => {
+    paint({ "--pos": "#118811", "--neg": "#cc2222", "--accent": "#2233cc" });
+    expect(readChartTheme()).toMatchObject({ positive: "#118811", negative: "#cc2222", accent: "#2233cc" });
+  });
+
   it("fall back to a visible grey for a variable the page does not have, never to nothing", () => {
     const theme = readChartTheme();
-    expect([theme.text, theme.surface, ...theme.series].every((c) => /^#[0-9a-f]{6}$/i.test(c))).toBe(true);
+    expect([theme.text, theme.surface, theme.positive, theme.negative, theme.accent, ...theme.series].every((c) => /^#[0-9a-f]{6}$/i.test(c))).toBe(true);
   });
 
   it("are read again when the page's theme changes", async () => {

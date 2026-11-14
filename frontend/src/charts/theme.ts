@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
  *  `--chart-1` ... `--chart-16` in styles.css) and read again when the theme changes. */
 export type ChartTheme = {
   text: string; muted: string; surface: string; border: string;
+  positive: string; negative: string; accent: string;     // what raises and what lowers a value, and the app's accent
   series: string[];                              // the categorical slots, in their fixed order
 };
 
 /** How many colours the palette has. It is a size and never a limit: past it the colours repeat (see `slotFor`). */
 export const SLOTS = 16;
-const FALLBACK = { text: "#888888", muted: "#888888", surface: "#ffffff", border: "#cccccc", series: "#888888" };
+const FALLBACK = { text: "#888888", muted: "#888888", surface: "#ffffff", border: "#cccccc", positive: "#2f7d4f", negative: "#b4443a", accent: "#3a6d9c", series: "#888888" };
 
 export function readChartTheme(root: HTMLElement = document.documentElement): ChartTheme {
   const style = getComputedStyle(root);
@@ -17,6 +18,7 @@ export function readChartTheme(root: HTMLElement = document.documentElement): Ch
   return {
     text: variable("--text", FALLBACK.text), muted: variable("--muted", FALLBACK.muted),
     surface: variable("--surface", FALLBACK.surface), border: variable("--border", FALLBACK.border),
+    positive: variable("--pos", FALLBACK.positive), negative: variable("--neg", FALLBACK.negative), accent: variable("--accent", FALLBACK.accent),
     series: Array.from({ length: SLOTS }, (_, i) => variable(`--chart-${i + 1}`, FALLBACK.series)),
   };
 }

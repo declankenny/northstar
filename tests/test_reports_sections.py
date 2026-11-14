@@ -352,6 +352,59 @@ def test_a_lone_node_with_contradictory_figures_is_a_defect():
         sections.validate(TREE, data)
 
 
+WATERFALL = SectionDef("w", "hierarchy", "waterfall", "W")
+
+
+def drawn():
+    """What a waterfall is given: two types that changed, and a whole that is more than what changed (an account that did not change is in it)."""
+    return {"nodes": [{"id": "a", "label": "A", "value": 50, "opening": 40, "closing": 90}, {"id": "b", "label": "B", "value": -20, "opening": 60, "closing": 40}],
+            "opening": 1_100, "closing": 1_130}
+
+
+def test_a_waterfall_is_a_view_of_a_hierarchy_that_compares_two_dates_and_is_not_sized():
+    sections.check("r", (WATERFALL,))
+    assert sections.validate(WATERFALL, drawn())["opening"] == 1_100
+    with pytest.raises(ReportDefinitionError):
+        sections.check("r", (SectionDef("s", "summary", "waterfall", "S"),))
+
+
+def test_a_waterfall_needs_the_whole_at_each_end_and_its_nodes_at_each_end():
+    for mutate in (lambda d: (d.pop("opening"), d.pop("closing")),                          # no whole
+                   lambda d: d["nodes"][0].pop("opening"), lambda d: (d["nodes"][0].pop("opening"), d["nodes"][0].pop("closing"))):
+        data = drawn()
+        mutate(data)
+        with pytest.raises(ReportDefectError):
+            sections.validate(WATERFALL, data)
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda d: d.pop("closing"),                                                             # one end of the whole without the other
+    lambda d: d.update(closing=1_131),                                                      # a whole that is not its opening plus the changes
+    lambda d: d.update(opening=1_100.5), lambda d: d.update(opening=True), lambda d: d.update(opening="1100"),
+])
+def test_the_whole_must_be_whole_amounts_that_differ_by_exactly_the_changes(mutate):
+    data = drawn()
+    mutate(data)
+    with pytest.raises(ReportDefectError):
+        sections.validate(WATERFALL, data)
+
+
+def test_a_table_may_name_the_whole_too_and_a_hierarchy_that_is_not_compared_may_not_have_one_end_only():
+    data = drawn()
+    assert sections.validate(SectionDef("h", "hierarchy", "table", "H"), data)["closing"] == 1_130
+    plain = {"nodes": [leaf("a", 1)], "opening": 5}
+    with pytest.raises(ReportDefectError):
+        sections.validate(UNSIZED, plain)
+
+
+def test_a_figure_may_say_it_is_a_change_only_if_it_is_money_and_says_so_with_true_or_false():
+    item = {"key": "c", "label": "C", "kind": "money", "value": -5, "signed": True}
+    assert sections.validate(SUMMARY, {"items": [item]})["items"][0]["signed"] is True
+    for bad in ({**item, "signed": "yes"}, {**item, "signed": 1}, {**item, "kind": "count", "value": 5}):
+        with pytest.raises(ReportDefectError):
+            sections.validate(SUMMARY, {"items": [bad]})
+
+
 def test_a_section_says_whether_its_table_opens_expanded_and_only_a_hierarchy_may_say_collapsed():
     assert SectionDef("h", "hierarchy", "table", "H").expanded is True
     sections.check("r", (SectionDef("h", "hierarchy", "table", "H", expanded=False),))

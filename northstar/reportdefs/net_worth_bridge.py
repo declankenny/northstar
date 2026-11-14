@@ -10,6 +10,8 @@ exactly, in integer minor units, and both totals equal the Dashboard's net worth
   stays, because its accounts changed.
 * A change is both the change in the balance and the change in exchange rates. They are not split: splitting them exactly would need an
   unexplained rounding adjustment. A note on the section says so.
+* The same nodes are drawn twice: as a waterfall (`bridge`) and as a table (`changes`). The waterfall also carries the opening and closing
+  net worth, which are not the sums of the nodes' (an account that did not change is in them and in no node).
 * Types and accounts are alphabetical. Each node carries its opening and closing amounts, and an account says which balances they rest
   on, so a table or a chart needs no arithmetic of its own.
 * The report is filtered by every account field except dates (it has dates of its own) and opens with no filters.
@@ -70,7 +72,7 @@ def calculate(ctx: ReportContext) -> ReportResult:
     nodes.sort(key=lambda n: (n["label"].casefold(), n["id"]))
     change_total = closing_total - opening_total
     date = locales.speaking().date
-    change_item = {"key": "change", "label": "Change", "kind": "money", "value": change_total}
+    change_item = {"key": "change", "label": "Change", "kind": "money", "value": change_total, "signed": True}
     if (percent := _percent(change_total, opening_total)) is not None:
         change_item["note"] = percent
     headline = {"items": [
@@ -86,12 +88,13 @@ def calculate(ctx: ReportContext) -> ReportResult:
     else:
         notes.append({"code": "includes_exchange_rates", "section": "changes",
                       "text": "A change includes the change in the balance and the change in exchange rates."})
-    return ReportResult({"headline": headline, "changes": {"nodes": nodes}}, notes)
+    return ReportResult({"headline": headline, "bridge": {"nodes": nodes, "opening": opening_total, "closing": closing_total}, "changes": {"nodes": nodes}}, notes)
 
 
 NET_WORTH_BRIDGE = ReportDef(
     KEY, "Net Worth Bridge", "Why your net worth changed.", params.ordered_pair(),
     (SectionDef("headline", "summary", "tiles", "Net worth"),
+     SectionDef("bridge", "hierarchy", "waterfall", "How net worth changed"),
      SectionDef("changes", "hierarchy", "table", "Detail", expanded=False)),
     calculate, filters=FilterDecl(exclude_dates=True))
 
