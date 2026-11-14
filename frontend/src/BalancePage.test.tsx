@@ -430,6 +430,46 @@ describe("deleting", () => {
     expect(screen.getByRole("heading", { name: "Test euros" })).toBeTruthy();
   });
 
+  it("after a refusal, closing the dialog takes the balance as it is now, so Delete again sends its new version", async () => {
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older, newer: null });
+    vi.mocked(deleteBalance).mockRejectedValueOnce(refusal(conflict()));
+    await shown();
+    await screen.findByRole("table");
+    fireEvent.click(button("Delete…"));
+    const asked = vi.mocked(fetchBalance).mock.calls.length;
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await screen.findByText(/Nothing was deleted\./);
+    await waitFor(() => expect(vi.mocked(fetchBalance).mock.calls.length).toBeGreaterThan(asked));
+    vi.mocked(fetchBalance).mockResolvedValue(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 31000, note: "Declan's correction", version: 9 } }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(amountBox().value).toBe("310.00"));
+    vi.mocked(deleteBalance).mockResolvedValue(account());
+    fireEvent.click(button("Delete…"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deleteBalance).toHaveBeenLastCalledWith(12, 9));
+  });
+
+  it("keeps what was typed when a refused Delete is closed, and still sends the new version the next time", async () => {
+    vi.mocked(fetchNeighbours).mockResolvedValue({ older, newer: null });
+    vi.mocked(deleteBalance).mockRejectedValueOnce(refusal(conflict()));
+    await shown();
+    await screen.findByRole("table");
+    fireEvent.change(amountBox(), { target: { value: "999.00" } });
+    fireEvent.click(button("Delete…"));
+    const asked = vi.mocked(fetchBalance).mock.calls.length;
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await screen.findByText(/Nothing was deleted\./);
+    await waitFor(() => expect(vi.mocked(fetchBalance).mock.calls.length).toBeGreaterThan(asked));
+    vi.mocked(fetchBalance).mockResolvedValue(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 31000, note: "Declan's correction", version: 9 } }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(vi.mocked(fetchBalance).mock.calls.length).toBeGreaterThan(asked + 1));
+    expect(amountBox().value).toBe("999.00");                                  // what was typed is still there
+    vi.mocked(deleteBalance).mockResolvedValue(account());
+    fireEvent.click(button("Delete…"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deleteBalance).toHaveBeenLastCalledWith(12, 9));
+  });
+
   it("does not delete when Cancel is pressed", async () => {
     vi.mocked(fetchNeighbours).mockResolvedValue({ older, newer: null });
     await shown();

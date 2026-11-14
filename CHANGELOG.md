@@ -11,6 +11,10 @@ Each released version has a **Breaking** heading that says what an upgrade means
 - A balance's history (#267): a balance's page now lists the changes recorded for it, newest first, with when, who made each one, the amount after it, whether it is the current value, and how it was made (typed by hand, the Update balances screen, an imported file, an import undo). A change to the note alone says so. A balance that existed before changes were recorded shows one row, "Entered", with its amount before the first recorded change.
 - Restoring an earlier value of a balance (#268): a row of a balance's history has a **Restore** button when its amount can be put back. It asks first ("Replace $1,250.00 with $1,100.00 for this balance?"), restores the amount only (the note stays), and records it as a new change that says which value it restored; nothing in the history is removed. It is refused, and says who changed the balance and what it is now, if the balance changed after you opened the page, and is greyed out on a closed account and while the form has unsaved changes.
 
+### Fixed
+
+- A balance's page: after Delete or Restore was refused because someone changed the balance first, pressing it again was refused again with the same message. Closing the refusal now takes the balance as it is now, with its new version, so trying again is a review of the new value. What you had typed in the form is kept.
+
 ### Breaking
 
 - Migration: `0029_balance_history` adds a view of the change log for each balance's history. It reads the log and the balances, so it can only be created after them and no data changes. A checked backup is made first.
