@@ -332,6 +332,12 @@ export async function editBalance(balanceId: number, entry: BalanceEntry, versio
   return (await send<AccountPage>("PATCH", `/api/balances/${balanceId}`, { ...entry, version, locale: getLocale().tag }))!;
 }
 
+/** Puts back the amount of one row of the balance's history (`historyId` is the list row's id), as a new change. `version` is the balance's
+ *  version when the page loaded it, as for an edit: a balance written since is a RequestError whose `conflicts` say so. */
+export async function restoreBalanceValue(balanceId: number, historyId: number, version: number): Promise<AccountPage> {
+  return (await send<AccountPage>("POST", `/api/balances/${balanceId}/restore`, { history_id: historyId, version }))!;
+}
+
 export async function deleteBalance(balanceId: number, version: number): Promise<AccountPage> {
   return (await send<AccountPage>("DELETE", `/api/balances/${balanceId}?version=${version}`, undefined))!;
 }

@@ -337,8 +337,8 @@ describe("a row's menu", () => {
     const edit = vi.fn();
     render(<ListView listKey="balances" config={{
       rowLabel: (r) => String(r.account),
-      actions: (r) => [{ label: "Edit", onClick: () => edit(r._id) },
-        { label: "Delete", danger: true, disabled: r._id === 1, note: "the account is closed", onClick: () => {} }],
+      actions: [{ label: "Edit", run: (r) => edit(r._id) },
+        { label: "Delete", danger: true, disabled: (r) => (r._id === 1 ? "the account is closed" : false), run: () => {} }],
     }} />);
     await screen.findByRole("table");
     fireEvent.click(screen.getByRole("button", { name: "Actions for Test account 1" }));
@@ -346,6 +346,46 @@ describe("a row's menu", () => {
     expect(screen.getByText(/the account is closed/)).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
     expect(edit).toHaveBeenCalledWith(1);
+  });
+
+  it("is one button, not a menu, when the list declares exactly one action", async () => {
+    const run = vi.fn();
+    render(<ListView listKey="balances" config={{
+      rowLabel: (r) => String(r.account),
+      actions: [{ label: "Restore", run: (r) => run(r._id), show: (r) => r._id !== 1 }],
+    }} />);
+    await screen.findByRole("table");
+    expect(screen.queryByRole("button", { name: /Actions for/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore Test account 1" })).toBeNull();      // the action does not apply to this row
+    fireEvent.click(screen.getByRole("button", { name: "Restore Test account 2" }));
+    expect(run).toHaveBeenCalledWith(2);
+  });
+
+  it("names a single action's button as the list says, and greys it out with the reason", async () => {
+    render(<ListView listKey="balances" config={{
+      actions: [{ label: "Restore", run: () => {}, name: (r) => `Restore the value of ${r._id}`, disabled: (r) => (r._id === 2 ? "Reopen the account." : false) }],
+    }} />);
+    await screen.findByRole("table");
+    expect((screen.getByRole("button", { name: "Restore the value of 1" }) as HTMLButtonElement).disabled).toBe(false);
+    const greyed = screen.getByRole("button", { name: "Restore the value of 2" }) as HTMLButtonElement;
+    expect(greyed.disabled).toBe(true);
+    expect(greyed.title).toBe("Reopen the account.");
+  });
+
+  it("shows a menu of only the actions that apply to a row, when the list declares several", async () => {
+    render(<ListView listKey="balances" config={{
+      rowLabel: (r) => String(r.account),
+      actions: [{ label: "Edit", run: () => {} }, { label: "Delete", run: () => {}, show: (r) => r._id !== 1 }],
+    }} />);
+    await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Test account 1" }));
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Edit"]);
+  });
+
+  it("does not draw a column the list carries for its cells and actions", async () => {
+    render(<ListView listKey="balances" config={{ hidden: ["note"], actions: [{ label: "Restore", run: () => {} }] }} />);
+    await screen.findByRole("table");
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▾▲▼]/g, "").trim())).toEqual(["Date", "Account", "Value", ""]);
   });
 
   it("has no column for actions when the list has none", async () => {

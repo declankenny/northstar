@@ -800,3 +800,16 @@ The balance page lists the changes the log recorded for it, as a fixed list over
 - **How is composed in SQL**, with the file's base name and "note changed" after " · ", and the page writes what follows the first " · " in a quieter colour. This kept the file and the note flag out of the list's columns, so no hidden-column feature was needed.
 - **Row keys run backwards on purpose.** The engine breaks a tie by the smallest key, and two changes can share a second, so a log row's key is the negative of its entry's id (the later change first) and a baseline row's is the balance's own id (last).
 - **Not decided here:** restoring a value, which is step 2, and the row-actions declaration it needs (#272 and #268).
+
+### Restoring an earlier value of a balance, and row actions declared as an array (#268, v0.7)
+
+A balance's history (#267) gets a Restore button on the rows whose amount can be put back. The design is in `docs/design/history-and-recovery/`; the layout was agreed from a mockup on 2026-11-14.
+
+- **Restore changes the amount only,** through the writer, as one `restore` operation. The `restore` kind is a new row of `sys_operation_kinds` (migration 0030), so the log says what it was, and its header's detail holds the history row's id and date, `{"history_id", "from"}`, as its provenance. It is not an `import` and not an `undo`, which can be undone by nothing. The source of the balance is left as it is, as for any edit.
+- **The stale check is the conflicting-edit rule,** not a selective undo: the page sends the version it opened at, and the server refuses, writing nothing, if the balance was written or deleted since. A deleted balance is a conflict and not a 404, so the version is checked before the history row is looked up.
+- **Which rows can be restored is the view's business.** `balance_history` (made again in migration 0030) has `restorable`: the row set the amount (an INSERT, the baseline row, or an UPDATE that changed it) and its amount is not the balance's amount now. The current row and a note-only change have none, and the server refuses them even if asked.
+- **A closed account's buttons are greyed out with the reason, not hidden,** and so are they while the form has unsaved changes, because restoring takes the balance as the server now has it and would throw the typed values away.
+- **How reads "Restored · value of" and the date.** The view writes the ISO date and the page puts it in the person's format, so the view stays free of locale.
+- **Row actions are declared as an array in a list's config** (`ListConfig.actions`, replacing a function that returned menu items for a row), so the number of actions is known without reading a row: exactly one is drawn as a button in the row and two or more as the menu, and `show` and `disabled` say, per row, whether it applies and why it is greyed out. Nothing used the function before, and #222 (the Accounts list menu) later uses the same declaration. The existing lists were reviewed for it (#272): none needs retrofitting, and the hand-built Users and Account types tables keep their menus.
+- **A list can carry a column it does not draw** (`ListConfig.hidden`), which is how a row's `restorable` reaches the action without becoming a column.
+- **Not decided here:** the deleted-data screens and retention (steps 3 to 5).

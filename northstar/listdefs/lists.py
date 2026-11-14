@@ -39,9 +39,10 @@ ACCOUNT_BALANCES = ListDef(
 )
 
 # One balance's history, newest first, twelve to a page: the balance page's History. A fixed list like the account page's: the view
-# is the change log read for the balance (migration 0029), the scope is that balance, and the page names it.
+# is the change log read for the balance (migration 0029, made again by 0030), the scope is that balance, and the page names it.
+# `restorable` is carried for the page to decide which rows offer Restore, and is not drawn.
 BALANCE_HISTORY = ListDef(
-    "balance_history", "balance_history", ("changed_at", "by_name", "amount_cents", "is_current", "how"), ("changed_at", "desc"),
+    "balance_history", "balance_history", ("changed_at", "by_name", "amount_cents", "is_current", "how", "restorable"), ("changed_at", "desc"),
     scope="b.balance_id = :balance", params=("balance",), page_size=12, customisable=False,
 )
 

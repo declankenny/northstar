@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { type BalancePageData, deleteBalance, editBalance, fetchBalance, fetchNeighbours, RequestError } from "./api";
+import { type BalancePageData, deleteBalance, editBalance, fetchBalance, fetchNeighbours, type ListRow, RequestError, restoreBalanceValue } from "./api";
 import { AmountReading } from "./AmountReading";
 import { deleteConsequence } from "./balanceText";
 import { conflictText } from "./conflicts";
@@ -11,12 +11,15 @@ import { goBack, Link, useLeaveGuard } from "./router";
 import { accountPath, PATHS } from "./routes";
 import { useRequest } from "./useRequest";
 
-const SAVED_FOR = 3000; // milliseconds "Saved" stays beside the buttons
+const SAVED_FOR = 3000; // milliseconds "Saved" or "Restored" stays beside the buttons
+const CLOSED = "Reopen the account to change its balances.";
+const UNSAVED = "Save or cancel your changes first.";
 
 /** How a change was made: what the server wrote, with what follows the first " · " (an imported file, "note changed") in a quieter colour. */
 function howCell(how: string) {
   const [what, ...rest] = how.split(" · ");
-  return <>{what}{rest.length > 0 && <span className="m">{` · ${rest.join(" · ")}`}</span>}</>;
+  const tail = rest.join(" · ").replace(/^value of (\d{4}-\d{2}-\d{2})$/, (_all, day: string) => `value of ${formatDate(day)}`);   // the date a restore put back, in the person's format
+  return <>{what}{rest.length > 0 && <span className="m">{` · ${tail}`}</span>}</>;
 }
 
 /** One balance, on its own page: its amount and note are edited and the balance is deleted. The date is the balance's name and is not
@@ -48,7 +51,9 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const [version, setVersion] = useState(balance.version);
   const [openedAt, setOpenedAt] = useState(balance.amount_cents);    // what the person was looking at, for a conflict message
   const [shown, setShown] = useState<string | null>(null);           // who changed the balance now on show, after Use the current value
-  const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);        // "Saved" or "Restored", for a moment beside the buttons
+  const [restoring, setRestoring] = useState<ListRow | null>(null); // the row of the history whose amount the person is asked to put back
+  const [restoreRefused, setRestoreRefused] = useState(false);       // the open restore dialog was refused because the balance changed meanwhile
   const [consequence, setConsequence] = useState<string | null>(null);   // what deleting does, asked of the server when Delete… is pressed; the dialog is open while it is set
   const [gone, setGone] = useState<string | null>(null);             // the balance was deleted, here or by someone else
   const [historyKey, setHistoryKey] = useState(0);                    // raised when the balance changes, so its history reads again
@@ -57,6 +62,12 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   useLeaveGuard(dirty && !gone, "You have unsaved changes to this balance. Leave without saving?");
+
+  const showNotice = (text: string) => {
+    setNotice(text);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setNotice(null), SAVED_FOR);
+  };
 
   /** Take the balance as the server now has it. */
   const adopt = (fresh: BalancePageData) => {
@@ -70,6 +81,15 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
       (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
   };
 
+  /** Close the restore dialog. When it was refused because the balance changed, the page then takes the balance as it is now, with its version, so
+   *  that pressing Restore again is a review of the new value and not the same refusal again. (The form is clean: Restore is greyed out otherwise.) */
+  const closeRestore = () => {
+    const refused = restoreRefused;
+    setRestoring(null);
+    setRestoreRefused(false);
+    if (refused) fetchBalance(id).then(adopt, (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
+  };
+
   /** One small question to the server, and the confirmation opens with its answer. A refusal (the balance is gone) shows beside the form. */
   const askDelete = () => {
     run(async () => { setConsequence(deleteConsequence(balance, await fetchNeighbours(id), account.currency)); });
@@ -78,13 +98,11 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setShown(null);
-    setSaved(false);
+    setNotice(null);
     run(async () => {
       await editBalance(id, { date: balance.as_of_date, amount, note }, version);
       adopt(await fetchBalance(id));
-      setSaved(true);
-      window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => setSaved(false), SAVED_FOR);
+      showNotice("Saved");
     });
   };
 
@@ -168,7 +186,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
                   <button type="button" className="btn ghost" onClick={() => goBack(PATHS.balances)}>{open ? "Cancel" : "Back"}</button>
                 </>
               )}
-              <span className="notice ok" role="status">{saved ? "Saved" : ""}</span>
+              <span className="notice ok" role="status">{notice ?? ""}</span>
               <span className="spacer" />
               <button type="button" className="btn ghost danger-text" disabled={locked || busy} onClick={askDelete}>Delete…</button>
             </div>
@@ -191,8 +209,30 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
       <div className="acct-panel history">
         <div className="panelhead"><span className="label">History</span></div>
         <ListView listKey="balance_history" fixed={{ params: { balance: id } }} refreshKey={historyKey}
-          config={{ cell: { how: (row) => howCell(row.how as string) } }} />
+          config={{
+            cell: { how: (row) => howCell(row.how as string) },
+            hidden: ["restorable"],
+            rowLabel: (row) => formatDate((row.changed_at as string).slice(0, 10)),
+            actions: [{
+              label: "Restore", run: setRestoring, show: (row) => row.restorable === 1,
+              name: (row) => `Restore the value of ${formatDate((row.changed_at as string).slice(0, 10))}`,
+              disabled: () => (!open ? CLOSED : dirty ? UNSAVED : false),
+            }],
+          }} />
       </div>
+
+      {restoring !== null && (
+        <ConfirmDialog title="Restore this value?" subtitle={`${account.name} · ${date}`} confirmLabel="Restore" onClose={closeRestore}
+          text={`Replace ${formatCents(balance.amount_cents, account.currency)} with ${formatCents((restoring.amount_cents as { value: number }).value, account.currency)} for this balance? `
+            + `Only the amount is restored: ${balance.note ? `the note, “${balance.note}”,` : "the note"} stays as it is. This is recorded as a new change, and nothing in the history is removed.`}
+          onConflict={() => { setRestoreRefused(true); refreshDetails(); }} conflict={{ lead: "Nothing was restored.", text: (c) => conflictText(c, openedAt) }}
+          onConfirm={async () => {
+            await restoreBalanceValue(id, restoring._id, version);
+            adopt(await fetchBalance(id));
+            setRestoring(null);
+            showNotice("Restored");
+          }} />
+      )}
 
       {consequence !== null && (
         <ConfirmDialog title="Delete this balance?" confirmLabel="Delete" danger onClose={() => setConsequence(null)}

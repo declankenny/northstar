@@ -8,11 +8,13 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ### Added
 
-- A balance's history (#267): a balance's page now lists the changes recorded for it, newest first, with when, who made each one, the amount after it, whether it is the current value, and how it was made (typed by hand, the Update balances screen, an imported file, an import undo). A change to the note alone says so. A balance that existed before changes were recorded shows one row, "Entered", with its amount before the first recorded change. There is no restore yet.
+- A balance's history (#267): a balance's page now lists the changes recorded for it, newest first, with when, who made each one, the amount after it, whether it is the current value, and how it was made (typed by hand, the Update balances screen, an imported file, an import undo). A change to the note alone says so. A balance that existed before changes were recorded shows one row, "Entered", with its amount before the first recorded change.
+- Restoring an earlier value of a balance (#268): a row of a balance's history has a **Restore** button when its amount can be put back. It asks first ("Replace $1,250.00 with $1,100.00 for this balance?"), restores the amount only (the note stays), and records it as a new change that says which value it restored; nothing in the history is removed. It is refused, and says who changed the balance and what it is now, if the balance changed after you opened the page, and is greyed out on a closed account and while the form has unsaved changes.
 
 ### Breaking
 
 - Migration: `0029_balance_history` adds a view of the change log for each balance's history. It reads the log and the balances, so it can only be created after them and no data changes. A checked backup is made first.
+- Migration: `0030_restore_balance_value` adds the operation kind `restore` and makes the history view again with a column that says which rows can be restored. No data changes. A checked backup is made first.
 - Environment variables: nothing.
 - Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
 
