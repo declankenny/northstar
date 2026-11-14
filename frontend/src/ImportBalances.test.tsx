@@ -365,7 +365,10 @@ describe("Import: importing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Import 2 balances" }));
     expect(await screen.findByText(/Balances changed since you reviewed this import \(2026-02-28\)/)).toBeTruthy();
     expect(screen.getByText(/The review below is up to date/)).toBeTruthy();
-    expect(vi.mocked(fetchImportReview)).toHaveBeenCalledTimes(2);
+    // The message shows at once, but the review is asked for again by an effect that React runs a moment later, so wait for the
+    // request and for its answer (the updated review has three balances to import) before looking at what it shows.
+    await vi.waitFor(() => expect(vi.mocked(fetchImportReview)).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("button", { name: "Import 3 balances" })).toBeTruthy();
     const changed = within(screen.getByLabelText("Changes")).getByText("Feb 28, 2026").closest("tr")!;
     expect(changed.textContent).toContain("changed");
     expect(within(screen.getByLabelText("Changes")).getByText("Jan 31, 2026").closest("tr")!.textContent).not.toContain("changed");
