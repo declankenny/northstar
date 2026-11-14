@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { echarts, type EChartsCoreOption } from "./echarts";
 
-/** What a click on a mark says: its name and the data item the chart was given. */
-export type ChartClick = { name: string; data?: unknown };
+/** What a click says: on a mark, its name and the data item the chart was given; on the label of an axis (a chart asks for these with
+ *  `triggerEvent`), that label's value in `axis`. */
+export type ChartClick = { name: string; data?: unknown; axis?: string };
 
 /** One ECharts chart, drawn as SVG from `option`, which the caller builds from the theme and the data, so a new option is a new
  *  picture. `label` is the chart's description for a screen reader; the data itself is for a keyboard and a screen reader in the list or
@@ -18,7 +19,10 @@ export function Chart({ option, label, onClick }: { option: EChartsCoreOption; l
   useEffect(() => {
     const el = box.current!;
     const chart = echarts.init(el, null, { renderer: "svg" });
-    chart.on("click", (event) => handler.current?.({ name: String(event.name ?? ""), data: event.data }));
+    chart.on("click", (event) => {
+      if (event.componentType === "xAxis" || event.componentType === "yAxis") handler.current?.({ name: String(event.value ?? ""), axis: String(event.value ?? "") });
+      else handler.current?.({ name: String(event.name ?? ""), data: event.data });
+    });
     // The description is ours, so it replaces the one ECharts would work out from the data.
     chart.setOption({ ...option, animation: false, aria: { enabled: true, label: { description: label } } });
     const watcher = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => chart.resize());

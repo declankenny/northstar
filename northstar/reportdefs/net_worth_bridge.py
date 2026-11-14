@@ -94,7 +94,7 @@ def calculate(ctx: ReportContext) -> ReportResult:
 NET_WORTH_BRIDGE = ReportDef(
     KEY, "Net Worth Bridge", "Why your net worth changed.", params.ordered_pair(),
     (SectionDef("headline", "summary", "tiles", "Net worth"),
-     SectionDef("bridge", "hierarchy", "waterfall", "How net worth changed"),
+     SectionDef("bridge", "hierarchy", "waterfall", "How net worth changed", expanded=False),
      SectionDef("changes", "hierarchy", "table", "Detail", expanded=False)),
     calculate, filters=FilterDecl(exclude_dates=True))
 

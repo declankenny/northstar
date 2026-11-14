@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { axisRange, type Bar, bridgeBars, extent, niceStep, type Range, scaleOption, type StepNode, waterfallOption, type Words } from "./waterfall";
+import { axisRange, type Bar, bottomOf, BRACKET, bracketsOf, bridgeBars, extent, niceStep, type Range, scaleOption, type StepNode, waterfallOption, type Words } from "./waterfall";
 import type { ChartTheme } from "./theme";
 
-const step = (id: string, opening: number, closing: number, note?: string): StepNode => ({ id, name: id.toUpperCase(), value: closing - opening, opening, closing, note });
+const step = (id: string, opening: number, closing: number, note?: string, children?: StepNode[]): StepNode => ({ id, name: id.toUpperCase(), value: closing - opening, opening, closing, note, children });
+/** A type holding accounts, whose own amounts are the sums of theirs. */
+const type = (id: string, accounts: [string, number, number][]): StepNode => {
+  const kids = accounts.map(([n, o, c]) => ({ ...step(n, o, c, `${n} balances`), href: `/accounts/${n}` }));
+  return step(id, kids.reduce((t, k) => t + k.opening, 0), kids.reduce((t, k) => t + k.closing, 0), `${kids.length} accounts`, kids);
+};
 
 const THEME: ChartTheme = {
   text: "#111111", muted: "#999999", surface: "#ffffff", border: "#cccccc", positive: "#00aa00", negative: "#aa0000", accent: "#0000aa", series: [],
@@ -134,13 +139,15 @@ describe("the option", () => {
   const bars = bridgeBars([step("a", 100, 150, "2 accounts"), step("b", 60, 40)]);
   const r = axisRange(bars);
   const option = waterfallOption(bars, r, THEME, WORDS) as never as {
-    xAxis: { data: string[] }; yAxis: { min: number; max: number; interval: number; axisLabel: { show: boolean } };
+    xAxis: { data: string[]; triggerEvent: boolean; axisLabel: { formatter: (id: string) => string } }; yAxis: { min: number; max: number; interval: number; axisLabel: { show: boolean } };
     series: { type: string; data: { id: string }[] }[]; tooltip: { formatter: (p: unknown) => string };
   };
 
-  it("names each bar under it, and has the same scale as the scale column that sits beside it", () => {
-    expect(option.xAxis.data).toEqual(["Opening balance", "A", "B", "Closing balance"]);
-    const scale = scaleOption(r, THEME, WORDS) as never as { yAxis: { min: number; max: number; interval: number; axisLabel: { show?: boolean; formatter: (v: number) => string } } };
+  it("names each bar under it by its id, written as its name, and has the same scale as the scale column that sits beside it", () => {
+    expect(option.xAxis.data).toEqual(["opening", "a", "b", "closing"]);
+    expect(option.xAxis.axisLabel.formatter("opening")).toBe("Opening balance");
+    expect(option.xAxis.axisLabel.formatter("a")).toBe("A");
+    const scale = scaleOption(r, THEME, WORDS, bars) as never as { yAxis: { min: number; max: number; interval: number; axisLabel: { show?: boolean; formatter: (v: number) => string } } };
     expect([scale.yAxis.min, scale.yAxis.max, scale.yAxis.interval]).toEqual([option.yAxis.min, option.yAxis.max, option.yAxis.interval]);
     expect(option.yAxis.axisLabel.show).toBe(false);
     expect(scale.yAxis.axisLabel.formatter(1_000)).toBe("s1000");
@@ -157,9 +164,88 @@ describe("the option", () => {
     expect(tip("a")).toContain("+$50");
     expect(tip("a")).toContain("2 accounts");
     expect(tip("b")).toContain("$-20");
-    expect(tip("opening")).toContain("Net worth");
+    expect(tip("opening")).toContain("Balance");
     expect(tip("opening")).toContain("$160");
     expect(tip("nothing")).toBe("");
     expect(tip("a")).not.toMatch(/\bstyle\s*=/i);
+  });
+});
+
+describe("a type that is open", () => {
+  const nodes = [type("t1", [["a1", 100, 160], ["a2", 50, 20]]), step("t2", 200, 250), type("t3", [["a3", 10, 10 + 5]])];
+  const open = (...ids: string[]) => (id: string) => ids.includes(id);
+  const ends = (bars: Bar[]) => bars.map((b) => b.end);
+
+  it("is replaced by its accounts, in the order given, and the running total after them is the running total after the type", () => {
+    const shut = bridgeBars(nodes, undefined);
+    const some = bridgeBars(nodes, undefined, open("t1"));
+    expect(some.map((b) => b.id)).toEqual(["opening", "a1", "a2", "t2", "t3", "closing"]);
+    expect(shut.map((b) => b.id)).toEqual(["opening", "t1", "t2", "t3", "closing"]);
+    expect(ends(some).slice(2)).toEqual([ends(shut)[1], ...ends(shut).slice(2)]);          // after a2 it is where it was after t1
+    expect(some[1]).toMatchObject({ start: 360, end: 420, value: 60, group: "t1", groupName: "T1", opening: 100, closing: 160, href: "/accounts/a1", note: "a1 balances" });
+  });
+
+  it("changes no total and no net change, whichever types are open", () => {
+    for (const ids of [[], ["t1"], ["t3"], ["t1", "t3"], ["t1", "t2", "t3"]]) {
+      const bars = bridgeBars(nodes, undefined, open(...ids));
+      expect(bars[0].end, ids.join()).toBe(360);
+      expect(bars[bars.length - 1].end, ids.join()).toBe(360 + 30 + 50 + 5);
+      expect(bars.slice(1, -1).reduce((t, b) => t + b.value, 0), ids.join()).toBe(85);
+    }
+  });
+
+  it("is only a type that holds accounts: a step with nothing inside it cannot be opened, and a closed type can", () => {
+    const bars = bridgeBars(nodes, undefined, open("t2"));
+    expect(bars.map((b) => [b.id, !!b.expandable])).toEqual([["opening", false], ["t1", true], ["t2", false], ["t3", true], ["closing", false]]);
+  });
+
+  it("has a bracket under its accounts, coloured by the type's own change, and none when nothing is open", () => {
+    expect(bracketsOf(bridgeBars(nodes))).toEqual([]);
+    const brackets = bracketsOf(bridgeBars(nodes, undefined, open("t1", "t3")));
+    expect(brackets).toEqual([
+      { id: `${BRACKET}t1`, group: "t1", name: "T1", first: 1, last: 2, net: 30 },
+      { id: `${BRACKET}t3`, group: "t3", name: "T3", first: 4, last: 4, net: 5 },
+    ]);
+  });
+
+  it("takes its colour from the type's total even when its accounts differ", () => {
+    const mixed = bridgeBars([type("m", [["x", 100, 300], ["y", 400, 150]])], undefined, open("m"));       // +200 and -250: the type fell
+    expect(bracketsOf(mixed)[0].net).toBe(-50);
+    expect(mixed.slice(1, -1).map((b) => Math.sign(b.value))).toEqual([1, -1]);
+  });
+
+  it("needs room below the bars for the bracket, and the scale column has the same room", () => {
+    expect(bottomOf(bridgeBars(nodes))).toBeLessThan(bottomOf(bridgeBars(nodes, undefined, open("t1"))));
+    const bars = bridgeBars(nodes, undefined, open("t1"));
+    const grid = (o: unknown) => (o as { grid: { bottom: number } }).grid.bottom;
+    expect(grid(scaleOption(axisRange(bars), THEME, WORDS, bars))).toBe(grid(waterfallOption(bars, axisRange(bars), THEME, WORDS)));
+  });
+
+  it("draws the brackets as a second series after the bars, only when something is open", () => {
+    const seriesOf = (bars: Bar[]) => (waterfallOption(bars, axisRange(bars), THEME, WORDS) as never as { series: { data: { id: string }[] }[] }).series;
+    expect(seriesOf(bridgeBars(nodes))).toHaveLength(1);
+    const withBrackets = seriesOf(bridgeBars(nodes, undefined, open("t1")));
+    expect(withBrackets).toHaveLength(2);
+    expect(withBrackets[1].data.map((d) => d.id)).toEqual([`${BRACKET}t1`]);
+  });
+
+  it("shows an account's opening, closing and change, and the balances behind them, and a type's change and how many accounts it holds", () => {
+    const bars = bridgeBars(nodes, undefined, open("t1"));
+    const option = waterfallOption(bars, axisRange(bars), THEME, WORDS) as never as { tooltip: { formatter: (p: unknown) => string } };
+    const tip = (id: string) => option.tooltip.formatter({ data: { id } });
+    const account = tip("a1");
+    for (const expected of ["T1 › A1", "Opening", "$100", "Closing", "$160", "Change", "+$60", "a1 balances"]) expect(account).toContain(expected);
+    const kind = tip("t3");
+    expect(kind).toContain("1 accounts");
+    expect(kind).not.toContain("Opening");
+    expect(tip(`${BRACKET}t1`)).toBe("");
+  });
+
+  it("lets a click on a name under the axis say which bar it is", () => {
+    const bars = bridgeBars(nodes);
+    const option = waterfallOption(bars, axisRange(bars), THEME, WORDS) as never as { xAxis: { triggerEvent: boolean; axisLabel: { formatter: (id: string) => string } } };
+    expect(option.xAxis.triggerEvent).toBe(true);
+    expect(option.xAxis.axisLabel.formatter("t1")).toBe("▸ T1");                        // a type that can be opened says so
+    expect(option.xAxis.axisLabel.formatter("t2")).toBe("T2");
   });
 });

@@ -86,7 +86,7 @@ def test_it_is_registered_and_opens_with_closing_today_and_opening_a_year_earlie
     described = engine.describe(REPORT, TODAY, conn)
     assert [(p["key"], p["default"]) for p in described["parameters"]] == [("opening", "2025-11-11"), ("closing", "2026-11-11")]
     assert [(s["key"], s["kind"], s["view"], s["expanded"], s["columns"]) for s in described["sections"]] == [
-        ("headline", "summary", "tiles", True, 12), ("bridge", "hierarchy", "waterfall", True, 12), ("changes", "hierarchy", "table", False, 12)]
+        ("headline", "summary", "tiles", True, 12), ("bridge", "hierarchy", "waterfall", False, 12), ("changes", "hierarchy", "table", False, 12)]
     assert described["filters"]["enabled"] is True and described["filters"]["defaults"] == []
 
 

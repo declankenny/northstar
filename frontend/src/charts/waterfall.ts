@@ -3,12 +3,17 @@ import type { ChartTheme } from "./theme";
 import { tooltipOption } from "./tooltip";
 
 /** One step of a bridge: a group of the report with its value at each end of the period and its change (`value`, so closing minus
- *  opening). The report works these out and checks them; the chart only draws them. */
-export type StepNode = { id: string; name: string; value: number; opening: number; closing: number; note?: string };
+ *  opening). The report works these out and checks them; the chart only draws them. A step with `children` can be opened into them, and
+ *  `href` is where a step with nothing inside it goes when it is clicked. */
+export type StepNode = { id: string; name: string; value: number; opening: number; closing: number; note?: string; href?: string; children?: StepNode[] };
 
 /** A bar of the waterfall: a total (from the baseline up or down to its amount) or a step (from where the running total was to where it is
- *  now). `start` and `end` are amounts, and a step's `value` is its signed change. */
-export type Bar = { id: string; name: string; kind: "total" | "step"; start: number; end: number; value: number; note?: string };
+ *  now). `start` and `end` are amounts, and a step's `value` is its signed change. A step that can be opened is `expandable`; a step that
+ *  is one of an open step's children has that step's id as its `group` and name as `groupName`, and shows its own `opening` and `closing`. */
+export type Bar = {
+  id: string; name: string; kind: "total" | "step"; start: number; end: number; value: number; note?: string;
+  expandable?: boolean; href?: string; group?: string; groupName?: string; opening?: number; closing?: number;
+};
 
 /** What the opening and closing bars are called. */
 export const OPENING = { id: "opening", name: "Opening balance" };
@@ -19,16 +24,22 @@ export const CLOSING = { id: "closing", name: "Closing balance" };
 export type Whole = { opening: number; closing: number };
 
 /** The bars of a bridge, in the order the report gave its steps: the opening total, a step each from the running total, and the closing
- *  total. When the report does not give the whole, it is the sum of the steps' own amounts (everything in it changed). */
-export function bridgeBars(nodes: StepNode[], whole?: Whole): Bar[] {
+ *  total. A step that `isOpen` is replaced by a step for each of its children, in the order the report gave them, so the running total
+ *  after them is the running total after the step they replace (a step's change is the sum of its children's, which the report checks) and
+ *  opening or closing any mix of steps changes no total. When the report does not give the whole, it is the sum of the steps' own amounts
+ *  (everything in it changed). */
+export function bridgeBars(nodes: StepNode[], whole?: Whole, isOpen: (id: string) => boolean = () => false): Bar[] {
   const opening = whole?.opening ?? nodes.reduce((total, n) => total + n.opening, 0);
   const closing = whole?.closing ?? nodes.reduce((total, n) => total + n.closing, 0);
   let running = opening;
-  const steps: Bar[] = nodes.map((n) => {
-    const bar: Bar = { id: n.id, name: n.name, kind: "step", start: running, end: running + n.value, value: n.value, note: n.note };
+  const step = (n: StepNode, extra: Partial<Bar>): Bar => {
+    const bar: Bar = { id: n.id, name: n.name, kind: "step", start: running, end: running + n.value, value: n.value, note: n.note, href: n.href, ...extra };
     running += n.value;
     return bar;
-  });
+  };
+  const steps = nodes.flatMap((n) => (n.children?.length && isOpen(n.id)
+    ? n.children.map((child) => step(child, { group: n.id, groupName: n.name, opening: child.opening, closing: child.closing }))
+    : [step(n, { expandable: !!n.children?.length })]));
   return [{ ...OPENING, kind: "total", start: 0, end: opening, value: opening }, ...steps, { ...CLOSING, kind: "total", start: 0, end: closing, value: closing }];
 }
 
@@ -70,30 +81,77 @@ export function extent(bar: Bar, range: Range): { low: number; high: number } {
  *  short for a label that has little room. */
 export type Words = { amount: (value: number) => string; change: (value: number) => string; short: (value: number) => string; shortChange: (value: number) => string; whole: (value: number) => string };
 
-/** The room around the plot, shared by the chart and its scale so the two line up: above for a bar's label, below for the names. */
-export const GRID = { top: 34, bottom: 58 };
+/** A bracket under the bars of an open step: its `first` and `last` bar, and the step's own `net` change, which gives its colour (the colour of
+ *  the step's total, even when its children differ). */
+export type Bracket = { id: string; group: string; name: string; first: number; last: number; net: number };
+
+/** The prefix of a bracket's id, so a click on one is told from a click on a bar. */
+export const BRACKET = "group:";
+
+/** The brackets of the bars shown, one for each open step. */
+export function bracketsOf(bars: Bar[]): Bracket[] {
+  const found = new Map<string, Bracket>();
+  bars.forEach((bar, index) => {
+    if (!bar.group) return;
+    const known = found.get(bar.group);
+    if (known) { known.last = index; known.net += bar.value; }
+    else found.set(bar.group, { id: BRACKET + bar.group, group: bar.group, name: bar.groupName ?? "", first: index, last: index, net: bar.value });
+  });
+  return [...found.values()];
+}
+
+/** The room around the plot, shared by the chart and its scale so the two line up: above for a bar's label, below for the names, and below
+ *  those for a bracket when a step is open. */
+const TOP = 34;
+export const bottomOf = (bars: Bar[]) => (bars.some((b) => b.group) ? 92 : 58);
+
+/** What a bar is called under it: a step that can be opened says so, since clicking its name opens it. */
+const nameOf = (bar: Bar) => (bar.expandable ? `▸ ${bar.name}` : bar.name);
 
 /** The bar's colour: what raises net worth, what lowers it, the app's accent for the totals, and the muted colour for no change. */
 const fillOf = (bar: Bar, theme: ChartTheme) => (bar.kind === "total" ? theme.accent : bar.value > 0 ? theme.positive : bar.value < 0 ? theme.negative : theme.muted);
 
-type Api = { coord: (value: number[]) => number[]; size: (value: number[]) => number[] };
+type Api = { coord: (value: number[]) => number[]; size: (value: number[]) => number[]; getHeight: () => number };
 
 /** The ECharts option for the bars. ECharts has no waterfall, so each bar is drawn by a custom series: a rectangle, its label and the thin
  *  dashed connector to the next bar. The scale is not drawn here (see `scaleOption`), so the bars can scroll sideways beside it. */
 export function waterfallOption(bars: Bar[], range: Range, theme: ChartTheme, words: Words): EChartsCoreOption {
+  const brackets = bracketsOf(bars);
+  // The bracket under the bars of an open step: a line under its children with the step's name centred beneath it, in the colour of the
+  // step's own change. Clicking the name collapses the step.
+  const bracketSeries = {
+    type: "custom", z: 5, data: brackets.map((b) => ({ id: b.id, value: [b.first, b.last] })),
+    renderItem: (params: { dataIndex: number }, api: Api) => {
+      const b = brackets[params.dataIndex];
+      const cell = api.size([1, 0])[0];
+      const left = api.coord([b.first, 0])[0] - cell / 2 + 8, right = api.coord([b.last, 0])[0] + cell / 2 - 8, middle = (left + right) / 2;
+      const y = api.getHeight() - 30;
+      const tone = b.net > 0 ? theme.positive : b.net < 0 ? theme.negative : theme.muted;
+      return { type: "group", children: [
+        { type: "polyline", shape: { points: [[left, y - 5], [left, y], [right, y], [right, y - 5]] }, style: { stroke: tone, lineWidth: 1.5, fill: "none" } },
+        { type: "text", style: { text: `▾ ${b.name}`, x: middle, y: y + 8, textAlign: "center", textVerticalAlign: "top", fill: tone, fontSize: 13, fontWeight: 650 }, cursor: "pointer" },
+        { type: "rect", shape: { x: middle - 70, y: y + 2, width: 140, height: 26 }, style: { fill: "rgba(0,0,0,0)" }, cursor: "pointer" },     // a click target bigger than the name
+      ] };
+    },
+  };
   return {
-    grid: { left: 8, right: 16, top: GRID.top, bottom: GRID.bottom },
+    grid: { left: 8, right: 16, top: TOP, bottom: bottomOf(bars) },
+    // The categories are the bars' ids, so a click on a name says which bar it is; what is written is worked out from them.
     xAxis: {
-      type: "category", data: bars.map((b) => b.name), axisTick: { show: false }, axisLine: { lineStyle: { color: theme.border } },
-      axisLabel: { interval: 0, width: 92, overflow: "break", color: theme.muted, fontSize: 12, lineHeight: 15 },
+      type: "category", data: bars.map((b) => b.id), triggerEvent: true, axisTick: { show: false }, axisLine: { lineStyle: { color: theme.border } },
+      axisLabel: { interval: 0, width: 92, overflow: "break", color: theme.muted, fontSize: 12, lineHeight: 15, formatter: (id: string) => { const bar = bars.find((b) => b.id === id); return bar ? nameOf(bar) : id; } },
     },
     yAxis: { type: "value", min: range.min, max: range.max, interval: range.step, axisLabel: { show: false }, splitLine: { lineStyle: { color: theme.border, opacity: 0.6 } } },
     tooltip: tooltipOption((params) => {
       const bar = bars.find((b) => b.id === (params.data as { id?: string } | undefined)?.id);
       if (!bar) return null;
-      return bar.kind === "total"
-        ? { title: bar.name, rows: [{ label: "Net worth", value: words.amount(bar.value) }] }
-        : { title: bar.name, rows: [{ label: "Change", value: words.change(bar.value) }], note: bar.note };
+      if (bar.kind === "total") return { title: bar.name, rows: [{ label: "Balance", value: words.amount(bar.value) }] };
+      const own = bar.opening !== undefined && bar.closing !== undefined;                // an account shows both ends; a type shows its change
+      return {
+        title: own ? `${bar.groupName} › ${bar.name}` : bar.name,
+        rows: [...(own ? [{ label: "Opening", value: words.amount(bar.opening!) }, { label: "Closing", value: words.amount(bar.closing!) }] : []), { label: "Change", value: words.change(bar.value) }],
+        note: bar.note,
+      };
     }),
     series: [{
       type: "custom", data: bars.map((b, i) => ({ id: b.id, value: [i, b.start, b.end] })),
@@ -105,7 +163,7 @@ export function waterfallOption(bars: Bar[], range: Range, theme: ChartTheme, wo
         const top = api.coord([i, high])[1];
         const height = Math.max(api.coord([i, low])[1] - top, 2);                 // a step of nothing is still a line
         const children: unknown[] = [
-          { type: "rect", shape: { x: x - width / 2, y: top, width, height, r: 2 }, style: { fill: fillOf(bar, theme) } },
+          { type: "rect", shape: { x: x - width / 2, y: top, width, height, r: 2 }, style: { fill: fillOf(bar, theme) }, cursor: bar.expandable || bar.href ? "pointer" : "default" },
           { type: "text", style: { text: bar.kind === "total" ? words.whole(bar.value) : words.shortChange(bar.value), x, y: top - 6, textAlign: "center", textVerticalAlign: "bottom", fill: theme.text, fontSize: 12, fontWeight: 600 } },
         ];
         if (i < bars.length - 1) {                                              // the thin connector from this bar's end to the next bar
@@ -114,15 +172,15 @@ export function waterfallOption(bars: Bar[], range: Range, theme: ChartTheme, wo
         }
         return { type: "group", children };
       },
-    }],
+    }, ...(brackets.length > 0 ? [bracketSeries] : [])],
   };
 }
 
-/** The scale as a chart of its own, beside the one that scrolls: the same range, top and bottom, and nothing else, so the scale stays in view
- *  while the bars move. */
-export function scaleOption(range: Range, theme: ChartTheme, words: Words): EChartsCoreOption {
+/** The scale as a chart of its own, beside the one that scrolls: the same range, top and bottom (`bars` says how much room is below), and
+ *  nothing else, so the scale stays in view while the bars move. */
+export function scaleOption(range: Range, theme: ChartTheme, words: Words, bars: Bar[]): EChartsCoreOption {
   return {
-    grid: { left: 0, right: 8, top: GRID.top, bottom: GRID.bottom },
+    grid: { left: 0, right: 8, top: TOP, bottom: bottomOf(bars) },
     xAxis: { type: "category", data: [""], show: false },
     yAxis: { type: "value", min: range.min, max: range.max, interval: range.step, axisLabel: { color: theme.muted, fontSize: 12, formatter: (value: number) => words.short(value) }, splitLine: { show: false } },
     series: [{ type: "custom", data: [], renderItem: () => ({ type: "group", children: [] }) }],

@@ -389,3 +389,36 @@ describe("opening a report", () => {
     expect(await screen.findByText(/Choose today or an earlier date/)).toBeTruthy();    // later than the server's today, though long before the browser's
   });
 });
+
+describe("a report that shows the same nodes as a chart and as a table", () => {
+  const nodes = [{ id: "type_1", label: "Brokerage", value: 600, opening: 1000, closing: 1600, note: "2 accounts", children: [
+    { id: "account_1", label: "Index fund", value: 700, opening: 1000, closing: 1700 }, { id: "account_2", label: "Stocks", value: -100, opening: 0, closing: -100 }] }];
+  const BRIDGE: ReportDefinition = {
+    ...DEFINITION, key: "synthetic_bridge", title: "Synthetic bridge", parameters: [],
+    sections: [
+      { key: "headline", kind: "summary", view: "tiles", title: "Headline", sized: false, columns: 12, expanded: true },
+      { key: "bridge", kind: "hierarchy", view: "waterfall", title: "How it changed", sized: false, columns: 12, expanded: false },
+      { key: "changes", kind: "hierarchy", view: "table", title: "Detail", sized: false, columns: 12, expanded: false },
+    ],
+  };
+  const answer: ReportResult = {
+    report: "synthetic_bridge", today: "2026-11-11", parameters: {}, filters: [], currency: { code: "USD", minor_units: 2 },
+    sections: { headline: { items: [{ key: "net", label: "Closing balance", kind: "money", value: 1600 }] }, bridge: { nodes, opening: 1000, closing: 1600 }, changes: { nodes } }, notes: [],
+  };
+
+  it("opens a type in the chart when it is opened in the table, because the page keeps what is open for the whole report", async () => {
+    vi.mocked(fetchReports).mockResolvedValue([{ key: "synthetic_bridge", title: "Synthetic bridge", description: "A bridge." }]);
+    vi.mocked(fetchReportDefinition).mockResolvedValue(BRIDGE);
+    vi.mocked(calculateReport).mockResolvedValue(answer);
+    const { container } = show("/reports/synthetic_bridge");
+    await screen.findByText("How it changed");
+    const chart = () => container.querySelector(".bridge-scroll")!.textContent!;
+    expect(chart()).not.toContain("Index fund");
+    fireEvent.click(await screen.findByRole("button", { name: /Brokerage/ }));
+    expect(chart()).toContain("Index fund");
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(chart()).not.toContain("Index fund");
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(1);
+  });
+});

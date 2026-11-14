@@ -116,6 +116,27 @@ describe("the chart", () => {
     expect(onClick.mock.calls[0][0]).toMatchObject({ name: "Savings", data: { id: "s" } });
   });
 
+  it("tells its owner which axis label was clicked, when the chart asks for them, and says so apart from a mark", () => {
+    const option: EChartsCoreOption = {
+      grid: { left: 0, right: 0, top: 0, bottom: 40 }, xAxis: { type: "category", data: ["a", "b"], triggerEvent: true, axisLabel: { formatter: (id: string) => `Name ${id}` } },
+      yAxis: { type: "value", min: 0, max: 10 }, series: [{ type: "custom", data: [], renderItem: () => ({ type: "group", children: [] }) }],
+    };
+    const onClick = vi.fn();
+    const { container } = render(<Chart option={option} label="Bars" onClick={onClick} />);
+    const label = [...container.querySelectorAll("svg text")].find((t) => t.textContent === "Name b")!;
+    const moved = /translate\(([\d.-]+) ([\d.-]+)\)/.exec(label.getAttribute("transform") ?? "")!;
+    clickAt(container, Number(moved[1]), Number(moved[2]) + 7);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick.mock.calls[0][0]).toMatchObject({ axis: "b" });
+  });
+
+  it("does not say a click on a mark was on an axis", () => {
+    const onClick = vi.fn();
+    const { container } = render(<Chart option={treemap()} label="Assets" onClick={onClick} />);
+    clickAt(container, 100, 100);
+    expect(onClick.mock.calls[0][0].axis).toBeUndefined();
+  });
+
   it("uses the latest click handler without drawing again", () => {
     const first = vi.fn(), second = vi.fn(), option = treemap();
     const { container, rerender } = render(<Chart option={option} label="Assets" onClick={first} />);
