@@ -1,15 +1,15 @@
 # History and recovery: implementation plan
 
-Five steps after a preparation step, each its own branch and pull request into `main`, one merged before the next starts. A step is done when its issue is closed. Issues for the steps are TODO: create them under the v0.7 milestone and link them from #58.
+Five steps after a preparation step, each its own branch and pull request into `main`, one merged before the next starts. A step is done when its issue is closed. The step issues are under the v0.7 milestone and part of #58.
 
 | Step | What | Issue |
 |---|---|---|
 | 0 | Reconcile #58 with the agreed scope (no code) | [#58](https://github.com/declankenny/northstar/issues/58) |
-| 1 | History list on the balance screen, read only | TODO |
-| 2 | Restore this value | TODO |
-| 3 | Retention properties and the cleanup job | TODO |
-| 4 | Deleted accounts | TODO |
-| 5 | Deleted balances | TODO |
+| 1 | History list on the balance screen, read only | [#267](https://github.com/declankenny/northstar/issues/267) |
+| 2 | Restore this value | [#268](https://github.com/declankenny/northstar/issues/268) |
+| 3 | Retention properties and the cleanup job | [#269](https://github.com/declankenny/northstar/issues/269) |
+| 4 | Deleted accounts | [#270](https://github.com/declankenny/northstar/issues/270) |
+| 5 | Deleted balances | [#271](https://github.com/declankenny/northstar/issues/271) |
 
 The order puts the cleanup job before the two recovery screens, so nothing ships that holds recoverable data without a way to purge it.
 
@@ -21,13 +21,14 @@ The order puts the cleanup job before the two recovery screens, so nothing ships
 
 ## Step 1: history list
 
-- **Scope:** the server function that reads a balance's changes from the log (actor, time, previous and resulting amounts, operation kind, import batch), the History list on the balance screen, the current value marked, the synthesized baseline row, and note-only changes shown with an unchanged amount.
+- **Scope:** the server function that reads a balance's changes from the log (actor, time, resulting amount, operation kind, import file name, whether the note changed), the History list on the balance screen with its When, By, Amount, Current and How columns, the synthesized earliest row, and note-only changes shown with an unchanged amount. It starts with the spike on listing a view over `sys_record_changes` (see `design.md`).
 - **Tests:** a balance never edited, edited, replaced by an import, restored later; a balance from before the log (`version` 0); a balance of a closed account; permissions.
 - **Docs:** the spec's "Change log" sentence that nothing reads the log, a decisions entry.
 
 ## Step 2: restore this value
 
-- **Scope:** the `restore` operation kind, the amount-only restore with the confirmation text, the stale check by version in the same transaction, the record of the historical reference as provenance, and the refusal on a closed account.
+- **Before it starts:** the review of the existing lists' row actions (see `design.md`, "Review of the existing lists"), a table in this folder. TODO: its own issue.
+- **Scope:** the row actions declaration for `ListConfig` (a fixed array, one action drawn as a button), then the `restore` operation kind, the amount-only restore with the confirmation text, the stale check by version in the same transaction, the record of the historical reference as provenance, and the refusal on a closed account.
 - **Tests:** current note kept, other dates and accounts unchanged, a stale confirmation refused with the new value shown, the current value offers no restore.
 - **Docs:** the spec rule, a decisions entry, the changelog.
 

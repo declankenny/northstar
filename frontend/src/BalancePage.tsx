@@ -5,12 +5,19 @@ import { deleteConsequence } from "./balanceText";
 import { conflictText } from "./conflicts";
 import { formatDate } from "./dates";
 import { ConfirmDialog, useAction } from "./Dialogs";
+import { ListView } from "./ListView";
 import { amountPlaceholder, centsToInput, formatCents } from "./money";
 import { goBack, Link, useLeaveGuard } from "./router";
 import { accountPath, PATHS } from "./routes";
 import { useRequest } from "./useRequest";
 
 const SAVED_FOR = 3000; // milliseconds "Saved" stays beside the buttons
+
+/** How a change was made: what the server wrote, with what follows the first " · " (an imported file, "note changed") in a quieter colour. */
+function howCell(how: string) {
+  const [what, ...rest] = how.split(" · ");
+  return <>{what}{rest.length > 0 && <span className="m">{` · ${rest.join(" · ")}`}</span>}</>;
+}
 
 /** One balance, on its own page: its amount and note are edited and the balance is deleted. The date is the balance's name and is not
  *  edited (a balance is the one of an account on a date); the rules and the wording are those of the account page's dialogs. */
@@ -44,6 +51,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const [saved, setSaved] = useState(false);
   const [consequence, setConsequence] = useState<string | null>(null);   // what deleting does, asked of the server when Delete… is pressed; the dialog is open while it is set
   const [gone, setGone] = useState<string | null>(null);             // the balance was deleted, here or by someone else
+  const [historyKey, setHistoryKey] = useState(0);                    // raised when the balance changes, so its history reads again
   const { busy, error, conflict, run, clear } = useAction();
   const dirty = amount !== base.amount || note !== base.note;
   const timer = useRef<number | undefined>(undefined);
@@ -54,10 +62,12 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const adopt = (fresh: BalancePageData) => {
     const next = { amount: typed(fresh.balance.amount_cents), note: fresh.balance.note ?? "" };
     setData(fresh); setBase(next); setAmount(next.amount); setNote(next.note); setVersion(fresh.balance.version); setOpenedAt(fresh.balance.amount_cents);
+    setHistoryKey((key) => key + 1);
   };
   /** Show who changed it and what it is now in the details, leaving what was typed alone. A balance deleted meanwhile says so. */
   const refreshDetails = () => {
-    fetchBalance(id).then(setData, (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
+    fetchBalance(id).then((fresh) => { setData(fresh); setHistoryKey((key) => key + 1); },
+      (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
   };
 
   /** One small question to the server, and the confirmation opens with its answer. A refusal (the balance is gone) shows beside the form. */
@@ -176,6 +186,12 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
             </dl>
           </div>
         </div>
+      </div>
+
+      <div className="acct-panel history">
+        <div className="panelhead"><span className="label">History</span></div>
+        <ListView listKey="balance_history" fixed={{ params: { balance: id } }} refreshKey={historyKey}
+          config={{ cell: { how: (row) => howCell(row.how as string) } }} />
       </div>
 
       {consequence !== null && (

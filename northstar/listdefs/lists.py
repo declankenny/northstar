@@ -38,7 +38,15 @@ ACCOUNT_BALANCES = ListDef(
     scope="b.account_id = :account", params=("account",), page_size=12, customisable=False,
 )
 
+# One balance's history, newest first, twelve to a page: the balance page's History. A fixed list like the account page's: the view
+# is the change log read for the balance (migration 0029), the scope is that balance, and the page names it.
+BALANCE_HISTORY = ListDef(
+    "balance_history", "balance_history", ("changed_at", "by_name", "amount_cents", "is_current", "how"), ("changed_at", "desc"),
+    scope="b.balance_id = :balance", params=("balance",), page_size=12, customisable=False,
+)
+
 loader.register(BALANCES)
 loader.register(ACCOUNT_BALANCES)
+loader.register(BALANCE_HISTORY)
 loader.register(ACCOUNTS)
 loader.register(CURRENCIES)

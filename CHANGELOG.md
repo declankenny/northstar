@@ -6,6 +6,16 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+### Added
+
+- A balance's history (#267): a balance's page now lists the changes recorded for it, newest first, with when, who made each one, the amount after it, whether it is the current value, and how it was made (typed by hand, the Update balances screen, an imported file, an import undo). A change to the note alone says so. A balance that existed before changes were recorded shows one row, "Entered", with its amount before the first recorded change. There is no restore yet.
+
+### Breaking
+
+- Migration: `0029_balance_history` adds a view of the change log for each balance's history. It reads the log and the balances, so it can only be created after them and no data changes. A checked backup is made first.
+- Environment variables: nothing.
+- Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
+
 ## [0.6.0] - 2026-11-14
 
 Household reporting (#57). A Reports page with two reports, Assets & Liabilities and the Net Worth Bridge, built on one framework: a report is a definition and a calculation, and the page, the filters, the charts and the states are shared. Both work out each account's value on a date the way the Dashboard does, so their totals equal the Dashboard's net worth for the same date and accounts. An account's value on a date is its latest balance on or before the date, at the latest exchange rate on or before the date.

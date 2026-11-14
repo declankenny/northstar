@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type AccountPage, type BalancePageData, type Conflict, RequestError } from "./api";
+import { type AccountPage, type BalancePageData, type Conflict, type ListColumn, type ListPage, type ListRow, RequestError } from "./api";
 import { BalancePage } from "./BalancePage";
 import { navigate } from "./router";
 
 vi.mock("./api", async (original) => ({
-  ...(await original<typeof import("./api")>()), fetchBalance: vi.fn(), fetchNeighbours: vi.fn(), editBalance: vi.fn(), deleteBalance: vi.fn(),
+  ...(await original<typeof import("./api")>()), fetchBalance: vi.fn(), fetchNeighbours: vi.fn(), editBalance: vi.fn(), deleteBalance: vi.fn(), fetchList: vi.fn(),
 }));
 vi.mock("./router", async (original) => ({ ...(await original<typeof import("./router")>()), goBack: vi.fn() }));
 
-import { deleteBalance, editBalance, fetchBalance, fetchNeighbours } from "./api";
+import { deleteBalance, editBalance, fetchBalance, fetchList, fetchNeighbours } from "./api";
 import { goBack } from "./router";
 
 const EUR = { code: "EUR", name: "Euro", minor_units: 2 };
@@ -30,6 +30,23 @@ const conflict = (over: Partial<Conflict> = {}): Conflict => ({
 });
 const refusal = (...conflicts: Conflict[]) => new RequestError("That balance changed since you opened it. Nothing was saved.", {}, 409, [], null, conflicts);
 
+const HISTORY_COLUMNS: ListColumn[] = [
+  { key: "changed_at", label: "When", path_label: "When", kind: "timestamp", scale: null, linked: false, groupable: true },
+  { key: "by_name", label: "By", path_label: "By", kind: "text", scale: null, linked: false, groupable: true },
+  { key: "amount_cents", label: "Amount", path_label: "Amount", kind: "amount", scale: null, linked: false, groupable: false },
+  { key: "is_current", label: "Current", path_label: "Current", kind: "yes_no", scale: null, linked: false, groupable: true },
+  { key: "how", label: "How", path_label: "How", kind: "text", scale: null, linked: false, groupable: true },
+];
+const historyRow = (id: number, over: Partial<ListRow> = {}): ListRow => ({
+  _id: id, changed_at: "2026-11-12 10:00:00", by_name: "Sample Admin", amount_cents: { value: 30000, scale: 2, unit: "EUR" }, is_current: 1,
+  how: "Manual edit", _links: {}, ...over,
+});
+const historyPage = (rows: ListRow[]): ListPage => ({
+  columns: HISTORY_COLUMNS, rows, total: rows.length, page: 1, pages: 1, page_size: 12, group: null,
+  sort: { field: "changed_at", direction: "desc" }, filters: [], skipped: [], default_filter_id: null,
+  default_columns: HISTORY_COLUMNS.map((c) => c.key), customised: false, skipped_columns: [],
+});
+
 const amountBox = () => screen.getByLabelText("Balance in EUR") as HTMLInputElement;
 const noteBox = () => screen.getByLabelText("Note (optional)") as HTMLInputElement;
 const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
@@ -38,12 +55,52 @@ const shown = async () => { render(<BalancePage id={12} />); return screen.findB
 beforeEach(() => {
   window.history.replaceState(null, "", "/balances/12");
   vi.mocked(fetchBalance).mockResolvedValue(page());
+  vi.mocked(fetchList).mockResolvedValue(historyPage([historyRow(-5), historyRow(-3, { is_current: 0, amount_cents: { value: 25000, scale: 2, unit: "EUR" } })]));
 });
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetAllMocks();
+});
+
+describe("the history", () => {
+  it("lists this balance's changes in a panel of its own, under the form, asking for this balance only", async () => {
+    await shown();
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▾▲▼]/g, "").trim())).toEqual(["When", "By", "Amount", "Current", "How"]);
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText("Yes")).toBeTruthy();
+    expect(within(rows[1]).getByText("No")).toBeTruthy();
+    expect(fetchList).toHaveBeenCalledWith("balance_history", expect.objectContaining({ params: { balance: 12 } }), expect.anything());
+    expect(screen.getByText("History")).toBeTruthy();
+  });
+
+  it("writes what follows the first dot in a quieter colour: the imported file and a changed note", async () => {
+    vi.mocked(fetchList).mockResolvedValue(historyPage([historyRow(-5, { how: "CSV import · savings-2026.csv · note changed" })]));
+    await shown();
+    const cell = (await screen.findByText("CSV import")).closest("td")!;
+    expect(cell.textContent).toBe("CSV import · savings-2026.csv · note changed");
+    expect(cell.querySelector(".m")?.textContent).toBe(" · savings-2026.csv · note changed");
+  });
+
+  it("reads again after a save, so the new change is the first row", async () => {
+    await shown();
+    await screen.findByRole("table");
+    const before = vi.mocked(fetchList).mock.calls.length;
+    vi.mocked(editBalance).mockResolvedValue(undefined as never);
+    vi.mocked(fetchBalance).mockResolvedValue(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 31000, note: "Statement balance", version: 8 } }));
+    fireEvent.change(amountBox(), { target: { value: "310,00" } });
+    fireEvent.click(button("Save"));
+    await waitFor(() => expect(vi.mocked(fetchList).mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it("says nothing of earlier history: it lists what the server sent and no more", async () => {
+    await shown();
+    await screen.findByRole("table");
+    expect(screen.queryByText(/before history/i)).toBeNull();
+  });
 });
 
 describe("the balance page", () => {
