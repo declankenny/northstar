@@ -289,6 +289,10 @@ def _hierarchy(section: SectionDef, data: object, where: str) -> dict:
         for name in COMPARED:                       # a comparison between two dates: the value at each end, of which `value` is the change
             if name in raw:
                 out[name] = whole(raw[name], f"{at}.{name}")
+        if ("opening" in raw) != ("closing" in raw):
+            _fail(at, "has one of opening and closing but not both")
+        if "opening" in out and out["closing"] - out["opening"] != value:
+            _fail(at, "has a value that is not its closing minus its opening")
         children = _list(raw.get("children", []), f"{at}.children")
         size = 0
         if children:

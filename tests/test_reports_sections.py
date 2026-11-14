@@ -331,6 +331,27 @@ def test_opening_and_closing_that_do_not_add_up_or_are_not_whole_amounts_are_a_d
         sections.validate(TREE, data)
 
 
+@pytest.mark.parametrize("mutate", [
+    lambda d: d["nodes"][0]["children"][0].update(value=999),                 # a leaf whose change is not closing minus opening
+    lambda d: d["nodes"][0]["children"][0].pop("closing"),                    # an opening without a closing
+    lambda d: d["nodes"][0]["children"][0].pop("opening"),                    # a closing without an opening
+])
+def test_a_node_needs_both_ends_and_its_value_is_closing_minus_opening(mutate):
+    data = compared()
+    mutate(data)
+    with pytest.raises(ReportDefectError):
+        sections.validate(TREE, data)
+
+
+def test_a_lone_node_with_contradictory_figures_is_a_defect():
+    data = {"nodes": [{"id": "a", "label": "A", "value": 999, "opening": 100, "closing": 130, "size": 1}]}
+    with pytest.raises(ReportDefectError):
+        sections.validate(TREE, data)
+    del data["nodes"][0]["closing"]
+    with pytest.raises(ReportDefectError):
+        sections.validate(TREE, data)
+
+
 def test_a_section_says_whether_its_table_opens_expanded_and_only_a_hierarchy_may_say_collapsed():
     assert SectionDef("h", "hierarchy", "table", "H").expanded is True
     sections.check("r", (SectionDef("h", "hierarchy", "table", "H", expanded=False),))
