@@ -179,6 +179,15 @@ Version 0.5 turns the main tables of Northstar into lists you can search, filter
 - **Reading the database yourself.** The views the lists use call functions that Northstar registers when it opens the database, so they can only be read through Northstar. Opening the file in the `sqlite3` shell and querying them fails; the tables are still readable.
 - To go back, restore the backup the upgrade made, under the 0.4 image (see below).
 
+### Upgrading from 0.5 to 0.6
+
+Version 0.6 adds the Reports page, with two reports: Assets & Liabilities and the Net Worth Bridge. What an upgrade does to an installation that already runs 0.5:
+
+- **A checked backup is made first**, as for any database change (see above). One migration runs, `0028`, which replaces the view `account_days` with one that also says which balance and which exchange rate each row used. No figure on any existing screen changes.
+- **Nothing to change in your settings**, nobody is signed out, and Northstar makes no new outbound request.
+- **Reports** is a new page in the menu, second after the Dashboard. It reads your data and writes nothing. A report that needs an exchange rate you have not entered says so and does not show partial figures; an administrator can add the rate on the Currencies page.
+- To go back, restore the backup the upgrade made, under the 0.5 image (see below).
+
 ### Rolling back
 
 You can't just start the old image on an upgraded database, because it doesn't understand the new schema. Restore the backup the upgrade made, under the old image. The file name has the version that made it and the UTC time, so take the newest one from the list:

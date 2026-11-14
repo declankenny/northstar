@@ -6,13 +6,23 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+## [0.6.0] - TODO release date
+
+Household reporting (#57). A Reports page with two reports, Assets & Liabilities and the Net Worth Bridge, built on one framework: a report is a definition and a calculation, and the page, the filters, the charts and the states are shared. Both work out each account's value on a date the way the Dashboard does, so their totals equal the Dashboard's net worth for the same date and accounts. An account's value on a date is its latest balance on or before the date, at the latest exchange rate on or before the date.
+
 ### Added
 
 - Opening account types in the Net Worth Bridge chart (#255): click a type's bar, or its name under the chart, to see its accounts as bars of their own, in name order, with a bracket under them in the green or red of the type's own change; click the bracket's name to close it. Expand all and Collapse all are above the chart, an account's bar opens the account, and its tooltip shows its opening, closing and change and the balances behind them. The table below opens and closes the same types as the chart, and the totals do not change whichever are open.
-- The Net Worth Bridge waterfall (#254): above its table, the opening balance, a bar for each account type that changed, from the running total, with its signed change, and the closing balance, which are the opening and closing figures at the top of the page. Green raises your net worth and red lowers it; hover a type to see its change and how many accounts it holds. The scale is zoomed in, beside the bars, and stays in view while they scroll. The Change figure is now green or red by its direction. Opening types into their accounts in the chart comes next (#255).
-- Net Worth Bridge, a second report (#253): why your net worth changed between two dates (closing today and opening a year earlier to begin with). It shows your opening balance, the change and your closing balance, and a table of the account types that changed, which opens to show each account with its opening and closing figures and the balances they rest on. An account that did not change is not shown. A change includes the change in the balance and in exchange rates. The waterfall chart comes next (#254, #255). You can filter it by any account field except dates.
+- The Net Worth Bridge waterfall (#254): above its table, the opening balance, a bar for each account type that changed, from the running total, with its signed change, and the closing balance, which are the opening and closing figures at the top of the page. Green raises your net worth and red lowers it; hover a type to see its change and how many accounts it holds. The scale is zoomed in, beside the bars, and stays in view while they scroll. The Change figure is now green or red by its direction.
+- Net Worth Bridge, a second report (#253): why your net worth changed between two dates (closing today and opening a year earlier to begin with). It shows your opening balance, the change and your closing balance, and a table of the account types that changed, which opens to show each account with its opening and closing figures and the balances they rest on. An account that did not change is not shown. A change includes the change in the balance and in exchange rates. You can filter it by any account field except dates.
 - Assets & Liabilities, the first report (#240): what you own and what you owe on a date you choose (today by default), as three figures with their account counts and two treemaps, assets and liabilities, each by account type and then account. Click a type, or its entry in the list under the chart, to see its accounts, and an account to open it. An overdrawn account, or one with no balance by the date, is not drawn but stays in the list, marked "not in the chart", so the lists add up to the figures. The figures equal the Dashboard's net worth for the same date. You can filter it by any account field except dates.
 - A Reports page, second in the navigation, with a searchable list of reports, the choices each one asks for (a date, say) and filters. Reports arrive with later changes, starting with Assets & Liabilities (#239).
+
+### Breaking
+
+- Migration: `0028_account_days_provenance` replaces the view `account_days` with one that also says which balance and which exchange rate each row used (three more columns). The rule, the other columns and the rows are the same, so no figure changes. A checked backup is made first.
+- Environment variables: nothing.
+- Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
 
 ## [0.5.0] - 2026-11-11
 
