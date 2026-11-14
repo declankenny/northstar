@@ -21,7 +21,7 @@ The order puts the cleanup job before the two recovery screens, so nothing ships
 
 ## Step 1: history list
 
-- **Scope:** the server function that reads a balance's changes from the log (actor, time, previous and resulting amounts, operation kind, import batch), the History list on the balance screen, the current value marked, the synthesized baseline row, and note-only changes shown with an unchanged amount.
+- **Scope:** the server function that reads a balance's changes from the log (actor, time, resulting amount, operation kind, import file name, whether the note changed), the History list on the balance screen with its When, By, Amount, Current and How columns, the synthesized earliest row, and note-only changes shown with an unchanged amount. It starts with the spike on listing a view over `sys_record_changes` (see `design.md`).
 - **Tests:** a balance never edited, edited, replaced by an import, restored later; a balance from before the log (`version` 0); a balance of a closed account; permissions.
 - **Docs:** the spec's "Change log" sentence that nothing reads the log, a decisions entry.
 

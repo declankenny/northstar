@@ -24,15 +24,16 @@ The feature has three entry points: a history list on the existing balance scree
 
 Add a History list to the screen for an individual balance. This is the edit history of one account's balance on one date, distinct from the account's list of balances across dates.
 
-Show the most recent change first. Each row shows:
+Show the most recent change first. The layout was agreed from a mockup on November 14, 2026. Each row shows:
 
 - When the change happened.
 - Who made it.
-- The previous and resulting amounts, in the account's currency.
-- The operation responsible, such as manual edit, CSV import or restoration, with the recorded import batch identifiable where applicable.
-- A **Restore this value** row action for a historical amount different from the current amount.
+- The resulting amount, in the account's currency. There is no column for the previous amount.
+- Whether it is the current value (**Yes** or **No**), in a **Current** column. There are no badges or pills.
+- How it was made: the operation, such as manual edit, CSV import or Update balances, with the import file's base name where the change came from an import, and "note changed" where the note was edited.
+- A **Restore** button for a historical amount different from the current amount, drawn as a button because it is the list's only action (see "Row actions" below).
 
-The action targets the resulting amount shown in that row. Mark the current value clearly and do not offer a redundant restoration. Show the recorded baseline as the earliest known value; do not imply that changes before recording began are available. Note-only changes can remain visible as changes with an unchanged amount.
+The action targets the resulting amount shown in that row. The current row has no Restore, and neither does a note-only change, whose amount repeats the one before it. The earliest recorded value is shown as the last row without a note or badge about earlier history, and it can be restored. Note-only changes stay visible as changes with an unchanged amount.
 
 ### How the list is built
 
@@ -42,11 +43,11 @@ The History list is a fixed list (`ListView` with `fixed`), as the account page'
 - **Columns:** When, By, Amount (the resulting amount, in the account's currency), Current (Yes or No, the same test that hides Restore) and How (the operation kind, with the import file's base name where there is one, and "note changed" where the note differs between `old_json` and `new_json`). There is no Previous column and no pill or note about earlier history. The file name and the note-changed flag are plain columns of the view (Text and YesNo), joined from `sys_operations.detail` and worked out from the JSON, and the How cell composes them through `config.cell`, as the account page's Change cell does. They need no framework change.
 - **Open: the framework and a view over a `sys_` table.** From reading `northstar/lists/registry.py` (not yet tried): a view must be `based_on` a table with a single-column primary key and takes its key and relations from it, and every relation's target must have an entry. `sys_record_changes` has a single key, but its foreign key to `sys_operations` points at a `sys_` table that is never a list, and it has no foreign key to accounts, so the currency cannot come through a relation path. The amount's scale and unit can come from columns of the same row, which `ScaledBy` already allows (`live_balance_values` does), so the view exposes them. What probably needs a small change is letting a view over `sys_record_changes` be a list source without following its relation to `sys_operations`. Confirm with a spike at the start of step 1 and record the result here.
 - **The earliest recorded row.** A view over the log cannot produce a row the log does not have. For a balance that was never edited, or that predates the log, the view `UNION`s the live balance's own row as the earliest known value. For an edited balance the first `INSERT` entry is the earliest row. Decide before building whether the `UNION` is in SQL or built in Python.
-- **Restore is a row menu item** (step 2), not an inline button, and is absent on the current row and on note-only rows. The earliest recorded row can be restored, since it is a real recorded amount.
+- **Restore is the list's only row action** (step 2), so it is drawn as a button labelled **Restore** with an accessible name that names the row ("Restore the value of Oct 3, 2026"). It is absent on the current row and on note-only rows. The earliest recorded row can be restored, since it is a real recorded amount. See "Row actions are declared as a fixed array" under Implementation notes.
 
 ### Restoring a value
 
-Selecting **Restore this value** shows the account, balance date, current amount and proposed amount before confirmation. For example: “Replace $1,250.00 with $1,100.00 for this balance?”
+Selecting **Restore** shows the account (the dialog is titled "Restore this value?" and its confirm button is **Restore**), balance date, current amount and proposed amount before confirmation. For example: “Replace $1,250.00 with $1,100.00 for this balance?”
 
 Confirmation records a new change by the person restoring the value. It does not remove or rewrite any history, or reverse the import or other operation that originally produced that value. Other dates and accounts are unaffected.
 
