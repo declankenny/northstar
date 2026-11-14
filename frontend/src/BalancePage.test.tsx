@@ -158,6 +158,35 @@ describe("restoring a value", () => {
     expect(within(dialog).getByRole("button", { name: "Close" })).toBeTruthy();
   });
 
+  it("after a refusal, closing the dialog takes the balance as it is now, so Restore again reviews the new value with the new version", async () => {
+    await shown();
+    await screen.findByRole("table");
+    vi.mocked(restoreBalanceValue).mockRejectedValueOnce(refusal(conflict()));
+    fireEvent.click(restoreButton());
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Restore" }));
+    await screen.findByRole("alert");
+    vi.mocked(fetchBalance).mockResolvedValue(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 31000, note: "Declan's correction", version: 9 } }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(amountBox().value).toBe("310.00"));
+    expect(noteBox().value).toBe("Declan's correction");
+    vi.mocked(restoreBalanceValue).mockResolvedValue(undefined as never);
+    fireEvent.click(restoreButton());
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent!.replace(/\s/g, " ")).toContain("Replace EUR 310.00 with EUR 250.00 for this balance?");
+    expect(dialog.textContent).toContain("the note, “Declan's correction”, stays as it is");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(restoreBalanceValue).toHaveBeenLastCalledWith(12, -3, 9));
+  });
+
+  it("does not read the balance again when a dialog that was not refused is closed", async () => {
+    await shown();
+    await screen.findByRole("table");
+    const before = vi.mocked(fetchBalance).mock.calls.length;
+    fireEvent.click(restoreButton());
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(vi.mocked(fetchBalance).mock.calls.length).toBe(before);
+  });
+
   it("is greyed out with the reason on a closed account", async () => {
     vi.mocked(fetchBalance).mockResolvedValue(page({ account: account({ is_open: false }) }));
     await shown();

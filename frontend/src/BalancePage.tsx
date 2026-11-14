@@ -53,6 +53,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const [shown, setShown] = useState<string | null>(null);           // who changed the balance now on show, after Use the current value
   const [notice, setNotice] = useState<string | null>(null);        // "Saved" or "Restored", for a moment beside the buttons
   const [restoring, setRestoring] = useState<ListRow | null>(null); // the row of the history whose amount the person is asked to put back
+  const [restoreRefused, setRestoreRefused] = useState(false);       // the open restore dialog was refused because the balance changed meanwhile
   const [consequence, setConsequence] = useState<string | null>(null);   // what deleting does, asked of the server when Delete… is pressed; the dialog is open while it is set
   const [gone, setGone] = useState<string | null>(null);             // the balance was deleted, here or by someone else
   const [historyKey, setHistoryKey] = useState(0);                    // raised when the balance changes, so its history reads again
@@ -78,6 +79,15 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const refreshDetails = () => {
     fetchBalance(id).then((fresh) => { setData(fresh); setHistoryKey((key) => key + 1); },
       (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
+  };
+
+  /** Close the restore dialog. When it was refused because the balance changed, the page then takes the balance as it is now, with its version, so
+   *  that pressing Restore again is a review of the new value and not the same refusal again. (The form is clean: Restore is greyed out otherwise.) */
+  const closeRestore = () => {
+    const refused = restoreRefused;
+    setRestoring(null);
+    setRestoreRefused(false);
+    if (refused) fetchBalance(id).then(adopt, (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
   };
 
   /** One small question to the server, and the confirmation opens with its answer. A refusal (the balance is gone) shows beside the form. */
@@ -212,10 +222,10 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
       </div>
 
       {restoring !== null && (
-        <ConfirmDialog title="Restore this value?" subtitle={`${account.name} · ${date}`} confirmLabel="Restore" onClose={() => setRestoring(null)}
+        <ConfirmDialog title="Restore this value?" subtitle={`${account.name} · ${date}`} confirmLabel="Restore" onClose={closeRestore}
           text={`Replace ${formatCents(balance.amount_cents, account.currency)} with ${formatCents((restoring.amount_cents as { value: number }).value, account.currency)} for this balance? `
             + `Only the amount is restored: ${balance.note ? `the note, “${balance.note}”,` : "the note"} stays as it is. This is recorded as a new change, and nothing in the history is removed.`}
-          onConflict={refreshDetails} conflict={{ lead: "Nothing was restored.", text: (c) => conflictText(c, openedAt) }}
+          onConflict={() => { setRestoreRefused(true); refreshDetails(); }} conflict={{ lead: "Nothing was restored.", text: (c) => conflictText(c, openedAt) }}
           onConfirm={async () => {
             await restoreBalanceValue(id, restoring._id, version);
             adopt(await fetchBalance(id));
