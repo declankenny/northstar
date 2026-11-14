@@ -28,7 +28,7 @@ def before(tmp_path):
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith("0028"):
+        if not file.name.startswith(("0028", "0029")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -64,7 +64,7 @@ def before(tmp_path):
 
 def test_the_view_has_the_same_rows_and_the_dashboard_the_same_series_after_the_upgrade(before):
     path, rows, series, _ = before
-    assert db.upgrade(path) == ["0028_account_days_provenance"]
+    assert db.upgrade(path) == ["0028_account_days_provenance", "0029_balance_history"]
     conn = db.connect(path)
     assert [tuple(r) for r in conn.execute(f"SELECT {OLD_COLUMNS} FROM account_days ORDER BY day, account_id")] == rows
     assert networth.net_worth_series(conn, TODAY, date(2026, 2, 1), date(2026, 9, 30), "week") == series

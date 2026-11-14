@@ -67,6 +67,17 @@ TABLES = {
                                           unit_from=("account", "currency", "code")), label="Change", groupable=False),
         "note": _text(True), "source": _text(), **_audit()},
         denied=frozenset({"version"}), based_on="balances", record_page="/balances/{id}"),
+    # One balance's recorded changes, read from the change log (migration 0029), for the balance page's History. It is a view of
+    # `sys_record_changes`, whose key (the log entry's id, or a negative number for a baseline row) it has; that table's relation to
+    # `sys_operations` is not followed, because the `sys_` tables are never lists, and the amount's places and currency are columns of
+    # the row itself, not a relation to the account. Its list is fixed.
+    "balance_history": TableDef("balance_history", "changed_at", {
+        "changed_at": FieldDef(Timestamp(), label="When"),
+        "by_name": FieldDef(Text(), label="By"),
+        "amount_cents": FieldDef(ScaledBy(scale_from=("scale",), unit_from=("unit",)), label="Amount", groupable=False),
+        "is_current": FieldDef(YesNo(), label="Current"),
+        "how": FieldDef(Text(), label="How")},
+        denied=frozenset({"balance_id", "scale", "unit"}), based_on="sys_record_changes"),
     # The currency catalog with how many live accounts use each (migration 0026), for the admin Currencies list. It is a view of
     # `currencies`, so it has that table's key and relations; it does not know which currency is the system currency.
     "currency_summaries": TableDef("currency_summaries", "code", {

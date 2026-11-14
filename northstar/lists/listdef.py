@@ -25,7 +25,7 @@ class ListDef:
 
 
 # A parameter of a list is the id of a record of one of these tables, which a request names and the server checks exists.
-PARAM_TABLES = {"account": "live_accounts"}
+PARAM_TABLES = {"account": "live_accounts", "balance": "live_balances"}
 _PARAM = re.compile(r":([a-z_]+)")
 
 

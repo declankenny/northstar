@@ -24,19 +24,30 @@ The feature has three entry points: a history list on the existing balance scree
 
 Add a History list to the screen for an individual balance. This is the edit history of one account's balance on one date, distinct from the account's list of balances across dates.
 
-Show the most recent change first. Each row shows:
+Show the most recent change first. The layout was agreed from a mockup on November 14, 2026. Each row shows:
 
 - When the change happened.
 - Who made it.
-- The previous and resulting amounts, in the account's currency.
-- The operation responsible, such as manual edit, CSV import or restoration, with the recorded import batch identifiable where applicable.
-- A **Restore this value** row action for a historical amount different from the current amount.
+- The resulting amount, in the account's currency. There is no column for the previous amount.
+- Whether it is the current value (**Yes** or **No**), in a **Current** column. There are no badges or pills.
+- How it was made: the operation, such as manual edit, CSV import or Update balances, with the import file's base name where the change came from an import, and "note changed" where the note was edited.
+- A **Restore** button for a historical amount different from the current amount, drawn as a button because it is the list's only action (see "Row actions" below).
 
-The action targets the resulting amount shown in that row. Mark the current value clearly and do not offer a redundant restoration. Show the recorded baseline as the earliest known value; do not imply that changes before recording began are available. Note-only changes can remain visible as changes with an unchanged amount.
+The action targets the resulting amount shown in that row. The current row has no Restore, and neither does a note-only change, whose amount repeats the one before it. The earliest recorded value is shown as the last row without a note or badge about earlier history, and it can be restored. Note-only changes stay visible as changes with an unchanged amount.
+
+### How the list is built
+
+The History list is a fixed list (`ListView` with `fixed`), as the account page's balance list is: sortable and pageable, with no search, filters, grouping, choice of columns, page size or export, and nothing saved for it. It is drawn in an `.acct-panel` under the Balance and Details panels, and its rows are the list's own markup.
+
+- **A view over the change log.** The list framework never lists `sys_` tables, so the list reads a new view, `balance_history`, with its own `TableDef` in `northstar/listdefs/tables.py`, in the way `account_balances` and `currency_summaries` are views with entries of their own. The view takes `sys_record_changes` rows for `balances`, extracts the amount, note and source from `old_json` and `new_json` with `json_extract`, and joins the operation for who, when and kind. It leaves out balances of deleted accounts, the same rule as `live_balances`, and a test fails on any other read.
+- **Columns:** When, By, Amount (the resulting amount, in the account's currency), Current (Yes or No, the same test that hides Restore) and How (the operation kind, with the import file's base name where there is one, and "note changed" where the note differs between `old_json` and `new_json`). There is no Previous column and no pill or note about earlier history. The file name and the note-changed flag are plain columns of the view (Text and YesNo), joined from `sys_operations.detail` and worked out from the JSON, and the How cell composes them through `config.cell`, as the account page's Change cell does. They need no framework change.
+- **Settled in step 1: the framework needed one parameter, not a registry change.** A view `based_on` `sys_record_changes` registers as it is, because the registry takes the key from the base table and leaves out a relation to an excluded table (`sys_operations`). The amount's places and unit are columns of the row. The only change was a list parameter `balance`, checked against `live_balances`. The tie-break by smallest key meant giving log rows the negative of the entry's id. See the decisions entry for #267.
+- **The earliest recorded row.** A view over the log cannot produce a row the log does not have. For a balance that was never edited, or that predates the log, the view `UNION`s the live balance's own row as the earliest known value. For an edited balance the first `INSERT` entry is the earliest row. Decide before building whether the `UNION` is in SQL or built in Python.
+- **Restore is the list's only row action** (step 2), so it is drawn as a button labelled **Restore** with an accessible name that names the row ("Restore the value of Oct 3, 2026"). It is absent on the current row and on note-only rows. The earliest recorded row can be restored, since it is a real recorded amount. See "Row actions are declared as a fixed array" under Implementation notes.
 
 ### Restoring a value
 
-Selecting **Restore this value** shows the account, balance date, current amount and proposed amount before confirmation. For example: “Replace $1,250.00 with $1,100.00 for this balance?”
+Selecting **Restore** shows the account (the dialog is titled "Restore this value?" and its confirm button is **Restore**), balance date, current amount and proposed amount before confirmation. For example: “Replace $1,250.00 with $1,100.00 for this balance?”
 
 Confirmation records a new change by the person restoring the value. It does not remove or rewrite any history, or reverse the import or other operation that originally produced that value. Other dates and accounts are unaffected.
 
@@ -141,6 +152,8 @@ The scope and defaults above are agreed. Do not expand this into general operati
 - **The Deleted balances query** looks up `DELETE` entries for `balances` with no later entry for the same record id, excluding the `undo` kind and balances of deleted accounts. The existing conflict check already scans with `json_extract` on `account_id`, which is fine at household volumes. Add an index on `sys_record_changes` only if a measurement says so.
 - **The purge writes to the change log.** The writer refuses SQL writes outside it, so it needs a writer function for removing log rows of one record, not a raw `DELETE`. It removes every log entry for a purged record (its history as well as the `DELETE`), keeps the operation header of an import that touched several records until none remain, and never touches live balances or unrelated records. Check how existing operations that touched several records are recorded before writing it.
 - **The shorter-retention warning.** Validators today only accept or refuse. The warning before saving is a new behaviour, so decide where it lives (in the property's editor, with the count computed by the server) before building step 3.
+- **Row actions are declared as a fixed array** in a list's `ListConfig`, not returned by a function per row: each entry has a label, what it does, and per-row `show` or `disabled` rules (with a reason for a disabled one). The array's length is then known without reading a row, so a list with exactly one action draws it as a small ghost button in the row, labelled with the row (for example "Restore" with the accessible name "Restore the value of Oct 3, 2026"), and a list with two or more draws the "⋯" menu. A row where the action does not apply shows nothing, or a disabled button with its reason. This replaces `config.actions` as `(row) => MenuItem[]`, which no list uses yet, so it breaks nothing. It is built in step 2, where Restore is the first action, with a decisions entry and the `RowMenu` comment (which says rows have no inline actions) updated. #222 (the Accounts list menu) stays in the backlog and later uses the same declaration.
+- **Review of the existing lists.** Declaring which actions are available in which context needs every list looked at once: Balances, Accounts, Currencies and the account page's fixed balance list, and the hand-built tables for Users and Account types that use `RowMenu` directly. For each, decide the actions it declares (none is a valid answer, as for Balances and Accounts today) and the context rules. The result is a table in this folder, not code, and it is done before step 2 starts.
 - **The cleanup job** is the second entry in `northstar/jobs.py`, with its own `sys_jobs` lock and the usual failure categories, and its start time in the Time property `data.deleted.cleanup_time`.
 - **Closed accounts.** Restoring an amount on a closed account is refused, as for any balance change. Restoring a deleted balance into a closed account is refused for the same reason.
 - **Baseline.** No baseline of earlier data is written, so the earliest known value of a balance that was never edited is synthesized from the live row, and a balance from before the log has `version` 0. The upgrade tests need a dataset for this case.

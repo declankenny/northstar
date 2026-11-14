@@ -94,7 +94,8 @@ def test_every_household_table_has_an_entry_or_says_why_it_is_not_listable(conn)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")}
     household_tables = {t for t in tables if not t.startswith(("sys_", "ref_"))}
     own = {name for name, table in TABLES.items() if table.based_on is None}
-    based_on = {table.based_on for table in TABLES.values() if table.based_on}           # a table covered by a view of it
+    based_on = {table.based_on for table in TABLES.values() if table.based_on                # a table covered by a view of it; a view of a
+                and not table.based_on.startswith(("sys_", "ref_"))}                          # `sys_` table (the change log) covers none
     assert household_tables == own | based_on | set(NOT_LISTABLE), "a table was added or removed: decide whether it is a list"
     assert not (own | based_on) & set(NOT_LISTABLE)
     assert all(reason.strip() for reason in NOT_LISTABLE.values())
