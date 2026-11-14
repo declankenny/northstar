@@ -1,15 +1,15 @@
 # History and recovery: implementation plan
 
-Five steps after a preparation step, each its own branch and pull request into `main`, one merged before the next starts. A step is done when its issue is closed. Issues for the steps are TODO: create them under the v0.7 milestone and link them from #58.
+Five steps after a preparation step, each its own branch and pull request into `main`, one merged before the next starts. A step is done when its issue is closed. The step issues are under the v0.7 milestone and part of #58.
 
 | Step | What | Issue |
 |---|---|---|
 | 0 | Reconcile #58 with the agreed scope (no code) | [#58](https://github.com/declankenny/northstar/issues/58) |
-| 1 | History list on the balance screen, read only | TODO |
-| 2 | Restore this value | TODO |
-| 3 | Retention properties and the cleanup job | TODO |
-| 4 | Deleted accounts | TODO |
-| 5 | Deleted balances | TODO |
+| 1 | History list on the balance screen, read only | [#267](https://github.com/declankenny/northstar/issues/267) |
+| 2 | Restore this value | [#268](https://github.com/declankenny/northstar/issues/268) |
+| 3 | Retention properties and the cleanup job | [#269](https://github.com/declankenny/northstar/issues/269) |
+| 4 | Deleted accounts | [#270](https://github.com/declankenny/northstar/issues/270) |
+| 5 | Deleted balances | [#271](https://github.com/declankenny/northstar/issues/271) |
 
 The order puts the cleanup job before the two recovery screens, so nothing ships that holds recoverable data without a way to purge it.
 
