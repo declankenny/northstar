@@ -18,7 +18,7 @@ class DeletedAccountOut(BaseModel):
     type_name: str
     is_open: bool                  # as it was; restoring does not change it
     deleted_on: str                # YYYY-MM-DD, the UTC date it was deleted
-    purge_on: str | None           # the UTC date the cleanup is due to remove it for good; None when the cleanup is switched off
+    purge_on: str | None           # the date (in the installation's zone) of the first cleanup run after its period ends; None when the cleanup is off
     balance_count: int             # the balances its deletion hid, which come back with it
     name_taken: bool               # a live account has its name now, so a new one is needed
 

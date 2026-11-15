@@ -7,28 +7,35 @@ Nothing writes to a deleted account's row, so its `updated_at` is when it was de
 """
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 
-from northstar import accounts, db, retention, system_properties, writer
+from northstar import accounts, db, retention, scheduler, system_properties, writer
 from northstar.errors import NotFoundError
 from northstar.writer import Operation
 
 _STAMP = "%Y-%m-%dT%H:%M:%SZ"
 
 
-def _purge_date(deleted_at: str, days: int) -> str | None:
-    """The UTC date the cleanup is due to remove an account deleted at `deleted_at`, or None when a period that long is beyond a date."""
+def _purge_date(deleted_at: str, days: int, start: str, zone: tzinfo) -> str | None:
+    """The date, in the installation's zone, of the first scheduled run of the cleanup that finds an account deleted at `deleted_at` past its
+    period, or None when a period that long is beyond a date. The period runs out at one moment, and the cleanup runs once a date from its
+    start time (`start`, "HH:MM", as the scheduler reads it), so the run is on the date of that moment when it falls before the start time,
+    and on the next date when it falls at or after it. A run that was missed is made up on the date it was missed, which is this date."""
     try:
-        return (datetime.strptime(deleted_at, _STAMP) + timedelta(days=days)).strftime("%Y-%m-%d")
+        expires = (datetime.strptime(deleted_at, _STAMP).replace(tzinfo=timezone.utc) + timedelta(days=days)).astimezone(zone)
     except (OverflowError, ValueError):
         return None
+    day = expires.date() if expires.strftime("%H:%M") < start else expires.date() + timedelta(days=1)
+    return day.isoformat()
 
 
 def list_deleted(conn: sqlite3.Connection) -> dict:
-    """Every deleted account, newest deletion first, with the date it is due to be removed for good (None when the cleanup is switched
+    """Every deleted account, newest deletion first, with the date of the cleanup run that will remove it (in the installation's zone, None when the cleanup is switched
     off, because nothing is then removed), and whether its name is in use by a live account now. All of them: a recovery list is not cut off."""
     days = system_properties.get_value(conn, retention.RETENTION_PROPERTY)
-    scheduled = system_properties.get_value(conn, retention.TIME_PROPERTY) is not None
+    start = system_properties.get_value(conn, retention.TIME_PROPERTY) or None
+    scheduled = start is not None
+    zone = scheduler.zone_of(conn)
     rows = conn.execute(
         "SELECT a.id, a.name, t.name AS type_name, a.is_open, a.updated_at, "
         "  (SELECT COUNT(*) FROM balances b WHERE b.account_id = a.id) AS balance_count, "
@@ -36,7 +43,7 @@ def list_deleted(conn: sqlite3.Connection) -> dict:
         "FROM accounts a JOIN account_types t ON t.id = a.type_id WHERE a.deleted = 1 ORDER BY a.updated_at DESC, a.id DESC").fetchall()
     return {"cleanup_on": scheduled, "retention_days": days, "accounts": [{
         "id": row["id"], "name": row["name"], "type_name": row["type_name"], "is_open": bool(row["is_open"]),
-        "deleted_on": row["updated_at"][:10], "purge_on": _purge_date(row["updated_at"], days) if scheduled else None,
+        "deleted_on": row["updated_at"][:10], "purge_on": _purge_date(row["updated_at"], days, start, zone) if scheduled else None,
         "balance_count": row["balance_count"], "name_taken": bool(row["name_taken"])} for row in rows]}
 
 

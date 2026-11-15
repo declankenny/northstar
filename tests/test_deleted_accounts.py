@@ -64,7 +64,42 @@ def test_each_row_says_when_it_was_deleted_and_when_it_goes_for_good(client):
     [entry] = listed(client)["accounts"]
     assert entry["id"] == gone and entry["type_name"] == "Savings" and entry["balance_count"] == 2
     assert entry["deleted_on"] == stamp(10)[:10]
-    assert entry["purge_on"] == (datetime.now(timezone.utc) + timedelta(days=80)).strftime("%Y-%m-%d")
+
+
+def purge_on(client, deleted_at, zone=None, start="03:00", days=None):
+    """The date the list gives for an account deleted at a fixed UTC moment, under a zone and a start time (90 days unless `days`)."""
+    gone = make(client, "Gone", 5)
+    with with_db(client) as conn:
+        conn.execute("UPDATE accounts SET updated_at = ? WHERE id = ?", (deleted_at, gone))
+        conn.execute("UPDATE system_properties SET value = ? WHERE name = 'data.deleted.cleanup_time'", (start,))
+        if zone:
+            conn.execute("UPDATE system_properties SET value = ? WHERE name = 'system.timezone'", (zone,))
+        if days:
+            conn.execute("UPDATE system_properties SET value = ? WHERE name = 'data.deleted.retention_days'", (str(days),))
+        conn.commit()
+    return listed(client)["accounts"][0]["purge_on"]
+
+
+def test_the_date_is_the_first_cleanup_run_after_the_period_ends_not_the_day_it_ends(client):
+    # 90 days after August 17 is November 15. Deleted at noon, the period ends at noon, after that day's 03:00 run, so the run is on the 16th.
+    assert purge_on(client, "2026-08-17T12:00:00Z") == "2026-11-16"
+
+
+def test_a_period_that_ends_before_the_start_time_is_removed_by_that_days_run(client):
+    assert purge_on(client, "2026-08-17T01:00:00Z") == "2026-11-15"
+
+
+def test_the_start_time_is_read_in_the_installations_zone(client):
+    # The period ends at 06:00 UTC on November 15: after the 03:00 run in UTC (so the 16th), but 01:00 in New York in November, before it (so the 15th).
+    assert purge_on(client, "2026-08-17T06:00:00Z", zone="America/New_York") == "2026-11-15"
+
+
+def test_the_same_moment_in_utc_gives_the_next_date(client):
+    assert purge_on(client, "2026-08-17T06:00:00Z") == "2026-11-16"
+
+
+def test_a_period_that_is_beyond_a_date_has_no_date(client):
+    assert purge_on(client, "2026-08-17T12:00:00Z", days=999999999) is None
 
 
 def test_with_the_cleanup_switched_off_nothing_is_scheduled(client):
