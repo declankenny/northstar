@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type AccountPage, type BalancePageData, type Conflict, type ListColumn, type ListPage, type ListRow, RequestError } from "./api";
 import { BalancePage } from "./BalancePage";
+import { clearFlash, peekFlash, setFlash } from "./flash";
 import { navigate } from "./router";
 
 vi.mock("./api", async (original) => ({
@@ -60,9 +61,19 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  clearFlash();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetAllMocks();
+});
+
+describe("a notice left by the page before", () => {
+  it("is shown once", async () => {
+    setFlash("The balance for Apr 20, 2026 was restored.");
+    await shown();
+    expect(screen.getByText("The balance for Apr 20, 2026 was restored.").getAttribute("role")).toBe("status");
+    expect(peekFlash()).toBeNull();
+  });
 });
 
 describe("the history", () => {

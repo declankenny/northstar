@@ -8,6 +8,7 @@ import { ConfirmDialog, useAction } from "./Dialogs";
 import { ListView } from "./ListView";
 import { amountPlaceholder, centsToInput, formatCents } from "./money";
 import { goBack, Link, useLeaveGuard } from "./router";
+import { clearFlash, peekFlash } from "./flash";
 import { accountPath, PATHS } from "./routes";
 import { useRequest } from "./useRequest";
 
@@ -39,6 +40,8 @@ export function BalancePage({ id }: { id: number }) {
 }
 
 function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
+  const [flash] = useState(peekFlash);                             // a notice left by the page that sent the person here
+  useEffect(() => clearFlash(), []);
   const [data, setData] = useState(initial);                         // what the page shows beside the form; kept as the server last said
   const { account, balance, reporting } = data;
   const open = account.is_open;
@@ -151,6 +154,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   return (
     <div className="acct">
       <div className="crumb"><Link to={PATHS.balances}>Balances</Link> / {account.name} · {date}</div>
+      {flash && <p className="notice ok" role="status">{flash}</p>}
       <div className="top">
         <div>
           <div className="titlerow">

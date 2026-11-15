@@ -841,3 +841,15 @@ An admin can bring back a deleted account from a Deleted accounts screen. The de
 - **After success the account's own page opens, with a one-line notice,** held in memory for the next page (`flash.ts`) and shown once. A reload shows nothing. It is not carried in the address.
 - **Not shown: who deleted the account.** The design does not ask for it and the log has it.
 
+### Restoring a deleted balance (#271, v0.7)
+
+An admin can bring back a balance that was deleted on its own, from a Deleted balances screen. The design is in `docs/design/history-and-recovery/`.
+
+- **A plain table with an account filter,** decided with Declan as for Deleted accounts: the volume is individual deletions within the retention period, so the whole list is returned and the account select filters it in the page (it offers only accounts that have something deleted). What would change this: a household that deletes balances in bulk, and then the list framework, with a view over the log.
+- **Rebuilt from the DELETE entry through the writer, under the original id.** The writer already accepts an explicit `id`, so the balance's history is one history (INSERT, DELETE, INSERT) and anything that referred to the id still does. The entry holds every logged field, and the restore writes all of it except the audit columns, so a column added to `balances` later is carried if it is logged and takes its default if the entry predates it (SQLite requires a default for any column added to a table). That makes the plan's "defaults for fields added after a balance was deleted" a property of the migration rule and not code, and a test restores an entry with a field removed.
+- **The author and time of the restored row are the restore's.** The writer sets the audit columns and refuses them from callers, so "entered by" on the balance's page is the admin who restored it; the original author and time remain in its history. Preserving them would need a second way to write the audit columns, which is not worth it.
+- **A date that has a balance now refuses the restore, never replaces it.** The refusal is a 409 `DateTaken` that carries the balance in the way, so the page can link to it and show its amount; the deleted entry stays listed. A closed account, a deleted account and a balance that is no longer deleted are refused too, and the list is read again after any refusal.
+- **Left out: balances removed by an import's undo,** as in the cleanup (a group removed on purpose), and the balances of deleted accounts, which return with the account.
+- **Deleted by on Deleted accounts too (Declan's request).** The account's deleting operation is the latest UPDATE of `deleted` to 1 in the log. An account deleted with no entry in the log (before the log, if any) shows "Unknown".
+- **The permanent-deletion date** is the one Deleted accounts uses (the first cleanup run after the period ends, in the installation's zone), through the same function.
+

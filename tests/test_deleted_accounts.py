@@ -107,6 +107,23 @@ def test_a_period_that_is_beyond_a_date_has_no_date(client):
     assert purge_on(client, "2026-08-17T12:00:00Z", days=999999999) is None
 
 
+def test_each_row_says_who_deleted_the_account(client):
+    gone = make(client, "Gone", None)
+    with with_db(client) as conn:
+        who = conn.execute("SELECT id FROM users WHERE email = 'test@example.com'").fetchone()[0]
+        accounts.delete_account(op(conn, who), gone)
+        conn.commit()
+    assert listed(client)["accounts"][0]["deleted_by"] == "Test User"
+
+
+def test_an_account_deleted_with_no_record_in_the_log_has_no_name(client):
+    gone = make(client, "Gone", 5)
+    with with_db(client) as conn:
+        conn.execute("DELETE FROM sys_record_changes WHERE tablename = 'accounts' AND record_id = ? AND change = 'UPDATE'", (gone,))
+        conn.commit()
+    assert listed(client)["accounts"][0]["deleted_by"] is None
+
+
 def test_with_the_cleanup_switched_off_nothing_is_scheduled(client):
     make(client, "Gone", 10)
     with with_db(client) as conn:

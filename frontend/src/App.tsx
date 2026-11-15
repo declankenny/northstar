@@ -11,6 +11,7 @@ import { CurrencyPage } from "./CurrencyPage";
 import { Dashboard } from "./Dashboard";
 import { ImportBalances } from "./ImportBalances";
 import { DeletedAccounts } from "./DeletedAccounts";
+import { DeletedBalances } from "./DeletedBalances";
 import { Imports } from "./Imports";
 import { Profile } from "./Profile";
 import { ReportsPage } from "./reports/ReportsPage";
@@ -125,6 +126,7 @@ function Shell() {
             <Link className={route === "users" ? "active" : ""} to={PATHS.users}>Users</Link>
             <Link className={route === "imports" ? "active" : ""} to={PATHS.imports}>Imports</Link>
             <Link className={route === "deleted" ? "active" : ""} to={PATHS.deleted}>Deleted accounts</Link>
+            <Link className={route === "deletedBalances" ? "active" : ""} to={PATHS.deletedBalances}>Deleted balances</Link>
             <Link className={route === "currencies" || route === "currency" ? "active" : ""} to={PATHS.currencies}>Currencies</Link>
             <Link className={route === "properties" ? "active" : ""} to={PATHS.properties}>System properties</Link>
           </>
@@ -160,6 +162,8 @@ function Shell() {
           me.is_admin ? <Imports /> : <p className="empty">Only admins can see imports.</p>
         ) : route === "deleted" ? (
           me.is_admin ? <DeletedAccounts /> : <p className="empty">Only admins can see deleted accounts.</p>
+        ) : route === "deletedBalances" ? (
+          me.is_admin ? <DeletedBalances /> : <p className="empty">Only admins can see deleted balances.</p>
         ) : route === "currencies" ? (
           me.is_admin ? <Currencies /> : <p className="empty">Only admins can see currencies.</p>
         ) : route === "currency" && currencyCode !== null ? (
