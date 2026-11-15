@@ -54,6 +54,7 @@ def test_the_first_properties_are_seeded_by_the_system_user(conn):
         "system.currency": ("String", "USD"), "ui.locale.default": ("String", "en-US"),
         "currency.rate.stale_days": ("Integer", "14"), "currency.rate.start.default": ("Date", "2000-01-01"),
         "system.timezone": ("String", None), "currency.rate.fetch_time": ("Time", "18:00"),
+        "data.deleted.retention_days": ("Integer", "90"), "data.deleted.cleanup_time": ("Time", "03:00"),
         "oidc.enabled": ("Boolean", "false"), "oidc.provider": ("String", None), "oidc.issuer": ("String", None),
         "oidc.client_id": ("String", None), "oidc.user.allow_creation": ("Boolean", "false"),
         "oidc.session.lifetime_hours": ("Integer", "12"), "system.auth.local.enabled": ("Boolean", "true")}

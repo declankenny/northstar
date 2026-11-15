@@ -202,7 +202,7 @@ Then change the `image:` line back to the old version, for example `ghcr.io/decl
 
 ## Backup and restore
 
-A backup is a complete copy of your financial data, with the password hashes and sessions, so keep it private. Never copy the database file by hand while the app runs: use the tool, which is safe on a running app and checks what it wrote.
+A backup is a complete copy of your financial data, with the password hashes and sessions, so keep it private. Deleted data is kept for a while so it can be recovered (90 days until an administrator changes `data.deleted.retention_days` on the System Properties screen), and a nightly cleanup at the time in `data.deleted.cleanup_time` (03:00, in your time zone; empty turns it off) then removes it for good, with its history. The cleanup does not touch backups: a backup still holds what was deleted until the backup itself expires, so a record deleted by mistake can also be brought back from a backup, and data that must be gone for good is gone only when the backups holding it are. Never copy the database file by hand while the app runs: use the tool, which is safe on a running app and checks what it wrote.
 
 Take a backup. The tool never overwrites a file, so the name includes the time:
 

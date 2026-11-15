@@ -34,8 +34,8 @@ The order puts the cleanup job before the two recovery screens, so nothing ships
 
 ## Step 3: retention and cleanup
 
-- **Scope:** migration for `data.deleted.retention_days` and `data.deleted.cleanup_time` and their validators, the `purge` operation kind, the writer function for removing log rows of one record, the cleanup job in `northstar/jobs.py`, the recheck of eligibility and deletion state inside each purge transaction, and the shorter-retention warning.
-- **Open before it starts:** where the warning lives (see `design.md`), and how operations that touched several records are recorded and kept.
+- **Scope:** migration for `data.deleted.retention_days` and `data.deleted.cleanup_time` and their validators, the `purge` operation kind, the writer function for removing log rows of one record, the cleanup job in `northstar/jobs.py`, and the recheck of eligibility and deletion state inside each purge transaction. No shorter-retention warning: decided on November 15, 2026 that an admin who sets a short period has chosen it.
+- **Settled before it started:** no warning; a purge removes only the log rows of the purged record, and an operation's header stays until none of its records remain.
 - **Tests:** an account and its balances purged together on the account's clock, an independently deleted balance on its own clock, a restored record not purged from a stale selection, unrelated and live history untouched, cleanup disabled, a missed run.
 - **Docs:** the spec rules, `docs/schema.md` if the schema changes, the operator guide's backup wording, a decisions entry, the changelog.
 

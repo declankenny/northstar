@@ -221,9 +221,10 @@ READS = re.compile(r"\b(FROM|JOIN)\s+(accounts|balances)\b", re.I)
 # see deleted accounts because they still hold their type, and the imports register has to name the account of an import
 # even when it has been deleted, and its undo has to find the balances of a deleted account to refuse and say why. The
 # system properties module has to see deleted accounts too, because they keep their currency and so lock the system
-# currency. No other file may read balances directly.
+# currency. The cleanup of deleted data has to find deleted accounts, which is its whole job (retention.py), and the balances that are not
+# in the views. No other file may read balances directly.
 EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}, "import_register.py": {"accounts", "balances"},
-          "system_properties.py": {"accounts"}}
+          "system_properties.py": {"accounts"}, "retention.py": {"accounts", "balances"}}
 
 
 def direct_reads(source: str) -> set[str]:

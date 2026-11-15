@@ -18,6 +18,7 @@ from tests.test_scheduler import FakeClock, lock, make_env, runs
 UTC = timezone.utc
 TODAY = date(2026, 6, 3)
 JOB = "currency.rates.fetch"
+RATES = tuple(job for job in jobs.REGISTRY if job.name == JOB)     # the cleanup of deleted data is also due at these times, and has its own tests
 
 
 def day(offset=0, start=TODAY):
@@ -85,7 +86,7 @@ def stored(conn, code):
 
 def go(conn, at=None, registry=None):
     clock = FakeClock(at or datetime(2026, 6, 3, 18, 0, tzinfo=UTC))
-    env = make_env(conn, registry or jobs.REGISTRY, clock)
+    env = make_env(conn, registry or RATES, clock)
     return run_due(env), env, clock
 
 
@@ -350,13 +351,13 @@ def test_scheduled_rates_are_an_operation_of_kind_scheduled_by_the_system_user_a
     assert (header["kind"], header["user_id"]) == ("scheduled", system)
     assert conn.execute("SELECT COUNT(*) FROM sys_record_changes WHERE tablename = 'exchange_rates' AND change = 'INSERT'").fetchone()[0] == 2
     clock = FakeClock(datetime(2026, 6, 4, 19, 0, tzinfo=UTC))             # the next day has one new rate to add
-    assert run_now(make_env(conn, jobs.REGISTRY, clock), jobs.REGISTRY[0]) == "succeeded"
+    assert run_now(make_env(conn, RATES, clock), RATES[0]) == "succeeded"
     header = conn.execute("SELECT kind FROM sys_operations ORDER BY id DESC LIMIT 1").fetchone()
     assert header["kind"] == "cli" and runs(conn, JOB)[-1]["started_by"] == "manual"
 
 
 def test_the_job_is_registered_with_its_time_property_and_the_property_starts_at_18_00_and_can_be_cleared(conn):
-    assert [(j.name, j.time_property) for j in jobs.REGISTRY] == [(JOB, "currency.rate.fetch_time")]
+    assert [(j.name, j.time_property) for j in jobs.REGISTRY][:1] == [(JOB, "currency.rate.fetch_time")]
     assert sp.get_value(conn, "currency.rate.fetch_time") == "18:00"
     assert sp.set_property(op(conn), "currency.rate.fetch_time", "") is None
 
