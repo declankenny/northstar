@@ -11,7 +11,7 @@ import { fetchDeletedBalances, restoreDeletedBalance } from "./api";
 
 const USD = { code: "USD", name: "US Dollar", minor_units: 2 };
 const entry = (over: Partial<DeletedBalance> = {}): DeletedBalance => ({
-  id: 5, account_id: 1, account_name: "Joint savings", account_open: true, currency: USD, as_of_date: "2026-01-31", amount_cents: 1245000, note: "Statement total",
+  id: 5, entry_id: 41, account_id: 1, account_name: "Joint savings", account_open: true, currency: USD, as_of_date: "2026-01-31", amount_cents: 1245000, note: "Statement total",
   deleted_by: "Sam", deleted_on: "2026-11-12", purge_on: "2027-02-10", ...over,
 });
 const data = (balances: DeletedBalance[], over: Partial<Data> = {}): Data => ({ cleanup_on: true, retention_days: 90, balances, ...over });
@@ -78,7 +78,7 @@ describe("the Deleted balances page", () => {
     expect(within(dialog).getByText(/Statement total/)).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Restore balance" }));
     await waitFor(() => expect(window.location.pathname).toBe("/balances/5"));
-    expect(restoreDeletedBalance).toHaveBeenCalledWith(5);
+    expect(restoreDeletedBalance).toHaveBeenCalledWith(5, 41);       // the deletion that was shown
     expect(peekFlash()).toBe("The balance for Jan 31, 2026 was restored.");
   });
 
@@ -99,6 +99,17 @@ describe("the Deleted balances page", () => {
     expect(window.location.pathname).toBe("/deleted-balances");
     expect(peekFlash()).toBeNull();
     expect(vi.mocked(fetchDeletedBalances).mock.calls.length).toBeGreaterThan(1);      // read again
+  });
+
+  it("a balance that was changed since it was shown is refused in words, with Close only, and the list is read again", async () => {
+    vi.mocked(fetchDeletedBalances).mockResolvedValue(data([entry()]));
+    vi.mocked(restoreDeletedBalance).mockRejectedValue(new RequestError("This balance was changed by someone else since you opened it. Nothing was restored.", {}, 409));
+    render(<DeletedBalances />);
+    await open();
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Restore balance" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("changed by someone else");
+    expect(screen.queryByRole("button", { name: "Restore balance" })).toBeNull();
+    expect(vi.mocked(fetchDeletedBalances).mock.calls.length).toBeGreaterThan(1);
   });
 
   it("a closed account is refused in words, with Close only", async () => {

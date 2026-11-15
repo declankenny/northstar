@@ -17,7 +17,7 @@ function RestoreDialog({ entry, onRefused, onClose }: { entry: DeletedBalance; o
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const go = () => run(async () => {
     try {
-      const restored = await restoreDeletedBalance(entry.id);
+      const restored = await restoreDeletedBalance(entry.id, entry.entry_id);
       setFlash(`The balance for ${formatDate(restored.as_of_date)} was restored.`);
       navigate(balancePath(restored.id));
     } catch (e) {

@@ -20,6 +20,7 @@ class CurrencyOut(BaseModel):
 
 class DeletedBalanceOut(BaseModel):
     id: int
+    entry_id: int                  # the log entry of the deletion shown, sent back with the restore so that a different one is refused
     account_id: int
     account_name: str
     account_open: bool
@@ -38,6 +39,10 @@ class DeletedBalanceList(BaseModel):
     balances: list[DeletedBalanceOut]
 
 
+class RestoreIn(BaseModel):
+    entry_id: int                  # the list's `entry_id` for the balance, which the restore checks is still its latest deletion
+
+
 class RestoredOut(BaseModel):
     id: int
     account_id: int
@@ -50,8 +55,8 @@ def list_deleted(request: Request):
 
 
 @router.post("/{balance_id}/restore", response_model=RestoredOut)
-def restore(balance_id: int, request: Request):
+def restore(balance_id: int, body: RestoreIn, request: Request):
     def action(conn):
         op = operation(request, conn, "restore", {"table": "balances", "record_id": balance_id})
-        return deleted_balances.restore_balance(op, balance_id)
+        return deleted_balances.restore_balance(op, balance_id, body.entry_id)
     return run(request, action)

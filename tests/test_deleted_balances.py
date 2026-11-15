@@ -47,8 +47,16 @@ def listed(client):
     return response.json()
 
 
-def restore(client, balance_id):
-    return client.post(f"{URL}/{balance_id}/restore")
+def entry_of(client, balance_id):
+    """The log entry of the balance's latest deletion, as the list gives it to a page (0 when it has none)."""
+    with with_db(client) as conn:
+        row = conn.execute("SELECT MAX(id) FROM sys_record_changes WHERE tablename = 'balances' AND record_id = ? AND change = 'DELETE'",
+                           (balance_id,)).fetchone()
+    return row[0] or 0
+
+
+def restore(client, balance_id, entry_id=None):
+    return client.post(f"{URL}/{balance_id}/restore", json={"entry_id": entry_of(client, balance_id) if entry_id is None else entry_id})
 
 
 def live(client, balance_id):
@@ -251,9 +259,9 @@ def test_restoring_twice_refuses_the_second(client):
 
 def test_only_an_admin_can_list_or_restore_including_direct_requests(member_client, anon_client):
     assert member_client.get(URL).status_code == 403
-    assert member_client.post(f"{URL}/1/restore").status_code == 403
+    assert member_client.post(f"{URL}/1/restore", json={"entry_id": 1}).status_code == 403
     assert anon_client.get(URL).status_code == 401
-    assert anon_client.post(f"{URL}/1/restore").status_code == 401
+    assert anon_client.post(f"{URL}/1/restore", json={"entry_id": 1}).status_code == 401
 
 
 # -- backup and restore, and upgrading --
@@ -272,7 +280,7 @@ def test_a_deleted_balance_survives_a_backup_and_a_restore_and_can_be_restored_a
     with db.connect(tmp_path / "restored.db") as connection:             # the same people are in it: only a new session is needed
         again.cookies.set("northstar_session", sessions.create_session(connection, user_id(connection)))
     assert [b["id"] for b in again.get(URL).json()["balances"]] == [original]
-    assert again.post(f"{URL}/{original}/restore").status_code == 200
+    assert again.post(f"{URL}/{original}/restore", json={"entry_id": again.get(URL).json()["balances"][0]["entry_id"]}).status_code == 200
     assert again.get(URL).json()["balances"] == []
 
 
@@ -305,6 +313,79 @@ def test_a_balance_deleted_under_the_preceding_release_is_listed_and_restored_af
     client = sign_in(TestClient(create_app(path)))
     [entry] = client.get(URL).json()["balances"]
     assert (entry["id"], entry["as_of_date"], entry["amount_cents"], entry["note"]) == (gone, "2026-01-31", 100_000, "Statement")
-    assert client.post(f"{URL}/{gone}/restore").status_code == 200
+    assert client.post(f"{URL}/{gone}/restore", json={"entry_id": client.get(URL).json()["balances"][0]["entry_id"]}).status_code == 200
     with with_db(client) as conn:
         assert conn.execute("SELECT amount_cents, note FROM live_balances WHERE id = ?", (gone,)).fetchone()[0] == 100_000
+
+
+# -- the confirmation is of one deletion (review of #277) --
+
+def test_a_confirmation_that_is_stale_restores_nothing_when_the_balance_was_restored_changed_and_deleted_again(client):
+    acct = make(client, days=("2026-01-31",))
+    original = bid(client, acct, "2026-01-31")
+    delete(client, original)
+    shown = listed(client)["balances"][0]
+    assert shown["amount_cents"] == 100_000 and shown["note"] is None
+    with with_db(client) as conn:                  # someone else, meanwhile: restores, edits and deletes it again
+        restored = Operation(conn, user_id(conn), "restore")
+        writer.insert(restored, "balances", {"id": original, "account_id": acct, "as_of_date": "2026-01-31", "amount_cents": 100_000, "note": None})
+        writer.update(Operation(conn, user_id(conn), "ui_edit"), "balances", original, {"amount_cents": 35_000, "note": "Later correction"})
+        balances.delete_balance(Operation(conn, user_id(conn), "ui_edit"), original)
+        conn.commit()
+    before = row_count(client)
+    response = restore(client, original, entry_id=shown["entry_id"])
+    assert response.status_code == 409 and "changed by someone else" in response.json()["detail"]
+    assert row_count(client) == before and not live(client, original)
+    now = listed(client)["balances"][0]
+    assert now["entry_id"] != shown["entry_id"] and (now["amount_cents"], now["note"]) == (35_000, "Later correction")
+    assert restore(client, original, entry_id=now["entry_id"]).status_code == 200            # reviewed again, it restores
+
+
+def test_the_entry_sent_must_be_one_of_that_balance(client):
+    acct = make(client)
+    first, second = bid(client, acct, "2026-01-31"), bid(client, acct, "2026-02-28")
+    delete(client, first)
+    delete(client, second)
+    assert restore(client, first, entry_id=entry_of(client, second)).status_code == 409
+    assert restore(client, first, entry_id=0).status_code == 409
+
+
+def test_a_request_without_the_entry_is_refused(client):
+    acct = make(client, days=("2026-01-31",))
+    original = bid(client, acct, "2026-01-31")
+    delete(client, original)
+    assert client.post(f"{URL}/{original}/restore", json={}).status_code == 422
+
+
+# -- a balance from before the log keeps its baseline (review of #277) --
+
+def test_a_restored_balance_from_before_the_log_keeps_its_original_baseline_row_and_its_author(client):
+    acct = make(client, days=())
+    with with_db(client) as conn:
+        balances.record_balance(op(conn), acct, date(2026, 1, 31), 10_000)         # written by the system user
+        original = conn.execute("SELECT id FROM balances").fetchone()[0]
+        conn.execute("DELETE FROM sys_record_changes WHERE tablename = 'balances' AND record_id = ?", (original,))      # the log never saw it created
+        conn.execute("UPDATE balances SET created_at = '2026-01-31T09:00:00Z' WHERE id = ?", (original,))
+        writer.update(Operation(conn, user_id(conn), "ui_edit"), "balances", original, {"amount_cents": 20_000})
+        balances.delete_balance(Operation(conn, user_id(conn), "ui_edit"), original)
+        conn.commit()
+    assert restore(client, original).status_code == 200
+    rows = client.post("/api/lists/balance_history", json={"params": {"balance": original}}).json()["rows"]
+    assert [(r["amount_cents"]["value"], r["how"], r["is_current"]) for r in rows] == [(20_000, "Restored", 1), (20_000, "Manual edit", 0), (10_000, "Entered", 0)]
+    entered = rows[-1]
+    assert entered["changed_at"] == "2026-01-31T09:00:00Z" and entered["by_name"] != "Test User"       # as it was created, not as restored
+    with with_db(client) as conn:       # and it is not in the way of a second restore after a second deletion
+        balances.delete_balance(Operation(conn, user_id(conn), "ui_edit"), original)
+        conn.commit()
+    assert restore(client, original).status_code == 200
+    rows = client.post("/api/lists/balance_history", json={"params": {"balance": original}}).json()["rows"]
+    assert [r["how"] for r in rows].count("Entered") == 1 and rows[-1]["by_name"] != "Test User"
+
+
+def test_a_balance_the_log_saw_created_has_no_baseline_row_after_a_restore(client):
+    acct = make(client, days=("2026-01-31",))
+    original = bid(client, acct, "2026-01-31")
+    delete(client, original)
+    restore(client, original)
+    rows = client.post("/api/lists/balance_history", json={"params": {"balance": original}}).json()["rows"]
+    assert [r["how"] for r in rows] == ["Restored", "Manual edit"]

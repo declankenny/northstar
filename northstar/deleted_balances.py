@@ -26,6 +26,11 @@ _LATEST_DELETE = (
     "AND NOT EXISTS (SELECT 1 FROM balances b WHERE b.id = rc.record_id) ")
 
 
+class Changed(ValidationError):
+    """The balance is not the deletion the person was shown: it was restored, changed and deleted again since the list was drawn, so what
+    was confirmed is not what would come back. Nothing was written, and the list shows the balance as it is now."""
+
+
 class DateTaken(ValidationError):
     """A live balance has the date now, so restoring would replace it. Nothing was written. `existing` is that balance, for a link to it."""
 
@@ -43,7 +48,7 @@ def list_deleted(conn: sqlite3.Connection) -> dict:
     run that will remove it for good (None when the cleanup is switched off). All of them: a recovery list is not cut off."""
     days, start, zone = deleted_accounts.schedule(conn)
     rows = conn.execute(
-        f"SELECT rc.record_id, rc.old_json, o.created_at, u.display_name AS by_name {_LATEST_DELETE} ORDER BY o.created_at DESC, rc.id DESC").fetchall()
+        f"SELECT rc.id AS entry_id, rc.record_id, rc.old_json, o.created_at, u.display_name AS by_name {_LATEST_DELETE} ORDER BY o.created_at DESC, rc.id DESC").fetchall()
     out = []
     for row in rows:
         values = json.loads(row["old_json"])
@@ -53,7 +58,7 @@ def list_deleted(conn: sqlite3.Connection) -> dict:
         if account is None:
             continue                                    # its account is deleted (or gone): the account's own restore brings it back
         out.append({
-            "id": row["record_id"], "account_id": account["id"], "account_name": account["name"], "account_open": bool(account["is_open"]),
+            "id": row["record_id"], "entry_id": row["entry_id"], "account_id": account["id"], "account_name": account["name"], "account_open": bool(account["is_open"]),
             "currency": {"code": account["code"], "name": account["currency_name"], "minor_units": account["minor_units"]},
             "as_of_date": values["as_of_date"], "amount_cents": values["amount_cents"], "note": values.get("note"),
             "deleted_by": row["by_name"], "deleted_on": row["created_at"][:10],
@@ -61,16 +66,20 @@ def list_deleted(conn: sqlite3.Connection) -> dict:
     return {"cleanup_on": start is not None, "retention_days": days, "balances": out}
 
 
-def restore_balance(op: Operation, balance_id: int) -> dict:
-    """Put a deleted balance back as it was, under its own id, with its amount, note and source. Rechecked here, in the transaction: the
-    balance is still deleted, its account is live and open, and no live balance has its date (that one is never replaced: DateTaken, with the
+def restore_balance(op: Operation, balance_id: int, entry_id: int) -> dict:
+    """Put a deleted balance back as it was, under its own id, with its amount, note and source. `entry_id` is the log entry of the deletion
+    the person was shown (the list's `entry_id`). Rechecked here, in the transaction: the balance is still deleted, and by that very entry (if it
+    was restored, changed and deleted again meanwhile it is another deletion with other contents: Changed, and nothing is written), its account
+    is live and open, and no live balance has its date (that one is never replaced: DateTaken, with the
     balance in the way). Anything refused writes nothing. The row's author and time are the restore's, and the log keeps the original entries.
     Returns {"id", "account_id", "as_of_date"}."""
     conn = op.conn
     with db.write_transaction(conn):
-        row = conn.execute(f"SELECT rc.old_json {_LATEST_DELETE} AND rc.record_id = ?", (balance_id,)).fetchone()
+        row = conn.execute(f"SELECT rc.id AS entry_id, rc.old_json {_LATEST_DELETE} AND rc.record_id = ?", (balance_id,)).fetchone()
         if row is None:
             raise NotFoundError("That balance is not deleted any more. It may already have been restored or permanently deleted.")
+        if row["entry_id"] != entry_id:
+            raise Changed("This balance was changed by someone else since you opened it. Nothing was restored. Review it again before restoring it.")
         values = {name: value for name, value in json.loads(row["old_json"]).items() if name not in (*writer.AUDIT_COLUMNS, "id")}
         account = conn.execute("SELECT id, name, is_open FROM live_accounts WHERE id = ?", (values["account_id"],)).fetchone()
         if account is None:

@@ -273,7 +273,7 @@ export async function restoreAccount(id: number, name?: string): Promise<{ id: n
 
 /** One row of the admin Deleted balances page. The dates are UTC dates except `as_of_date`, the balance's own; the amount is in the account's currency. */
 export type DeletedBalance = {
-  id: number; account_id: number; account_name: string; account_open: boolean; currency: Currency; as_of_date: string; amount_cents: number;
+  id: number; entry_id: number; account_id: number; account_name: string; account_open: boolean; currency: Currency; as_of_date: string; amount_cents: number;
   note: string | null; deleted_by: string; deleted_on: string; purge_on: string | null;
 };
 export type DeletedBalances = { cleanup_on: boolean; retention_days: number; balances: DeletedBalance[] };
@@ -282,9 +282,10 @@ export async function fetchDeletedBalances(signal?: AbortSignal): Promise<Delete
   return (await send<DeletedBalances>("GET", "/api/deleted-balances", undefined, signal))!;
 }
 
-/** Put a deleted balance back under its own id. A refusal is a RequestError: 409 with `existing` when its date has a balance now. */
-export async function restoreDeletedBalance(id: number): Promise<{ id: number; account_id: number; as_of_date: string }> {
-  return (await send<{ id: number; account_id: number; as_of_date: string }>("POST", `/api/deleted-balances/${id}/restore`, {}))!;
+/** Put a deleted balance back under its own id. `entryId` is the list's `entry_id`, the deletion that was shown: the server refuses (409) a balance that
+ *  was restored, changed and deleted again since. A refusal is a RequestError, with `existing` when its date has a balance now. */
+export async function restoreDeletedBalance(id: number, entryId: number): Promise<{ id: number; account_id: number; as_of_date: string }> {
+  return (await send<{ id: number; account_id: number; as_of_date: string }>("POST", `/api/deleted-balances/${id}/restore`, { entry_id: entryId }))!;
 }
 
 export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean; locale?: string }): Promise<UserRow> {

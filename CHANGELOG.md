@@ -25,6 +25,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 - Migration: `0029_balance_history` adds a view of the change log for each balance's history. It reads the log and the balances, so it can only be created after them and no data changes. A checked backup is made first.
 - Migration: `0030_restore_balance_value` adds the operation kind `restore` and makes the history view again with a column that says which rows can be restored. No data changes. A checked backup is made first.
 - Migration: `0031_deleted_data_retention` adds the operation kind `purge` and two system properties, `data.deleted.retention_days` (90) and `data.deleted.cleanup_time` (03:00). No data changes, but **the first cleanup run after the upgrade permanently removes every account, and every balance deleted on its own, that was deleted more than 90 days ago**, and its history, unless you change the settings first. A checked backup is made first, and backups keep what they held.
+- Migration: `0032_restored_balance_history` makes the history view again so that a balance from before the log keeps its first "Entered" row, with its original author and date, after it is restored from Deleted balances. No data changes. A checked backup is made first.
 - Environment variables: nothing.
 - Backup format: nothing. A backup taken before the upgrade restores under the old version and upgrades again.
 
