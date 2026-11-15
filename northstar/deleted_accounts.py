@@ -7,7 +7,7 @@ Nothing writes to a deleted account's row, so its `updated_at` is when it was de
 """
 
 import sqlite3
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import datetime, time, timedelta, timezone, tzinfo
 
 from northstar import accounts, db, retention, scheduler, system_properties, writer
 from northstar.errors import NotFoundError
@@ -19,13 +19,13 @@ _STAMP = "%Y-%m-%dT%H:%M:%SZ"
 def _purge_date(deleted_at: str, days: int, start: str, zone: tzinfo) -> str | None:
     """The date, in the installation's zone, of the first scheduled run of the cleanup that finds an account deleted at `deleted_at` past its
     period, or None when a period that long is beyond a date. The period runs out at one moment, and the cleanup runs once a date from its
-    start time (`start`, "HH:MM", as the scheduler reads it), so the run is on the date of that moment when it falls before the start time,
-    and on the next date when it falls at or after it. A run that was missed is made up on the date it was missed, which is this date."""
+    start time (`start`, "HH:MM", as the scheduler reads it), so the run is on the date of that moment when it falls at or before the start time
+    (an account is eligible from the moment its period ends, which the cleanup tests with <=), and on the next date when it falls after it. A run that was missed is made up on the date it was missed, which is this date."""
     try:
         expires = (datetime.strptime(deleted_at, _STAMP).replace(tzinfo=timezone.utc) + timedelta(days=days)).astimezone(zone)
     except (OverflowError, ValueError):
         return None
-    day = expires.date() if expires.strftime("%H:%M") < start else expires.date() + timedelta(days=1)
+    day = expires.date() if expires.time().replace(tzinfo=None) <= time.fromisoformat(start) else expires.date() + timedelta(days=1)
     return day.isoformat()
 
 

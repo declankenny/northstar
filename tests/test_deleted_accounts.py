@@ -89,6 +89,11 @@ def test_a_period_that_ends_before_the_start_time_is_removed_by_that_days_run(cl
     assert purge_on(client, "2026-08-17T01:00:00Z") == "2026-11-15"
 
 
+def test_a_period_that_ends_exactly_at_the_start_time_is_removed_by_that_days_run(client):
+    assert purge_on(client, "2026-08-17T03:00:00Z") == "2026-11-15"
+    assert purge_on(client, "2026-08-17T03:00:01Z") == "2026-11-16"
+
+
 def test_the_start_time_is_read_in_the_installations_zone(client):
     # The period ends at 06:00 UTC on November 15: after the 03:00 run in UTC (so the 16th), but 01:00 in New York in November, before it (so the 15th).
     assert purge_on(client, "2026-08-17T06:00:00Z", zone="America/New_York") == "2026-11-15"
