@@ -36,6 +36,7 @@ VERSION = "version"
 # Tables whose rows are never removed: they are marked deleted instead. Their balances and history are kept, and the
 # cascade from a balance to its account would otherwise erase them quietly.
 SOFT_DELETED = frozenset({"accounts", "users"})
+PURGEABLE = frozenset({"accounts", "balances"})   # what the cleanup removes for good (see purge)
 # A table the application writes for itself (sign-in sessions, failed-login tracking, the change log) is prefixed sys_.
 # It holds no household data, has no audit columns, and a write to it needs no operation.
 # A table loaded by a migration and never written at run time (the lists a setting is checked against) is prefixed ref_.
@@ -212,6 +213,56 @@ def delete(op: Operation, table: str, record_id: int) -> None:
         operation_id = _operation_id(op)
         op.conn.execute(f"DELETE FROM {table} WHERE id = ?", (record_id,))
         _record(op, operation_id, table, record_id, "DELETE", {name: current[name] for name in logged}, None)
+
+
+def purge(op: Operation, table: str, record_id: int) -> int:
+    """Remove a deleted account or balance for good: its row (an account's balances with it) and every logged change to it, so that the
+    values it held are in the log no longer. This is the one place that removes log rows, and only for a record that is already gone from
+    view; the caller (the cleanup, northstar/retention.py) has checked in this transaction that it is eligible. A header left with no
+    record changes, and that no undo names, goes too, so an import's header stays until none of its records remain. The operation
+    itself is one header of kind `purge`, whose detail the caller writes (which record, never what was in it). Returns how many log rows went."""
+    if table not in PURGEABLE:
+        raise ValueError(f"{table} are not purged.")
+    with db.write_transaction(op.conn):
+        conn = op.conn
+        records = [(table, record_id)]
+        if table == "accounts":
+            ids = {row[0] for row in conn.execute("SELECT id FROM balances WHERE account_id = ?", (record_id,))}
+            for column in ("new_json", "old_json"):
+                ids.update(row[0] for row in conn.execute(
+                    f"SELECT record_id FROM sys_record_changes WHERE tablename = 'balances' AND json_extract({column}, '$.account_id') = ?",
+                    (record_id,)))
+            records += [("balances", balance_id) for balance_id in sorted(ids)]
+        touched: set[int] = set()
+        removed = 0
+        for name, rid in records:
+            touched.update(row[0] for row in conn.execute(
+                "SELECT operation_id FROM sys_record_changes WHERE tablename = ? AND record_id = ?", (name, rid)))
+            removed += conn.execute("DELETE FROM sys_record_changes WHERE tablename = ? AND record_id = ?", (name, rid)).rowcount
+        for _, rid in records[1:]:
+            conn.execute("DELETE FROM balances WHERE id = ?", (rid,))
+        if table == "balances":
+            conn.execute("DELETE FROM balances WHERE id = ?", (record_id,))
+        else:
+            conn.execute("DELETE FROM accounts WHERE id = ?", (record_id,))
+        # Headers go until none more qualifies: an undo's header goes first when its records are gone, and the import it names then can.
+        pending = set(touched)
+        while True:
+            gone = {operation_id for operation_id in pending if conn.execute(
+                "DELETE FROM sys_operations WHERE id = ? AND NOT EXISTS (SELECT 1 FROM sys_record_changes WHERE operation_id = ?) "
+                "AND NOT EXISTS (SELECT 1 FROM sys_operations WHERE undoes_operation_id = ?)",
+                (operation_id, operation_id, operation_id)).rowcount}
+            if not gone:
+                break
+            pending -= gone
+        # An import that keeps a record after some were purged can no longer be undone as a whole, so the purge header names it (an id,
+        # nothing of what was in it) and the undo refuses.
+        partial = sorted(row[0] for row in conn.execute(
+            f"SELECT id FROM sys_operations WHERE kind = 'import' AND id IN ({','.join('?' * len(pending))})", sorted(pending))) if pending else []
+        if partial and op.detail is not None:
+            op.detail["imports"] = partial
+        _operation_id(op)
+        return removed
 
 
 def sys_insert(conn: sqlite3.Connection, table: str, values: dict) -> int:

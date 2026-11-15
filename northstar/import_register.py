@@ -139,6 +139,9 @@ def undo_plan(conn: sqlite3.Connection, import_id: int) -> UndoPlan:
             raise UndoBlocked(f"{account['name']} is closed, and a closed account takes no changes. Reopen it, then try Undo again.",
                               "account_closed")
     blocked, delete, restore = [], [], []
+    if conn.execute("SELECT 1 FROM sys_operations p, json_each(p.detail, '$.imports') j WHERE p.kind = 'purge' AND j.value = ?",
+                    (import_id,)).fetchone():
+        blocked.append({"date": "an unknown date", "why": "Deleted since the import, and removed for good"})
     for change in changes:
         if change["found"] is None:
             blocked.append({"date": _date_of(conn, change["record_id"]), "why": "Deleted since the import"})

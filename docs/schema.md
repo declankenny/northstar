@@ -228,7 +228,7 @@ erDiagram
         text detail "short, optional"
     }
     sys_operation_kinds {
-        text kind PK "ui_edit, bulk_update, import, undo, restore, cli, scheduled or oidc"
+        text kind PK "ui_edit, bulk_update, import, undo, restore, purge, cli, scheduled or oidc"
     }
     sys_operations {
         integer id PK "also the version it writes onto balances"
