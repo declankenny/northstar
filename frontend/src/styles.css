@@ -687,3 +687,7 @@ button.btn.ghost.danger-text { color: var(--neg); }
 nav.chart-crumbs { background: none; border: 0; padding: 0; display: flex; flex-direction: row; overflow: visible; }
 .rp-card .chart-crumbs { font-size: 15px; }
 .rp-card .chart-crumbs [aria-current] { font-size: 16px; font-weight: 650; }
+
+/* the account filter above a plain recovery table (Deleted balances) */
+.filter { margin: 0 0 12px; }
+.filter select { margin-left: 4px; }

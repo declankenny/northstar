@@ -72,13 +72,14 @@ export function DeletedAccounts() {
         <div className="panel tablepanel">
           <table>
             <thead>
-              <tr><th>Account</th><th>Type</th><th>Deleted</th><th>Permanently deleted on</th><th></th></tr>
+              <tr><th>Account</th><th>Type</th><th>Deleted by</th><th>Deleted</th><th>Permanently deleted on</th><th></th></tr>
             </thead>
             <tbody>
               {data.accounts.map((entry) => (
                 <tr key={entry.id}>
                   <td>{entry.name}{!entry.is_open && <> <span className="badge">Closed</span></>}</td>
                   <td>{entry.type_name}</td>
+                  <td>{entry.deleted_by ?? "Unknown"}</td>
                   <td className="num">{formatDate(entry.deleted_on)}</td>
                   <td className="num">{entry.purge_on === null ? "Not scheduled" : formatDate(entry.purge_on)}</td>
                   <td><button className="btn ghost small" onClick={() => setRestoring(entry)}>Restore account&hellip;</button></td>

@@ -146,8 +146,9 @@ export class RequestError extends Error {
   refusal: Omit<UndoRefusal, "refused"> | null; // why an import cannot be undone (409)
   conflicts: Conflict[]; // the balances that changed since the person opened them (409)
   localeChanged: { tag: string; label: string } | null; // the number and date format the person now has, when theirs changed since the page loaded (409)
+  existing: { balance_id: number; amount_cents: number } | null; // the balance in the way, when a deleted balance's date has one now (409)
   constructor(message: string, errors: Record<string, string> = {}, status = 0, dates: string[] = [], refusal: RequestError["refusal"] = null,
-    conflicts: Conflict[] = [], localeChanged: RequestError["localeChanged"] = null) {
+    conflicts: Conflict[] = [], localeChanged: RequestError["localeChanged"] = null, existing: RequestError["existing"] = null) {
     super(message);
     this.errors = errors;
     this.status = status;
@@ -155,6 +156,7 @@ export class RequestError extends Error {
     this.refusal = refusal;
     this.conflicts = conflicts;
     this.localeChanged = localeChanged;
+    this.existing = existing;
   }
 }
 
@@ -178,7 +180,8 @@ async function send<T>(method: string, url: string, body: unknown, signal?: Abor
       typeof answer?.reason === "string" && Array.isArray(answer.blocked)
         ? { message: String(detail), reason: answer.reason, blocked: answer.blocked, more: answer.more ?? 0 } : null,
       Array.isArray(answer?.conflicts) ? answer.conflicts : [],
-      typeof answer?.locale_changed?.tag === "string" ? { tag: answer.locale_changed.tag, label: String(answer.locale_changed.label) } : null);
+      typeof answer?.locale_changed?.tag === "string" ? { tag: answer.locale_changed.tag, label: String(answer.locale_changed.label) } : null,
+      typeof answer?.existing?.balance_id === "number" ? answer.existing : null);
   }
   return response.status === 204 ? null : response.json();
 }
@@ -255,7 +258,7 @@ export function undoImport(importId: number): Promise<UndoDone | UndoRefusal> {
 
 /** One row of the admin Deleted accounts page. The dates are UTC dates. `purge_on` is null when the cleanup is switched off. */
 export type DeletedAccount = {
-  id: number; name: string; type_name: string; is_open: boolean; deleted_on: string; purge_on: string | null; balance_count: number; name_taken: boolean;
+  id: number; name: string; type_name: string; is_open: boolean; deleted_by: string | null; deleted_on: string; purge_on: string | null; balance_count: number; name_taken: boolean;
 };
 export type DeletedAccounts = { cleanup_on: boolean; retention_days: number; accounts: DeletedAccount[] };
 
@@ -266,6 +269,23 @@ export async function fetchDeletedAccounts(signal?: AbortSignal): Promise<Delete
 /** Bring a deleted account back, under a new name when the old one is in use. A refusal (the name, or it is no longer deleted) is an Error. */
 export async function restoreAccount(id: number, name?: string): Promise<{ id: number; name: string; balance_count: number }> {
   return (await send<{ id: number; name: string; balance_count: number }>("POST", `/api/deleted-accounts/${id}/restore`, name === undefined ? {} : { name }))!;
+}
+
+/** One row of the admin Deleted balances page. The dates are UTC dates except `as_of_date`, the balance's own; the amount is in the account's currency. */
+export type DeletedBalance = {
+  id: number; entry_id: number; account_id: number; account_name: string; account_open: boolean; currency: Currency; as_of_date: string; amount_cents: number;
+  note: string | null; deleted_by: string; deleted_on: string; purge_on: string | null;
+};
+export type DeletedBalances = { cleanup_on: boolean; retention_days: number; balances: DeletedBalance[] };
+
+export async function fetchDeletedBalances(signal?: AbortSignal): Promise<DeletedBalances> {
+  return (await send<DeletedBalances>("GET", "/api/deleted-balances", undefined, signal))!;
+}
+
+/** Put a deleted balance back under its own id. `entryId` is the list's `entry_id`, the deletion that was shown: the server refuses (409) a balance that
+ *  was restored, changed and deleted again since. A refusal is a RequestError, with `existing` when its date has a balance now. */
+export async function restoreDeletedBalance(id: number, entryId: number): Promise<{ id: number; account_id: number; as_of_date: string }> {
+  return (await send<{ id: number; account_id: number; as_of_date: string }>("POST", `/api/deleted-balances/${id}/restore`, { entry_id: entryId }))!;
 }
 
 export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean; locale?: string }): Promise<UserRow> {

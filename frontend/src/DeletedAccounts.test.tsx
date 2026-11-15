@@ -10,7 +10,7 @@ vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api"
 import { fetchDeletedAccounts, restoreAccount } from "./api";
 
 const entry = (over: Partial<DeletedAccount> = {}): DeletedAccount => ({
-  id: 7, name: "Old joint savings", type_name: "Savings", is_open: true, deleted_on: "2026-11-02", purge_on: "2027-01-31", balance_count: 12, name_taken: false, ...over,
+  id: 7, name: "Old joint savings", type_name: "Savings", is_open: true, deleted_by: "Sam", deleted_on: "2026-11-02", purge_on: "2027-01-31", balance_count: 12, name_taken: false, ...over,
 });
 const data = (accounts: DeletedAccount[], over: Partial<Data> = {}): Data => ({ cleanup_on: true, retention_days: 90, accounts, ...over });
 
@@ -26,8 +26,8 @@ describe("the Deleted accounts page", () => {
     vi.mocked(fetchDeletedAccounts).mockResolvedValue(data([entry()]));
     render(<DeletedAccounts />);
     const row = (await screen.findByText("Old joint savings")).closest("tr") as HTMLElement;
-    expect(within(row).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["Old joint savings", "Savings", "Nov 2, 2026", "Jan 31, 2027", "Restore account…"]);
-    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Account", "Type", "Deleted", "Permanently deleted on", ""]);
+    expect(within(row).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["Old joint savings", "Savings", "Sam", "Nov 2, 2026", "Jan 31, 2027", "Restore account…"]);
+    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Account", "Type", "Deleted by", "Deleted", "Permanently deleted on", ""]);
   });
 
   it("marks a closed account", async () => {
