@@ -12,6 +12,7 @@ describe("routeFromPath", () => {
     expect(routeFromPath("/types")).toBe("types");
     expect(routeFromPath("/users")).toBe("users");
     expect(routeFromPath("/imports")).toBe("imports");
+    expect(routeFromPath("/deleted-accounts")).toBe("deleted");
     expect(routeFromPath("/system-properties")).toBe("properties");
     expect(routeFromPath("/currencies")).toBe("currencies");
     expect(routeFromPath("/profile")).toBe("profile");

@@ -12,6 +12,7 @@ import { NetWorthChart } from "./NetWorthChart";
 import { PERIOD, RANGES, type Range, rangeStart } from "./ranges";
 import { Link, navigate } from "./router";
 import { importPath, PATHS } from "./routes";
+import { clearFlash, peekFlash } from "./flash";
 import { WHEN } from "./Tile";
 import { useRequest } from "./useRequest";
 import { formatInteger } from "./locale";
@@ -48,6 +49,8 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const [failure, setFailure] = useState<string | null>(null); // a change that was refused (reopening)
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [menu, setMenu] = useState(false);
+  const [flash] = useState(peekFlash);                       // a notice left by the page that sent the person here
+  useEffect(() => clearFlash(), []);
   const [historyKey, setHistoryKey] = useState(0);              // raised when the account's balances change, so the history reads again
 
   // An answer for an account that is no longer the one in the address is ignored, and the old account is not shown meanwhile.
@@ -99,6 +102,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   return (
     <div className="acct">
       <div className="crumb"><Link to={PATHS.accounts}>Accounts</Link> / {account.name}</div>
+      {flash && <p className="notice ok" role="status">{flash}</p>}
       <div className="top">
         <div>
           <div className="titlerow">
