@@ -318,6 +318,8 @@ export type AccountPage = {
   type_name: string;
   is_open: boolean;
   notes: string | null;
+  website: string | null;          // the cleaned address, or none
+  website_removed: string[];      // what saving cleaned out of it ("login", "query", "fragment"); only an edit's answer has any
   stale_after_days: number;
   balance_count: number;
   earliest_date: string | null;
@@ -337,7 +339,7 @@ export async function fetchAccount(id: number, signal?: AbortSignal): Promise<Ac
   return (await send<AccountPage>("GET", `/api/accounts/${id}`, undefined, signal))!;
 }
 
-export async function editAccount(id: number, change: { name: string; type_id: number; notes: string }): Promise<AccountPage> {
+export async function editAccount(id: number, change: { name: string; type_id: number; notes: string; website: string }): Promise<AccountPage> {
   return (await send<AccountPage>("PATCH", `/api/accounts/${id}`, change))!;
 }
 

@@ -48,6 +48,8 @@ class AccountOut(BaseModel):
     type_name: str
     is_open: bool
     notes: str | None
+    website: str | None      # the cleaned address (see accounts.clean_website), or none
+    website_removed: list[str] = []   # what saving cleaned out of it ("login", "query", "fragment"); only an edit's answer has any
     stale_after_days: int
     balance_count: int
     earliest_date: str | None
@@ -93,6 +95,7 @@ class AccountChange(BaseModel):
     name: str
     type_id: int
     notes: str | None = None
+    website: str | None = None       # blank or null clears it; leaving it out leaves it as it is
 
 
 class ClassChange(BaseModel):
@@ -156,8 +159,9 @@ def export_balances(account_id: int, request: Request):
 @router.patch("/accounts/{account_id}", response_model=AccountOut)
 def edit_account(account_id: int, body: AccountChange, request: Request):
     def action(conn):
-        accounts.update_account(operation(request, conn), account_id, body.name, body.type_id, body.notes)
-        return _page(conn, account_id)
+        website = body.website if "website" in body.model_fields_set else accounts.UNCHANGED
+        removed = accounts.update_account(operation(request, conn), account_id, body.name, body.type_id, body.notes, website)
+        return {**_page(conn, account_id), "website_removed": removed}
     return run(request, action)
 
 

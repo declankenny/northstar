@@ -81,13 +81,15 @@ def test_existing_northstar_csv_is_read_as_plain_decimal_in_any_locale(client, l
     assert client.post(url(account, "review"), json={**body, "number_format": "1.234,56"}).status_code == 422
 
 
-def test_an_import_before_currency_migration_can_still_be_undone(tmp_path, v02_migrations):
-    from northstar import balance_import
+def test_an_import_before_currency_migration_can_still_be_undone(tmp_path, v02_migrations, monkeypatch):
+    from northstar import accounts, balance_import
     path = v02_database(tmp_path, v02_migrations)
     conn = db.connect(path)
     rows = [csvparse.ParsedRow(2, date(2026, 2, 28), 12345, None)]
-    plan = balance_import.plan_import(conn, 1, rows)
-    balance_import.commit_import(conn, None, 1, rows, "skip", plan.reviewed)
+    with monkeypatch.context() as before:           # the old release's account query: its table has no `website` yet
+        before.setattr(accounts, "_SELECT", accounts._SELECT.replace("a.website, ", ""))
+        plan = balance_import.plan_import(conn, 1, rows)
+        balance_import.commit_import(conn, None, 1, rows, "skip", plan.reviewed)
     operation = conn.execute("SELECT id FROM sys_operations WHERE kind = 'import'").fetchone()[0]
     # Old operations have no number-format metadata and may contain a Currency mapping.
     conn.execute("UPDATE sys_operations SET detail = ? WHERE id = ?",

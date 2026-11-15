@@ -284,7 +284,7 @@ def test_a_deleted_balance_survives_a_backup_and_a_restore_and_can_be_restored_a
     assert again.get(URL).json()["balances"] == []
 
 
-def test_a_balance_deleted_under_the_preceding_release_is_listed_and_restored_after_the_upgrade(tmp_path):
+def test_a_balance_deleted_under_the_preceding_release_is_listed_and_restored_after_the_upgrade(tmp_path, monkeypatch):
     """Migrations 0029 onward are this release's. A database as the last migration of 0.6.0 left it, with a balance deleted (logged by the writer of
     that schema), is upgraded and the balance is then listed and restored."""
     import shutil
@@ -302,10 +302,13 @@ def test_a_balance_deleted_under_the_preceding_release_is_listed_and_restored_af
     conn = db.connect(path)
     use_dollars(conn)
     account_id = add_account(conn, "Test upgrade", ASSET, "Savings")
-    for day, cents in (("2026-01-31", 100_000), ("2026-02-28", 120_000)):
-        balances.record_balance(op(conn), account_id, date.fromisoformat(day), cents, "Statement")
-    gone = conn.execute("SELECT id FROM balances WHERE as_of_date = '2026-01-31'").fetchone()[0]
-    balances.delete_balance(op(conn), gone)
+    from northstar import accounts
+    with monkeypatch.context() as before:           # the previous release's account query: its table has no `website` yet
+        before.setattr(accounts, "_SELECT", accounts._SELECT.replace("a.website, ", ""))
+        for day, cents in (("2026-01-31", 100_000), ("2026-02-28", 120_000)):
+            balances.record_balance(op(conn), account_id, date.fromisoformat(day), cents, "Statement")
+        gone = conn.execute("SELECT id FROM balances WHERE as_of_date = '2026-01-31'").fetchone()[0]
+        balances.delete_balance(op(conn), gone)
     conn.commit()
     conn.close()
 

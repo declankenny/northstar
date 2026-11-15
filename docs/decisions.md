@@ -855,3 +855,16 @@ An admin can bring back a balance that was deleted on its own, from a Deleted ba
 - **Deleted by on Deleted accounts too (Declan's request).** The account's deleting operation is the latest UPDATE of `deleted` to 1 in the log. An account deleted with no entry in the log (before the log, if any) shows "Unknown".
 - **The permanent-deletion date** is the one Deleted accounts uses (the first cleanup run after the period ends, in the installation's zone), through the same function.
 
+
+### A website on an account (#266, v0.7)
+
+An account can have a website, so its page can open the bank's own site. Agreed from a mockup (outside the repo) on the issue.
+
+- **The address is cleaned, not warned about.** A sign-in or session address often carries a token in its user name, query string or fragment, so the one rule (`accounts.clean_website`) removes those and stores the rest, and the page says after saving what was removed. A hint beside the field was tried in the mockup and dropped: the notice after saving says it when it matters, and a person who types a clean address never sees one. A legitimate link that needs a query string loses it, which is the price of never keeping a token. A token in the path cannot be told from a path, so this reduces the risk and does not remove it.
+- **Cleaned before it reaches the writer.** The change log records what the writer is given, so cleaning first is what keeps a removed credential out of it. A test saves an address with a user name, password, query and fragment and searches the log and the operation headers for them.
+- **The order of the rule** is trim, blank clears, length (2,048, on the trimmed input so the work is bounded), parse, clean. Cleaning only shortens an address, so the stored value always fits, and a `CHECK` keeps the column to the same length. Only `http` and `https` are accepted: `javascript:` and other schemes can never be saved.
+- **Leaving it out is not clearing it.** The edit API treats a missing `website` as "unchanged" and `null` or blank as "clear", so a script that edits only the notes cannot wipe it. The form always sends it.
+- **Plain `ADD COLUMN`.** `live_accounts` and `account_summaries` read `accounts.*`, so they carry the column without being made again (migration `0033_account_website`, tested from a database as 0032 left it).
+- **Shown on the page and as a list column, hidden by default.** The page is where a person acts on it; a website column adds little to comparing accounts, so it is offered and not shown. It is only set in the Edit account dialog, not when an account is added.
+- **The link's accessible name starts with the text on screen** (host first, then "Open <account>'s website (opens in a new tab)"), so voice control and screen readers match what is seen. A list that has no Name column says "the account's" instead.
+- **Not done:** a favicon or any request to the site (nothing leaves the household), checking that the address answers, and a field on the Add account dialog.

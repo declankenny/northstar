@@ -64,6 +64,7 @@ erDiagram
         integer created_by FK "who created it"
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
+        text website "optional, a cleaned http or https address (added last, by migration 0033)"
     }
     currencies {
         integer id PK

@@ -16,7 +16,7 @@ import { goBack } from "./router";
 
 const EUR = { code: "EUR", name: "Euro", minor_units: 2 };
 const account = (over: Partial<AccountPage> = {}): AccountPage => ({
-  id: 3, name: "Test euros", currency: EUR, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
+  id: 3, name: "Test euros", currency: EUR, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, website: null, website_removed: [], stale_after_days: 30,
   balance_count: 3, earliest_date: "2026-02-01", last_date: "2026-04-20", last_cents: 30000, days_since: 10, stale: false,
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-06-03", ...over,
 });

@@ -9,7 +9,7 @@ vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api"
 import { downloadExport, fetchAccount } from "./api";
 
 const page = (over: Partial<Account> = {}): Account => ({
-  id: 7, name: "Demo Savings", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, stale_after_days: 30,
+  id: 7, name: "Demo Savings", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, website: null, website_removed: [], stale_after_days: 30,
   balance_count: 0, earliest_date: null, last_date: null, last_cents: null, days_since: null, stale: false,
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30", ...over,
 });

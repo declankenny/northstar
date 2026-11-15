@@ -49,21 +49,22 @@ export function BalanceDialog(props: {
   );
 }
 
-/** Name, type (within the account's class) and notes. The class has its own dialog. */
+/** Name, type (within the account's class), website and notes. The class has its own dialog. */
 export function EditAccountDialog(props: {
   account: AccountPage;
-  onSave: (change: { name: string; type_id: number; notes: string }) => Promise<void>;
+  onSave: (change: { name: string; type_id: number; notes: string; website: string }) => Promise<void>;
   onClose: () => void;
 }) {
   const { account } = props;
   const [name, setName] = useState(account.name);
   const [typeId, setTypeId] = useState(account.type_id);
   const [notes, setNotes] = useState(account.notes ?? "");
+  const [website, setWebsite] = useState(account.website ?? "");
   const { busy, error, run } = useAction();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    run(() => props.onSave({ name, type_id: typeId, notes }));
+    run(() => props.onSave({ name, type_id: typeId, notes, website }));
   };
 
   return (
@@ -76,6 +77,9 @@ export function EditAccountDialog(props: {
           <select value={typeId} onChange={(e) => setTypeId(Number(e.target.value))}>
             {account.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
+        </label>
+        <label>Website (optional)
+          <input value={website} inputMode="url" autoComplete="off" onChange={(e) => setWebsite(e.target.value)} />
         </label>
         <label>Notes (optional)
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { addAccount, fetchAccountOptions } from "./api";
 import { AddAccountDialog } from "./AccountDialogs";
 import { ListView } from "./ListView";
+import { siteName, websiteLabel } from "./website";
 import { useRequest } from "./useRequest";
 
 /** Every account, as a list of the framework: the columns, the sort and the shared "Open accounts" filter are data on the server, so
@@ -41,7 +42,16 @@ export function AccountsList({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       <ListView listKey="accounts" refreshKey={refreshKey}
-        config={{ title: "Accounts", isAdmin, emptyText: "There are no accounts yet. Use Add account to create one." }} />
+        config={{
+          title: "Accounts", isAdmin, emptyText: "There are no accounts yet. Use Add account to create one.",
+          cell: {
+            // The site's name, as a link that opens in a new tab. The account's name is read from the row when the person has that column.
+            website: (row) => typeof row.website === "string" ? (
+              <a href={row.website} target="_blank" rel="noopener noreferrer"
+                aria-label={websiteLabel(row.website, typeof row.name === "string" ? row.name : undefined)}>{siteName(row.website)}</a>
+            ) : <span className="m">—</span>,
+          },
+        }} />
 
       {adding && options && (
         <AddAccountDialog options={options} isAdmin={isAdmin} accountClass={adding} onClose={() => setAdding(null)}
