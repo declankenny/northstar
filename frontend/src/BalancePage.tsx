@@ -59,6 +59,8 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   const [historyKey, setHistoryKey] = useState(0);                    // raised when the balance changes, so its history reads again
   const { busy, error, conflict, run, clear } = useAction();
   const dirty = amount !== base.amount || note !== base.note;
+  const dirtyNow = useRef(dirty);                                  // whether the form has changes now, for an answer that arrives later
+  dirtyNow.current = dirty;
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   useLeaveGuard(dirty && !gone, "You have unsaved changes to this balance. Leave without saving?");
@@ -84,9 +86,9 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
   /** After a Restore or a Delete was refused because the balance changed, take the balance as it is now, with its version, so that trying again is a
    *  review of the new value and not the same refusal again. A form with nothing typed takes all of it. Typed values are kept, and only what the page
    *  knows about the balance is brought up to date. */
-  const takeCurrent = (keepTyped: boolean) => {
+  const takeCurrent = () => {
     fetchBalance(id).then((fresh) => {
-      if (!keepTyped) return adopt(fresh);
+      if (!dirtyNow.current) return adopt(fresh);   // asked again here, when the answer arrives: the person may have typed since the dialog closed
       setData(fresh); setVersion(fresh.balance.version); setOpenedAt(fresh.balance.amount_cents); setHistoryKey((key) => key + 1);
     }, (e: Error) => { if (e instanceof RequestError && e.status === 404) setGone("This balance was deleted by someone else."); });
   };
@@ -96,7 +98,7 @@ function Balance({ id, initial }: { id: number; initial: BalancePageData }) {
     setRestoring(null);
     setConsequence(null);
     setRefused(false);
-    if (wasRefused) takeCurrent(dirty);
+    if (wasRefused) takeCurrent();
   };
 
   /** One small question to the server, and the confirmation opens with its answer. A refusal (the balance is gone) shows beside the form. */

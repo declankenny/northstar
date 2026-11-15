@@ -180,6 +180,22 @@ describe("restoring a value", () => {
     await waitFor(() => expect(restoreBalanceValue).toHaveBeenLastCalledWith(12, -3, 9));
   });
 
+  it("keeps what is typed after the dialog closed and before the new balance arrives", async () => {
+    await shown();
+    await screen.findByRole("table");
+    vi.mocked(restoreBalanceValue).mockRejectedValueOnce(refusal(conflict()));
+    fireEvent.click(restoreButton());
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Restore" }));
+    await screen.findByRole("alert");
+    let arrive!: (p: ReturnType<typeof page>) => void;
+    vi.mocked(fetchBalance).mockImplementation(() => new Promise((resolve) => { arrive = resolve as typeof arrive; }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.change(amountBox(), { target: { value: "999.00" } });
+    arrive(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 31000, note: "Declan's correction", version: 9 } }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(amountBox().value).toBe("999.00");
+  });
+
   it("does not read the balance again when a dialog that was not refused is closed", async () => {
     await shown();
     await screen.findByRole("table");
