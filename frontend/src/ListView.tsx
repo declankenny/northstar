@@ -19,13 +19,26 @@ import { RowMenu, type MenuItem } from "./RowMenu";
 import { Link, navigate, replaceAddress, usePath, useSearch } from "./router";
 import { useRequest } from "./useRequest";
 
+/** One thing a person can do to a row. A list declares its actions once, as an array, so it is known how many there are without
+ *  looking at a row: with exactly one it is drawn as a button in the row, with two or more as the ⋯ menu. A row it does not apply to
+ *  shows nothing (`show`), or shows it greyed out with the reason (`disabled`). */
+export type RowAction = {
+  label: string;
+  run: (row: ListRow) => void;
+  show?: (row: ListRow) => boolean;                                        // false: the row has no such action. Every row when left out
+  disabled?: (row: ListRow) => string | false;                             // the reason the action is not available for this row right now
+  danger?: boolean;
+  name?: (row: ListRow) => string;                                         // what a button drawn for the row is called, for a screen reader
+};
+
 // What a list needs that only its own page knows. A list is data on the server; this is the little that cannot be: how a cell is
-// drawn when the default is not enough, and what a row's menu does (its dialogs are React).
+// drawn when the default is not enough, and what a row's actions do (their dialogs are React).
 export type ListConfig = {
   emptyText?: string;                                                      // what an empty list says, before anything is added
   cell?: Record<string, (row: ListRow, page: ListPage) => ReactNode>;     // a column drawn its own way, by key
-  actions?: (row: ListRow) => MenuItem[];                                  // a row's menu; an item can be disabled, with its reason
-  rowLabel?: (row: ListRow) => string;                                     // what the row's menu button is called
+  hidden?: string[];                                                       // columns the list carries for its cells and actions to read, and does not draw
+  actions?: RowAction[];                                                   // what a person can do to a row: one is a button, more are a menu
+  rowLabel?: (row: ListRow) => string;                                     // what a row is called, for its actions
   title?: string;                                                          // what the list is called in its filter drawer
   isAdmin?: boolean;                                                       // admins can save a filter for everyone
 };
@@ -171,7 +184,9 @@ export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
   const shown = view.sort ?? page?.sort ?? null; // the list's own sort shows too, so a person can see what the order is
   const sorting: SortingState = shown ? [{ id: shown.field, desc: shown.direction === "desc" }] : [];
   const pagination: PaginationState = { pageIndex: (page?.page ?? view.page) - 1, pageSize: page?.page_size ?? size ?? 25 };
-  const columnList = useSameColumns(page?.columns);
+  const everyColumn = useSameColumns(page?.columns);
+  const hiddenKeys = (config.hidden ?? []).join(",");
+  const columnList = useMemo(() => everyColumn.filter((column) => !hiddenKeys.split(",").includes(column.key)), [everyColumn, hiddenKeys]);
   const columns = useMemo(
     () => columnList.map((column) => helper.accessor((row) => row[column.key] as unknown, { id: column.key, header: column.path_label })),
     [columnList],
@@ -195,7 +210,29 @@ export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
 
   const byKey = new Map(columnList.map((column) => [column.key, column]));
   const rowsById = new Map(table.getRowModel().rows.map((row) => [row.original._id, row]));
-  /** One row of the table: its cells, and its menu when the list has row actions. */
+  /** A row's actions: a button when the list has exactly one, else the ⋯ menu of those that apply. A row with none shows nothing. */
+  const rowActions = (row: ListRow) => {
+    const actions = config.actions ?? [];
+    const label = config.rowLabel?.(row) ?? `row ${row._id}`;
+    const shown = actions.filter((action) => action.show?.(row) ?? true);
+    if (actions.length === 1) {
+      const [action] = shown;
+      if (!action) return null;
+      const reason = action.disabled?.(row) || undefined;
+      return (
+        <button className={action.danger ? "btn ghost small danger-text" : "btn ghost small"} aria-label={action.name?.(row) ?? `${action.label} ${label}`}
+          disabled={reason !== undefined} title={reason} onClick={() => action.run(row)}>{action.label}</button>
+      );
+    }
+    if (shown.length === 0) return null;
+    return (
+      <RowMenu label={`Actions for ${label}`} items={shown.map((action): MenuItem => {
+        const reason = action.disabled?.(row) || undefined;
+        return { label: action.label, danger: action.danger, disabled: reason !== undefined, note: reason, onClick: () => action.run(row) };
+      })} />
+    );
+  };
+  /** One row of the table: its cells, and its actions when the list has them. */
   const bodyRow = (row: Row<typeof features, ListRow> | undefined) => {
     if (!row || !page) return null;
     return (
@@ -208,12 +245,7 @@ export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
             </td>
           );
         })}
-        {config.actions && (
-          <td className="k">
-            <RowMenu label={`Actions for ${config.rowLabel?.(row.original) ?? `row ${row.original._id}`}`}
-              items={config.actions(row.original)} />
-          </td>
-        )}
+        {config.actions && <td className="k">{rowActions(row.original)}</td>}
       </tr>
     );
   };
@@ -267,6 +299,7 @@ export function ListView({ listKey, config = {}, refreshKey = 0, fixed }: {
                           </th>
                         );
                       })}
+                      {config.actions && <th />}
                     </tr>
                   ))}
                 </thead>

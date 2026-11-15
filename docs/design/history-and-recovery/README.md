@@ -8,6 +8,7 @@ This folder holds the design for balance history, restoring an earlier amount, a
 | --- | --- |
 | [design.md](design.md) | The scope, behaviour, retention rules, acceptance criteria and the decisions made while reviewing it. |
 | [implementation-plan.md](implementation-plan.md) | The steps as pull requests, in order. |
+| [row-actions-review.md](row-actions-review.md) | The review of the existing lists' row actions (#272), done before step 2. |
 
 Related issues: [#58](https://github.com/declankenny/northstar/issues/58) (the v0.7 epic). The change log this builds on is designed in [../v0.2-db-schema/design.md](../v0.2-db-schema/design.md) and shipped. The broader deferred undo design in [../undo/design.md](../undo/design.md) is not a requirement here.
 

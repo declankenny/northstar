@@ -55,6 +55,7 @@ export function useAction() {
 /** A question that states the consequence, with Cancel and a confirming button. */
 export function ConfirmDialog(props: {
   title: string;
+  subtitle?: string;
   text: string;
   confirmLabel: string;
   danger?: boolean;
@@ -71,7 +72,7 @@ export function ConfirmDialog(props: {
     if (conflict) onConflict?.();
   }, [conflict]); // eslint-disable-line react-hooks/exhaustive-deps -- once per refusal
   return (
-    <Modal title={props.title} onClose={props.onClose}>
+    <Modal title={props.title} subtitle={props.subtitle} onClose={props.onClose}>
       <p className="sub">{props.text}</p>
       {error && <p className="notice bad" role="alert">{error}</p>}
       {conflict && props.conflict && <p className="notice bad" role="alert"><b>{props.conflict.lead}</b> {props.conflict.text(conflict)}</p>}

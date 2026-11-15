@@ -264,6 +264,21 @@ def edit_balance(balance_id: int, body: BalanceEdit, request: Request):
     return run(request, action)
 
 
+class BalanceRestore(BaseModel):
+    history_id: int              # the row of the balance's history (a list row's id) whose amount is put back
+    version: int                 # the balance's version when the person opened the page; refused if it has changed since
+
+
+@router.post("/balances/{balance_id:int}/restore", response_model=AccountOut)
+def restore_balance(balance_id: int, body: BalanceRestore, request: Request):
+    """Put an earlier amount of a balance back, as a new change. The note stays as it is."""
+    def action(conn):
+        detail = balances.restore_reference(conn, balance_id, body.history_id, body.version)
+        balances.restore_value(operation(request, conn, "restore", detail), balance_id, body.history_id, body.version)
+        return _page(conn, balances.get_balance(conn, balance_id)["account_id"])
+    return run(request, action)
+
+
 @router.delete("/balances/{balance_id}", response_model=AccountOut)
 def delete_balance(balance_id: int, version: int, request: Request):
     def action(conn):

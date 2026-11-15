@@ -76,7 +76,8 @@ TABLES = {
         "by_name": FieldDef(Text(), label="By"),
         "amount_cents": FieldDef(ScaledBy(scale_from=("scale",), unit_from=("unit",)), label="Amount", groupable=False),
         "is_current": FieldDef(YesNo(), label="Current"),
-        "how": FieldDef(Text(), label="How")},
+        "how": FieldDef(Text(), label="How"),
+        "restorable": FieldDef(YesNo(), label="Restorable")},
         denied=frozenset({"balance_id", "scale", "unit"}), based_on="sys_record_changes"),
     # The currency catalog with how many live accounts use each (migration 0026), for the admin Currencies list. It is a view of
     # `currencies`, so it has that table's key and relations; it does not know which currency is the system currency.

@@ -36,7 +36,7 @@ _CURRENCIES = (_MIGRATIONS / "0026_currency_summaries.sql").read_text(encoding="
 CURRENCY_SUMMARIES = _CURRENCIES[_CURRENCIES.index("CREATE VIEW currency_summaries"):]       # reads live_accounts
 _BALANCES = (_MIGRATIONS / "0027_account_balances.sql").read_text(encoding="utf-8")
 ACCOUNT_BALANCES = _BALANCES[_BALANCES.index("CREATE VIEW account_balances"):]               # reads live_balances
-_HISTORY = (_MIGRATIONS / "0029_balance_history.sql").read_text(encoding="utf-8")
+_HISTORY = (_MIGRATIONS / "0030_restore_balance_value.sql").read_text(encoding="utf-8")
 BALANCE_HISTORY = _HISTORY[_HISTORY.index("CREATE VIEW balance_history"):]                   # reads live_balances and live_accounts
 VIEWS = "CREATE VIEW live_accounts AS SELECT * FROM accounts WHERE deleted = 0;\n" + LIVE_BALANCES
 REBUILD_ACCOUNTS = """-- northstar: rebuild
