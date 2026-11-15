@@ -224,7 +224,7 @@ READS = re.compile(r"\b(FROM|JOIN)\s+(accounts|balances)\b", re.I)
 # currency. The cleanup of deleted data has to find deleted accounts, which is its whole job (retention.py), and the balances that are not
 # in the views. No other file may read balances directly.
 EXEMPT = {"backup.py": {"accounts", "balances"}, "account_types.py": {"accounts"}, "import_register.py": {"accounts", "balances"},
-          "system_properties.py": {"accounts"}, "retention.py": {"accounts", "balances"}}
+          "system_properties.py": {"accounts"}, "deleted_accounts.py": {"accounts", "balances"}, "retention.py": {"accounts", "balances"}}
 
 
 def direct_reads(source: str) -> set[str]:

@@ -3,6 +3,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountPage as Account } from "./api";
 import { AccountPage } from "./AccountPage";
+import { clearFlash, peekFlash, setFlash } from "./flash";
 import { deferred } from "./testing";
 
 vi.mock("./api", async (original) => ({ ...(await original<typeof import("./api")>()), fetchAccount: vi.fn(), fetchNetWorth: vi.fn() }));
@@ -27,7 +28,7 @@ describe("AccountPage", () => {
       return reply.promise;
     });
   });
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); clearFlash(); });
 
   it("shows the account in the address, even when the answer for the one before arrives after it", async () => {
     const { rerender } = render(<AccountPage id={1} isAdmin />);
@@ -38,6 +39,18 @@ describe("AccountPage", () => {
     await act(async () => asked.get(1)!.resolve(account(1, "First account")));
     expect(screen.getByRole("heading", { name: "Second account" })).toBeTruthy();
     expect(screen.queryByText("First account")).toBeNull();
+  });
+
+  it("shows the notice the page before left, once", async () => {
+    setFlash("Second account was restored with 3 balances.");
+    const { unmount } = render(<AccountPage id={2} isAdmin />);
+    await act(async () => asked.get(2)!.resolve(account(2, "Second account")));
+    expect(screen.getByRole("status").textContent).toBe("Second account was restored with 3 balances.");
+    expect(peekFlash()).toBeNull();
+    unmount();
+    render(<AccountPage id={2} isAdmin />);
+    await act(async () => asked.get(2)!.resolve(account(2, "Second account")));
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("does not show the error of an account that is no longer the one in the address", async () => {

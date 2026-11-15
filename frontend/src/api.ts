@@ -253,6 +253,21 @@ export function undoImport(importId: number): Promise<UndoDone | UndoRefusal> {
   return orRefusal(send<UndoDone>("POST", `/api/imports/${importId}/undo`, {}).then((done) => done!));
 }
 
+/** One row of the admin Deleted accounts page. The dates are UTC dates. `purge_on` is null when the cleanup is switched off. */
+export type DeletedAccount = {
+  id: number; name: string; type_name: string; is_open: boolean; deleted_on: string; purge_on: string | null; balance_count: number; name_taken: boolean;
+};
+export type DeletedAccounts = { cleanup_on: boolean; retention_days: number; accounts: DeletedAccount[] };
+
+export async function fetchDeletedAccounts(signal?: AbortSignal): Promise<DeletedAccounts> {
+  return (await send<DeletedAccounts>("GET", "/api/deleted-accounts", undefined, signal))!;
+}
+
+/** Bring a deleted account back, under a new name when the old one is in use. A refusal (the name, or it is no longer deleted) is an Error. */
+export async function restoreAccount(id: number, name?: string): Promise<{ id: number; name: string; balance_count: number }> {
+  return (await send<{ id: number; name: string; balance_count: number }>("POST", `/api/deleted-accounts/${id}/restore`, name === undefined ? {} : { name }))!;
+}
+
 export async function addUser(user: { email: string; display_name: string; password: string; is_admin: boolean; locale?: string }): Promise<UserRow> {
   return (await send<UserRow>("POST", "/api/users", user))!;
 }
