@@ -187,9 +187,11 @@ describe("restoring a value", () => {
     fireEvent.click(restoreButton());
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Restore" }));
     await screen.findByRole("alert");
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });      // the page has taken the refusal in too
     let arrive!: (p: ReturnType<typeof page>) => void;
     vi.mocked(fetchBalance).mockImplementation(() => new Promise((resolve) => { arrive = resolve as typeof arrive; }));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(arrive).toBeTypeOf("function"));      // the refresh has been asked for, and has not answered
     fireEvent.change(amountBox(), { target: { value: "999.00" } });
     arrive(page({ balance: { id: 12, as_of_date: "2026-04-20", amount_cents: 31000, note: "Declan's correction", version: 9 } }));
     await new Promise((r) => setTimeout(r, 20));
