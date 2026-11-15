@@ -276,3 +276,41 @@ def test_a_period_longer_than_a_date_can_go_back_purges_nothing(conn):
     conn.commit()
     assert go(conn) == [(JOB, "succeeded")]
     assert exists(conn, "accounts", gone)
+
+
+# -- imports (review of #275) --
+
+def make_import(conn, acct, days=("2026-01-31", "2026-02-28")):
+    from northstar import balance_import, csvparse
+    rows = [csvparse.ParsedRow(i + 2, date.fromisoformat(d), 5_000 + i, None) for i, d in enumerate(days)]
+    plan = balance_import.plan_import(conn, acct, rows)
+    balance_import.commit_import(conn, None, acct, rows, "skip", plan.reviewed)
+    return conn.execute("SELECT MAX(id) FROM sys_operations WHERE kind = 'import'").fetchone()[0]
+
+
+def test_an_import_with_a_purged_balance_cannot_be_undone_as_if_whole(conn):
+    from northstar import import_register
+    acct = account(conn, balances_on=())
+    header = make_import(conn, acct)
+    first = balance_id(conn, acct, "2026-01-31")
+    delete_balance(conn, first, 91)
+    with pytest.raises(import_register.UndoBlocked):
+        import_register.undo_plan(conn, header)                 # refused before the purge, because a balance was deleted
+    go(conn)
+    assert not exists(conn, "balances", first) and headers(conn, header) == 1
+    with pytest.raises(import_register.UndoBlocked) as refused:
+        import_register.undo_plan(conn, header)                 # and still refused after it
+    assert refused.value.kind == "changed"
+
+
+def test_an_undone_import_whose_account_is_purged_leaves_no_header_behind(conn):
+    from northstar import import_register
+    acct = account(conn, balances_on=())
+    header = make_import(conn, acct)
+    import_register.undo_import(conn, None, header)
+    conn.commit()
+    delete_account(conn, acct, 91)
+    go(conn)
+    assert headers(conn, header) == 0
+    assert conn.execute("SELECT COUNT(*) FROM sys_operations WHERE kind = 'undo'").fetchone()[0] == 0
+    assert not any(e["id"] == header for e in import_register.list_imports(conn)["imports"])

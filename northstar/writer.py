@@ -245,10 +245,22 @@ def purge(op: Operation, table: str, record_id: int) -> int:
             conn.execute("DELETE FROM balances WHERE id = ?", (record_id,))
         else:
             conn.execute("DELETE FROM accounts WHERE id = ?", (record_id,))
-        for operation_id in touched:
-            conn.execute(
+        # Headers go until none more qualifies: an undo's header goes first when its records are gone, and the import it names then can.
+        pending = set(touched)
+        while True:
+            gone = {operation_id for operation_id in pending if conn.execute(
                 "DELETE FROM sys_operations WHERE id = ? AND NOT EXISTS (SELECT 1 FROM sys_record_changes WHERE operation_id = ?) "
-                "AND NOT EXISTS (SELECT 1 FROM sys_operations WHERE undoes_operation_id = ?)", (operation_id, operation_id, operation_id))
+                "AND NOT EXISTS (SELECT 1 FROM sys_operations WHERE undoes_operation_id = ?)",
+                (operation_id, operation_id, operation_id)).rowcount}
+            if not gone:
+                break
+            pending -= gone
+        # An import that keeps a record after some were purged can no longer be undone as a whole, so the purge header names it (an id,
+        # nothing of what was in it) and the undo refuses.
+        partial = sorted(row[0] for row in conn.execute(
+            f"SELECT id FROM sys_operations WHERE kind = 'import' AND id IN ({','.join('?' * len(pending))})", sorted(pending))) if pending else []
+        if partial and op.detail is not None:
+            op.detail["imports"] = partial
         _operation_id(op)
         return removed
 
