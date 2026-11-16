@@ -6,7 +6,7 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
-## [0.7.0] - TODO release date
+## [0.7.0] - 2026-11-16
 
 Data history and recovery (#58). A balance's page lists every change made to it and can put an earlier value back. Deleted accounts and deleted balances are kept for 90 days, an admin can restore them, and a nightly cleanup then removes them for good. Two small additions to accounts came with it: a website, and a payment due day for a liability.
 
