@@ -50,6 +50,11 @@ def test_sign_in_details_the_query_and_the_fragment_are_removed_and_said(text, s
     "https://", "http:///path", "https:/bank.example", "https:bank.example", "https://@/", "https://user@:80/",
     "https://bank.example:abc/", "https://bank .example/", "https://bank.example/a b", "https://bank.example/\\x", "https://bank.example/\x00",
     "https://bank.example/\nSet-Cookie: x=1",
+    # a host a browser's URL parser would reject, so the saved link would not open
+    "https://bank.example%2Flogin/", "https://bank.example|other/", "https://bank%2eexample%3f/", "https://bank^example/",
+    "https://bank<example>/", "https://[::1%25eth0]/", "https://[bank.example]/", "https://[::1/",
+    # DEL and the C1 controls, in the host and elsewhere
+    "https://bank.example/\x7f", "https://bank\x7f.example/", "https://bank.example/a\x85b",
 ])
 def test_anything_else_is_refused_with_one_message(text):
     with pytest.raises(ValidationError) as refused:

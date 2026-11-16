@@ -1,6 +1,8 @@
 """Account rules. Plain functions, no web code."""
 
+import ipaddress
 import sqlite3
+import unicodedata
 from datetime import date
 from urllib.parse import urlsplit
 
@@ -113,6 +115,25 @@ WEBSITE_REFUSED = "Enter a full web address starting with http:// or https://, s
 LOGIN, QUERY, FRAGMENT = "login", "query", "fragment"
 
 
+# The characters a browser's URL parser refuses in a host (the WHATWG "forbidden domain code points", less the controls and
+# whitespace already refused), "%" included, so an encoded "/" or "?" cannot hide in one.
+_HOST_FORBIDDEN = set('#/:<>?@[\\]^|%')
+
+
+def _host_is_valid(hostport: str, host: str) -> bool:
+    """urlsplit does not validate the host. A bracketed host must be an IPv6 address; any other must have none of the characters a
+    browser refuses, so a saved address is one the link can open."""
+    if hostport.startswith("["):
+        if "%" in host:
+            return False
+        try:
+            ipaddress.IPv6Address(host)
+        except ValueError:
+            return False
+        return True
+    return not any(ch in _HOST_FORBIDDEN for ch in host)
+
+
 def clean_website(text: str | None) -> tuple[str | None, list[str]]:
     """An account's website as it is stored, and what was removed to get it (a list of LOGIN, QUERY and FRAGMENT, empty when the address
     was kept whole). The one rule for the form and the API (#266), in this order:
@@ -130,7 +151,7 @@ def clean_website(text: str | None) -> tuple[str | None, list[str]]:
         return None, []
     if len(text) > WEBSITE_MAX:
         raise ValidationError(f"The website can be at most {WEBSITE_MAX} characters.")
-    if any(ch.isspace() or ord(ch) < 32 or ch == "\\" for ch in text):
+    if any(ch.isspace() or unicodedata.category(ch) == "Cc" or ch == "\\" for ch in text):   # controls include DEL and the C1 range
         raise ValidationError(WEBSITE_REFUSED)
     try:
         parts = urlsplit(text)
@@ -139,6 +160,8 @@ def clean_website(text: str | None) -> tuple[str | None, list[str]]:
     except ValueError:
         raise ValidationError(WEBSITE_REFUSED) from None
     if parts.scheme.lower() not in ("http", "https") or not host or not text[len(parts.scheme):].startswith("://"):
+        raise ValidationError(WEBSITE_REFUSED)
+    if not _host_is_valid(parts.netloc.rsplit("@", 1)[-1], host):
         raise ValidationError(WEBSITE_REFUSED)
     removed = []
     if "@" in parts.netloc:
