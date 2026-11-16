@@ -129,7 +129,7 @@ describe("the Accounts list with accounts in several currencies", () => {
 
 describe("an account page for an account in another currency", () => {
   const euros = (): Account => ({
-    id: 7, name: "Test euros", currency: EUR, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, website: null, website_removed: [],
+    id: 7, name: "Test euros", currency: EUR, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, website: null, website_removed: [], due_day: null, next_due: null,
     stale_after_days: 35, balance_count: 2, earliest_date: "2026-04-30", last_date: "2026-05-12", last_cents: 1000000, days_since: 22,
     stale: false, today: "2026-06-03", types: [], other_class: { id: 2, name: "Liability", types: [] },
   });

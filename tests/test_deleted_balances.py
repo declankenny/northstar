@@ -304,7 +304,7 @@ def test_a_balance_deleted_under_the_preceding_release_is_listed_and_restored_af
     account_id = add_account(conn, "Test upgrade", ASSET, "Savings")
     from northstar import accounts
     with monkeypatch.context() as before:           # the previous release's account query: its table has no `website` yet
-        before.setattr(accounts, "_SELECT", accounts._SELECT.replace("a.website, ", ""))
+        before.setattr(accounts, "_SELECT", accounts._SELECT.replace("a.website, a.due_day, ", ""))
         for day, cents in (("2026-01-31", 100_000), ("2026-02-28", 120_000)):
             balances.record_balance(op(conn), account_id, date.fromisoformat(day), cents, "Statement")
         gone = conn.execute("SELECT id FROM balances WHERE as_of_date = '2026-01-31'").fetchone()[0]

@@ -868,3 +868,17 @@ An account can have a website, so its page can open the bank's own site. Agreed 
 - **Shown on the page and as a list column, hidden by default.** The page is where a person acts on it; a website column adds little to comparing accounts, so it is offered and not shown. It is only set in the Edit account dialog, not when an account is added.
 - **The link's accessible name starts with the text on screen** (host first, then "Open <account>'s website (opens in a new tab)"), so voice control and screen readers match what is seen. A list that has no Name column says "the account's" instead.
 - **Not done:** a favicon or any request to the site (nothing leaves the household), checking that the address answers, and a field on the Add account dialog.
+
+### A payment due day on a liability (#258, v0.7)
+
+A liability can have a due day of the month, so its page and the Accounts list can say when the next payment is due. Agreed from a mockup (outside the repo) on the issue.
+
+- **A day, not a date.** A date on an account would go stale and need someone to keep it up to date, which is what the issue asked to avoid. Storing only the day (1 to 31) means the next date is always right. A recurrence rule (yearly or quarterly bills) can replace the day later without losing data.
+- **It does not know whether a payment was made,** so it never says "paid" or "overdue": the date moves to next month once the day has passed. The page says "Payments aren't tracked." Tracking payments would need transactions, which v1 does not have.
+- **Worked out in the database, once.** The `account_summaries` view computes `next_due` with `northstar_today()` (today in the installation's zone, as `days_since` already does), so the Accounts list sorts and filters on it and the account page reads the same column. A view cannot call `clock.today()`, which is why the date function is registered on every connection. The view was made again by migration `0034_payment_due_day` (dropped first and created again, as migration 0025 says). The test compares every due day on every day of a normal and a leap year with a plain Python calculation.
+- **The clamp.** A day a short month lacks falls on that month's last day (31 in April is April 30; 30 in a leap February is the 29th). A due date of today counts as due today.
+- **Liabilities only,** checked in `accounts.update_account` for the form and the API, from the account's class. The only path that changes an account's class is `accounts.change_class`, which clears the day when the account moves to an asset type (a type's class cannot change while an account uses it), so no asset can hold one.
+- **Leaving it out is not clearing it,** as for the website: the edit API treats a missing `due_day` as unchanged and `null` as clear, and a blank form field sends `null`. Text, decimals, booleans, 0 and 32 are refused.
+- **Closed accounts keep the day and show no date.** Reopening resumes the schedule. An open account that is paid off keeps its date until the day is cleared or the account is closed; hiding it at a zero balance was considered and left out as one more rule.
+- **Shown by default,** as a Next due column between Type and Currency, because the point is to see what is coming. An account with no day and a closed account have no date and sort last either way. The page shows a fifth tile only for a liability.
+- **Not done:** reminders, an amount due, moving a date for weekends or holidays, a "due soon" view, and a due day on the Add account dialog (it is set by editing the account, as the website is).

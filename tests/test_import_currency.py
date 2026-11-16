@@ -87,7 +87,7 @@ def test_an_import_before_currency_migration_can_still_be_undone(tmp_path, v02_m
     conn = db.connect(path)
     rows = [csvparse.ParsedRow(2, date(2026, 2, 28), 12345, None)]
     with monkeypatch.context() as before:           # the old release's account query: its table has no `website` yet
-        before.setattr(accounts, "_SELECT", accounts._SELECT.replace("a.website, ", ""))
+        before.setattr(accounts, "_SELECT", accounts._SELECT.replace("a.website, a.due_day, ", ""))
         plan = balance_import.plan_import(conn, 1, rows)
         balance_import.commit_import(conn, None, 1, rows, "skip", plan.reviewed)
     operation = conn.execute("SELECT id FROM sys_operations WHERE kind = 'import'").fetchone()[0]

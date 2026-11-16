@@ -231,7 +231,7 @@ def test_upgrading_from_0032_adds_the_column_and_changes_no_data(tmp_path):
     folder = tmp_path / "before"
     folder.mkdir()
     for file in db.MIGRATIONS_DIR.glob("*.sql"):
-        if not file.name.startswith("0033"):
+        if not file.name.startswith(("0033", "0034")):
             shutil.copy(file, folder)
     path = tmp_path / "data" / "northstar.db"
     db.upgrade(path, folder)
@@ -244,7 +244,7 @@ def test_upgrading_from_0032_adds_the_column_and_changes_no_data(tmp_path):
     assert "website" not in [r[1] for r in conn.execute("PRAGMA table_info(accounts)")]
     conn.close()
 
-    assert db.upgrade(path) == ["0033_account_website"]
+    assert db.upgrade(path) == ["0033_account_website", "0034_payment_due_day"]
     conn = db.connect(path)
     assert [tuple(r) for r in conn.execute("SELECT id, name, type_id, notes, is_open FROM accounts ORDER BY id")] == accounts_before
     assert conn.execute("SELECT website FROM accounts WHERE id = ?", (account_id,)).fetchone()[0] is None

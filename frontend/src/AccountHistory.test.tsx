@@ -14,7 +14,7 @@ import { addBalance, exportList, fetchAccount, fetchList, fetchListFields, fetch
 
 const USD = { code: "USD", name: "US Dollar", minor_units: 2 };
 const account = (over: Partial<Account> = {}): Account => ({
-  id: 7, name: "Test savings", currency: USD, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, website: null, website_removed: [], stale_after_days: 30,
+  id: 7, name: "Test savings", currency: USD, class_name: "Asset", type_id: 1, type_name: "Savings", is_open: true, notes: null, website: null, website_removed: [], due_day: null, next_due: null, stale_after_days: 30,
   balance_count: 30, earliest_date: "2024-01-01", last_date: "2026-06-01", last_cents: 100000, days_since: 10, stale: false,
   types: [], other_class: { id: 2, name: "Liability", types: [] }, today: "2026-10-30", ...over,
 });

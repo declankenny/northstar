@@ -65,6 +65,7 @@ erDiagram
         text updated_at "UTC"
         integer updated_by FK "who last changed it"
         text website "optional, a cleaned http or https address (added last, by migration 0033)"
+        integer due_day "optional, 1 to 31, liabilities only (added last, by migration 0034)"
     }
     currencies {
         integer id PK
