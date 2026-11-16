@@ -83,7 +83,7 @@ describe("the Reports page", () => {
     expect(await screen.findByDisplayValue("Synthetic as-of")).toBeTruthy();
     expect(window.location.pathname).toBe("/reports/synthetic_as_of");
     expect(window.history.length).toBe(before);
-    expect(screen.getByText("An as-of date with a summary, a treemap and a table.")).toBeTruthy();
+    expect(await screen.findByText("An as-of date with a summary, a treemap and a table.")).toBeTruthy();   // drawn when the definition arrives, after the picker
     expect(fetchReportDefinition).toHaveBeenCalledWith("synthetic_as_of", expect.anything());
   });
 
