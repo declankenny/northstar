@@ -16,6 +16,7 @@ import { clearFlash, peekFlash } from "./flash";
 import { WHEN } from "./Tile";
 import { useRequest } from "./useRequest";
 import { formatInteger } from "./locale";
+import { dueDayText, dueIn } from "./dueDay";
 import { siteName, websiteLabel, websiteRemovedNotice } from "./website";
 
 type Dialog =
@@ -149,7 +150,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
         </div>
       </div>
 
-      <div className="tiles">
+      <div className={`tiles${account.class_name === "Liability" ? " five" : ""}`}>
         <div className="tile main">
           <div className="label">Latest balance</div>
           <div className="val num">{account.last_cents === null ? "—" : formatCents(account.last_cents, account.currency)}</div>
@@ -179,6 +180,17 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
             {view && `since ${formatDate(view.data.start)} · ${formatInteger(account.balance_count)} in all`}
           </div>
         </div>
+        {account.class_name === "Liability" && (
+          <div className="tile">
+            <div className="label">Next due</div>
+            <div className="val num">{account.next_due ? formatDate(account.next_due) : "—"}</div>
+            {account.next_due && <div className="delta num"><span className={account.next_due === account.today ? "w" : "m"}>{dueIn(account.today, account.next_due)}</span></div>}
+            <div className="delta m">
+              {account.due_day === null ? "No due day set. Payments aren't tracked."
+                : !open ? "The account is closed, so there is no date. Payments aren't tracked." : dueDayText(account.due_day)}
+            </div>
+          </div>
+        )}
         <div className="tile">
           <div className="label">Currency</div>
           <div className="val num">{account.currency.code}</div>

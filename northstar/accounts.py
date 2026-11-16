@@ -12,7 +12,7 @@ from northstar.writer import Operation
 
 _SELECT = (
     "SELECT a.id, a.name, t.class_id, c.name AS class_name, a.type_id, t.name AS type_name, "
-    "       a.is_open, a.notes, a.website, "
+    "       a.is_open, a.notes, a.website, a.due_day, "
     "       (SELECT COUNT(*) FROM live_balances b WHERE b.account_id = a.id) AS balance_count "
     "FROM live_accounts a "
     "JOIN account_types t ON t.id = a.type_id "
@@ -52,6 +52,9 @@ def account_summary(conn: sqlite3.Connection, account_id: int, today: date) -> d
     summary["last_date"] = latest["as_of_date"] if latest else None
     summary["last_cents"] = latest["amount_cents"] if latest else None
     summary["days_since"] = staleness.days_since(summary["last_date"], today)
+    # The one copy of the rule is the view's (migration 0034), so the page and the list cannot disagree.
+    summary["next_due"] = conn.execute(
+        "SELECT next_due FROM account_summaries WHERE id = ?", (account_id,)).fetchone()[0]
     # Closed accounts are never flagged: their last balance is meant to be old.
     summary["stale"] = bool(summary["is_open"]) and staleness.is_stale(
         summary["last_date"], today, summary["stale_after_days"])
@@ -254,13 +257,26 @@ def add_account(op: Operation, name: str | None, class_id: int,
             "name": name, "type_id": type_id, "currency_id": currency.id, "notes": _clean_notes(notes)})
 
 
-UNCHANGED = object()       # "the website was not sent": a partial update leaves it as it is, where None (or blank) clears it
+UNCHANGED = object()       # "it was not sent": a partial update leaves the website and the due day as they are, where None clears them
+
+LIABILITY = "Liability"
+
+
+def clean_due_day(value: object) -> int | None:
+    """An account's payment due day as it is stored (#258): None clears it, otherwise a whole number from 1 to 31. Text, decimals and
+    booleans are refused (a form sends its blank field as None), and so is 0 and anything above 31."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 31:
+        raise ValidationError("The due day must be a whole number from 1 to 31.")
+    return value
 
 
 def update_account(op: Operation, account_id: int, name: str | None,
-                   type_id: int | None, notes: str | None = None, website: str | None | object = UNCHANGED) -> list[str]:
-    """Rename, re-type within the account's own class, and edit notes and the website. Returns what cleaning removed from the website
-    (see clean_website), so the page can say so."""
+                   type_id: int | None, notes: str | None = None, website: str | None | object = UNCHANGED,
+                   due_day: object = UNCHANGED) -> list[str]:
+    """Rename, re-type within the account's own class, and edit notes, the website and the payment due day (liabilities only). Returns
+    what cleaning removed from the website (see clean_website), so the page can say so."""
     conn = op.conn
     with db.write_transaction(conn):
         account = get_account(conn, account_id)
@@ -271,6 +287,10 @@ def update_account(op: Operation, account_id: int, name: str | None,
         removed: list[str] = []
         if website is not UNCHANGED:
             values["website"], removed = clean_website(website)
+        if due_day is not UNCHANGED:
+            values["due_day"] = clean_due_day(due_day)
+            if values["due_day"] is not None and account["class_name"] != LIABILITY:
+                raise ValidationError("Only a liability has a payment due day.")
         writer.update(op, "accounts", account_id, values)
         return removed
 
@@ -287,7 +307,11 @@ def change_class(op: Operation, account_id: int, new_type_id: int | None) -> Non
             raise ValidationError("Choose a type from the list.")
         if row["class_id"] == account["class_id"]:
             raise ValidationError("Choose a type in the other class.")
-        writer.update(op, "accounts", account_id, {"type_id": new_type_id})   # the type decides the class
+        values = {"type_id": new_type_id}                                   # the type decides the class
+        if account["due_day"] is not None and conn.execute(
+                "SELECT name FROM account_classes WHERE id = ?", (row["class_id"],)).fetchone()[0] != LIABILITY:
+            values["due_day"] = None                      # an asset has no due day, and the clearing is in the change log
+        writer.update(op, "accounts", account_id, values)
 
 
 def close_account(op: Operation, account_id: int) -> None:

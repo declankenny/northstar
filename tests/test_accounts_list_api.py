@@ -59,9 +59,9 @@ def test_it_opens_with_the_open_accounts_shared_filter_and_sorted_by_account(cli
 
 def test_the_default_columns_are_the_ones_agreed(client, household):
     page = client.post(LIST, json={}).json()
-    assert page["default_columns"] == ["name", "type.class", "type", "currency", "last_cents", "reporting_value",
+    assert page["default_columns"] == ["name", "type.class", "type", "next_due", "currency", "last_cents", "reporting_value",
                                        "last_date", "days_since", "is_stale", "balance_count"]
-    assert [c["label"] for c in page["columns"]] == ["Account", "Class", "Type", "Currency", "Last balance", "Reporting value",
+    assert [c["label"] for c in page["columns"]] == ["Account", "Class", "Type", "Next due", "Currency", "Last balance", "Reporting value",
                                                       "Balance date", "Balance age (days)", "Stale", "Balances"]
 
 
@@ -115,8 +115,8 @@ def test_it_exports_what_it_shows(client, household):
     response = client.post(f"{LIST}/export", json={})
     assert response.status_code == 200
     text = response.content.decode("utf-8-sig").splitlines()
-    assert text[0] == "Account,Type › Class,Type,Currency,Last balance,Reporting value,Balance date,Balance age (days),Stale,Balances"
-    assert text[1].startswith("Checking,Asset,Checking,USD,8423.11,8423.11,2026-10-27,3,false,1")
+    assert text[0] == "Account,Type › Class,Type,Next due,Currency,Last balance,Reporting value,Balance date,Balance age (days),Stale,Balances"
+    assert text[1].startswith("Checking,Asset,Checking,,USD,8423.11,8423.11,2026-10-27,3,false,1")
     assert len(text) == 5                                                           # the header and the four open accounts
 
 

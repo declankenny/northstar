@@ -31,13 +31,16 @@ TABLES = {
     "account_types": TableDef("account_types", "name", {
         "name": _text(True), "stale_after_days": FieldDef(Integer(), label="Stale after (days)"), **_audit()}),
     "accounts": TableDef("accounts", "name", {
-        "name": _text(True), "is_open": FieldDef(YesNo(), label="Open"), "notes": _text(True), "website": _text(True), **_audit()},
+        "name": _text(True), "is_open": FieldDef(YesNo(), label="Open"), "notes": _text(True), "website": _text(True),
+        "due_day": FieldDef(Integer(), label="Due day"), **_audit()},
         denied=frozenset({"deleted"}), record_page="/accounts/{id}"),
     # The live accounts with the figures that are worked out for each (migration 0025): its balance count, last balance and date, that
     # balance's value in the system currency, its age and whether it is stale. It is a view of `accounts`, so it has that table's key
     # and relations, and it leaves out a deleted account itself.
     "account_summaries": TableDef("account_summaries", "name", {
         "name": _text(True, "Account"), "is_open": FieldDef(YesNo(), label="Open"), "notes": _text(True), "website": _text(True),
+        "due_day": FieldDef(Integer(), label="Due day"),
+        "next_due": FieldDef(Date(), label="Next due"),
         "balance_count": FieldDef(Integer(), label="Balances"),
         "last_date": FieldDef(Date(), label="Balance date"),
         "last_cents": FieldDef(ScaledBy(scale_from=("currency", "minor_units"), unit_from=("currency", "code")),

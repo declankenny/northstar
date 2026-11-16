@@ -320,6 +320,8 @@ export type AccountPage = {
   notes: string | null;
   website: string | null;          // the cleaned address, or none
   website_removed: string[];      // what saving cleaned out of it ("login", "query", "fragment"); only an edit's answer has any
+  due_day: number | null;         // a liability's payment due day (1 to 31), kept when the account is closed
+  next_due: string | null;        // the next due date, worked out by the server; none without a due day and for a closed account
   stale_after_days: number;
   balance_count: number;
   earliest_date: string | null;
@@ -339,7 +341,7 @@ export async function fetchAccount(id: number, signal?: AbortSignal): Promise<Ac
   return (await send<AccountPage>("GET", `/api/accounts/${id}`, undefined, signal))!;
 }
 
-export async function editAccount(id: number, change: { name: string; type_id: number; notes: string; website: string }): Promise<AccountPage> {
+export async function editAccount(id: number, change: { name: string; type_id: number; notes: string; website: string; due_day?: number | null }): Promise<AccountPage> {
   return (await send<AccountPage>("PATCH", `/api/accounts/${id}`, change))!;
 }
 

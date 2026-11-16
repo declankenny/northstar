@@ -15,7 +15,7 @@ import { editAccount, fetchAccount, fetchAccountOptions, fetchList, fetchListFie
 
 const account = (over: Partial<Account> = {}): Account => ({
   id: 7, name: "Visa Card", currency: { code: "USD", name: "US Dollar", minor_units: 2 }, class_name: "Liability", type_id: 4, type_name: "Credit card", is_open: true,
-  notes: null, website: null, website_removed: [], stale_after_days: 30, balance_count: 0, earliest_date: null, last_date: null, last_cents: null, days_since: null, stale: false,
+  notes: null, website: null, website_removed: [], due_day: null, next_due: null, stale_after_days: 30, balance_count: 0, earliest_date: null, last_date: null, last_cents: null, days_since: null, stale: false,
   types: [{ id: 4, name: "Credit card" }], other_class: { id: 1, name: "Asset", types: [] }, today: "2026-11-15", ...over,
 });
 
@@ -59,7 +59,7 @@ describe("the website on the account page", () => {
     expect(box.value).toBe("https://www.bank.example/");
     fireEvent.change(box, { target: { value: "  https://other.example/  " } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(editAccount).toHaveBeenCalledWith(7, { name: "Visa Card", type_id: 4, notes: "", website: "  https://other.example/  " }));
+    await waitFor(() => expect(editAccount).toHaveBeenCalledWith(7, { name: "Visa Card", type_id: 4, notes: "", website: "  https://other.example/  ", due_day: null }));
     expect((await screen.findByRole("link", { name: /other\.example/ })).getAttribute("href")).toBe("https://other.example/");
     expect(screen.queryByRole("status")).toBeNull();                      // nothing was removed, so nothing is said
   });
@@ -90,8 +90,8 @@ describe("the website on the account page", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
-  it("has no hint beside the field: what is removed is said after saving", async () => {
-    vi.mocked(fetchAccount).mockResolvedValue(account());
+  it("has no hint beside the field (an asset has no other hint in the dialog): what is removed is said after saving", async () => {
+    vi.mocked(fetchAccount).mockResolvedValue(account({ class_name: "Asset" }));
     render(<AccountPage id={7} isAdmin />);
     const dialog = await openEdit();
     expect(dialog.querySelectorAll(".hint").length).toBe(0);

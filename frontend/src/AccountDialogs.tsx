@@ -52,7 +52,7 @@ export function BalanceDialog(props: {
 /** Name, type (within the account's class), website and notes. The class has its own dialog. */
 export function EditAccountDialog(props: {
   account: AccountPage;
-  onSave: (change: { name: string; type_id: number; notes: string; website: string }) => Promise<void>;
+  onSave: (change: { name: string; type_id: number; notes: string; website: string; due_day?: number | null }) => Promise<void>;
   onClose: () => void;
 }) {
   const { account } = props;
@@ -60,11 +60,15 @@ export function EditAccountDialog(props: {
   const [typeId, setTypeId] = useState(account.type_id);
   const [notes, setNotes] = useState(account.notes ?? "");
   const [website, setWebsite] = useState(account.website ?? "");
+  const [dueDay, setDueDay] = useState(account.due_day === null ? "" : String(account.due_day));
+  const liability = account.class_name === "Liability";
   const { busy, error, run } = useAction();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    run(() => props.onSave({ name, type_id: typeId, notes, website }));
+    // A blank field clears the due day; an asset has none, so it is not sent. The server checks it is a whole number from 1 to 31.
+    const due_day = dueDay.trim() === "" ? null : Number(dueDay);
+    run(() => props.onSave({ name, type_id: typeId, notes, website, ...(liability ? { due_day } : {}) }));
   };
 
   return (
@@ -81,6 +85,12 @@ export function EditAccountDialog(props: {
         <label>Website (optional)
           <input value={website} inputMode="url" autoComplete="off" onChange={(e) => setWebsite(e.target.value)} />
         </label>
+        {liability && (
+          <label>Payment due day (optional)
+            <input type="number" inputMode="numeric" min={1} max={31} step={1} value={dueDay} onChange={(e) => setDueDay(e.target.value)} />
+            <span className="hint">The day of the month it is due, 1 to 31.</span>
+          </label>
+        )}
         <label>Notes (optional)
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>

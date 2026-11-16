@@ -5,6 +5,8 @@ rules of their own. Every change answers with the account's whole page, so the b
 exactly what the server now holds. A broken rule is a 422 and an unknown account or balance a 404.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
@@ -49,6 +51,8 @@ class AccountOut(BaseModel):
     is_open: bool
     notes: str | None
     website: str | None      # the cleaned address (see accounts.clean_website), or none
+    due_day: int | None      # a liability's payment due day (1 to 31), or none; kept when the account is closed
+    next_due: str | None     # the next due date, worked out by the database; none without a due day and for a closed account
     website_removed: list[str] = []   # what saving cleaned out of it ("login", "query", "fragment"); only an edit's answer has any
     stale_after_days: int
     balance_count: int
@@ -96,6 +100,8 @@ class AccountChange(BaseModel):
     type_id: int
     notes: str | None = None
     website: str | None = None       # blank or null clears it; leaving it out leaves it as it is
+    due_day: Any = None              # a whole number from 1 to 31 (accounts.clean_due_day, which refuses anything else); null clears it,
+                                     # and leaving it out leaves it as it is
 
 
 class ClassChange(BaseModel):
@@ -160,7 +166,8 @@ def export_balances(account_id: int, request: Request):
 def edit_account(account_id: int, body: AccountChange, request: Request):
     def action(conn):
         website = body.website if "website" in body.model_fields_set else accounts.UNCHANGED
-        removed = accounts.update_account(operation(request, conn), account_id, body.name, body.type_id, body.notes, website)
+        due_day = body.due_day if "due_day" in body.model_fields_set else accounts.UNCHANGED
+        removed = accounts.update_account(operation(request, conn), account_id, body.name, body.type_id, body.notes, website, due_day)
         return {**_page(conn, account_id), "website_removed": removed}
     return run(request, action)
 

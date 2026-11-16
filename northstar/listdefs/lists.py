@@ -17,7 +17,7 @@ BALANCES = ListDef(
 # data, so it is not here; and the page is the heading, the Add account button and the table.
 ACCOUNTS = ListDef(
     "accounts", "account_summaries",
-    ("name", "type.class", "type", "currency", "last_cents", "reporting_value", "last_date", "days_since", "is_stale", "balance_count"),
+    ("name", "type.class", "type", "next_due", "currency", "last_cents", "reporting_value", "last_date", "days_since", "is_stale", "balance_count"),
     ("name", "asc"),
 )
 
