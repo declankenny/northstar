@@ -188,6 +188,15 @@ Version 0.6 adds the Reports page, with two reports: Assets & Liabilities and th
 - **Reports** is a new page in the menu, second after the Dashboard. It reads your data and writes nothing. A report that needs an exchange rate you have not entered says so and does not show partial figures; an administrator can add the rate on the Currencies page.
 - To go back, restore the backup the upgrade made, under the 0.5 image (see below).
 
+### Upgrading from 0.6 to 0.7
+
+Version 0.7 adds the history of a balance and the recovery of deleted data. What an upgrade does to an installation that already runs 0.6:
+
+- **A checked backup is made first**, as for any database change (see above). Six migrations run (`0029` to `0034`). They add the view behind a balance's history, two new kinds of change-log entry (`restore` and `purge`), two system properties, and an optional `website` and an optional `due_day` on accounts. No existing account, balance or user is changed.
+- **The first nightly cleanup after the upgrade permanently removes** every account, and every balance deleted on its own, that was deleted more than 90 days ago, with its history. To keep any of them, restore it first (admins: Deleted accounts and Deleted balances in the Admin menu), or change `data.deleted.retention_days` on the System Properties screen before the first 03:00 run. Emptying `data.deleted.cleanup_time` turns the cleanup off. Backups keep what they held until they expire.
+- **Nothing else to change in your settings**, nobody is signed out, and Northstar makes no new outbound request.
+- To go back, restore the backup the upgrade made, under the 0.6 image (see below).
+
 ### Rolling back
 
 You can't just start the old image on an upgraded database, because it doesn't understand the new schema. Restore the backup the upgrade made, under the old image. The file name has the version that made it and the UTC time, so take the newest one from the list:

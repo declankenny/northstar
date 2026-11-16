@@ -6,6 +6,10 @@ Each released version has a **Breaking** heading that says what an upgrade means
 
 ## [Unreleased]
 
+## [0.7.0] - TODO release date
+
+Data history and recovery (#58). A balance's page lists every change made to it and can put an earlier value back. Deleted accounts and deleted balances are kept for 90 days, an admin can restore them, and a nightly cleanup then removes them for good. Two small additions to accounts came with it: a website, and a payment due day for a liability.
+
 ### Added
 
 - A balance's history (#267): a balance's page now lists the changes recorded for it, newest first, with when, who made each one, the amount after it, whether it is the current value, and how it was made (typed by hand, the Update balances screen, an imported file, an import undo). A change to the note alone says so. A balance that existed before changes were recorded shows one row, "Entered", with its amount before the first recorded change.
