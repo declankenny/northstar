@@ -1,7 +1,10 @@
 """Account rules. Plain functions, no web code."""
 
+import ipaddress
 import sqlite3
+import unicodedata
 from datetime import date
+from urllib.parse import urlsplit
 
 from northstar import currencies, db, rates, staleness, writer
 from northstar.errors import NotFoundError, ValidationError
@@ -9,7 +12,7 @@ from northstar.writer import Operation
 
 _SELECT = (
     "SELECT a.id, a.name, t.class_id, c.name AS class_name, a.type_id, t.name AS type_name, "
-    "       a.is_open, a.notes, "
+    "       a.is_open, a.notes, a.website, "
     "       (SELECT COUNT(*) FROM live_balances b WHERE b.account_id = a.id) AS balance_count "
     "FROM live_accounts a "
     "JOIN account_types t ON t.id = a.type_id "
@@ -106,6 +109,105 @@ def _clean_notes(notes: str | None) -> str | None:
     return (notes or "").strip() or None
 
 
+WEBSITE_MAX = 2048
+WEBSITE_REFUSED = "Enter a full web address starting with http:// or https://, such as https://www.bank.example/."
+# What cleaning can remove from an address, as the names the page turns into words.
+LOGIN, QUERY, FRAGMENT = "login", "query", "fragment"
+
+
+# The characters a browser's URL parser refuses in a host (the WHATWG "forbidden domain code points", less the controls and
+# whitespace already refused), "%" included, so an encoded "/" or "?" cannot hide in one.
+_HOST_FORBIDDEN = set('#/:<>?@[\\]^|%')
+
+
+def _host_is_valid(hostport: str, host: str) -> bool:
+    """urlsplit does not validate the host. A bracketed host must be an IPv6 address; any other must have none of the characters a
+    browser refuses, so a saved address is one the link can open."""
+    if hostport.startswith("["):
+        if "%" in host:
+            return False
+        try:
+            ipaddress.IPv6Address(host)
+        except ValueError:
+            return False
+        return True
+    return not any(ch in _HOST_FORBIDDEN for ch in host) and _numeric_host_is_valid(host)
+
+
+def _ipv4_number(part: str) -> int | None:
+    """One part of a numeric host as a browser reads it: decimal, 0x hex or leading-0 octal. None when it is not a number."""
+    if not part:
+        return None
+    radix = 10
+    if part[:2].lower() == "0x":
+        part, radix = part[2:], 16
+    elif len(part) > 1 and part[0] == "0":
+        part, radix = part[1:], 8
+    if not part:
+        return 0
+    try:
+        return int(part, radix) if part.isascii() and part.isalnum() else None
+    except ValueError:
+        return None
+
+
+def _numeric_host_is_valid(host: str) -> bool:
+    """A browser reads a host whose last label is a number as an IPv4 address (so 999.999.999.999 and 1.2.3.4.5 are refused, and 1.2.3
+    means 1.2.0.3), and refuses it when it is not one. Any other host is not checked further (WHATWG URL, "ends in a number")."""
+    labels = host.split(".")
+    if labels[-1] == "" and len(labels) > 1:
+        labels.pop()
+    last = labels[-1]
+    if not (last.isascii() and last.isdigit()) and not (last[:2].lower() == "0x" and _ipv4_number(last) is not None):
+        return True
+    if len(labels) > 4:
+        return False
+    numbers = [_ipv4_number(label) for label in labels]
+    if any(n is None for n in numbers):
+        return False
+    return all(n <= 255 for n in numbers[:-1]) and numbers[-1] < 256 ** (5 - len(numbers))
+
+
+def clean_website(text: str | None) -> tuple[str | None, list[str]]:
+    """An account's website as it is stored, and what was removed to get it (a list of LOGIN, QUERY and FRAGMENT, empty when the address
+    was kept whole). The one rule for the form and the API (#266), in this order:
+
+    1. surrounding whitespace is trimmed, and nothing left clears the website (None);
+    2. more than WEBSITE_MAX characters is refused, before anything is parsed, so the work is bounded;
+    3. it must be a well-formed http or https address with a host, with no whitespace, control character or backslash in it;
+    4. any user name and password, the query string and the fragment are removed (a sign-in or session address often carries a token
+       there), and the scheme and host are written in lower case. Cleaning only shortens an address, so it still fits.
+
+    Only the cleaned address ever reaches the writer, so the change log never holds what was removed. A token in the path cannot be told
+    from a path, so this reduces the risk and does not remove it."""
+    text = (text or "").strip()
+    if not text:
+        return None, []
+    if len(text) > WEBSITE_MAX:
+        raise ValidationError(f"The website can be at most {WEBSITE_MAX} characters.")
+    if any(ch.isspace() or unicodedata.category(ch) == "Cc" or ch == "\\" for ch in text):   # controls include DEL and the C1 range
+        raise ValidationError(WEBSITE_REFUSED)
+    try:
+        parts = urlsplit(text)
+        host = parts.hostname
+        parts.port                    # a port that is not a number is a ValueError
+    except ValueError:
+        raise ValidationError(WEBSITE_REFUSED) from None
+    if parts.scheme.lower() not in ("http", "https") or not host or not text[len(parts.scheme):].startswith("://"):
+        raise ValidationError(WEBSITE_REFUSED)
+    if not _host_is_valid(parts.netloc.rsplit("@", 1)[-1], host):
+        raise ValidationError(WEBSITE_REFUSED)
+    removed = []
+    if "@" in parts.netloc:
+        removed.append(LOGIN)
+    if parts.query:
+        removed.append(QUERY)
+    if parts.fragment:
+        removed.append(FRAGMENT)
+    netloc = parts.netloc.rsplit("@", 1)[-1].lower()
+    return f"{parts.scheme.lower()}://{netloc}{parts.path}", removed
+
+
 def _check_type(conn: sqlite3.Connection, type_id: int | None, class_id: int) -> int:
     """The type must exist and belong to the class."""
     if type_id is None or not conn.execute(
@@ -152,16 +254,25 @@ def add_account(op: Operation, name: str | None, class_id: int,
             "name": name, "type_id": type_id, "currency_id": currency.id, "notes": _clean_notes(notes)})
 
 
+UNCHANGED = object()       # "the website was not sent": a partial update leaves it as it is, where None (or blank) clears it
+
+
 def update_account(op: Operation, account_id: int, name: str | None,
-                   type_id: int | None, notes: str | None = None) -> None:
-    """Rename, re-type within the account's own class, and edit notes."""
+                   type_id: int | None, notes: str | None = None, website: str | None | object = UNCHANGED) -> list[str]:
+    """Rename, re-type within the account's own class, and edit notes and the website. Returns what cleaning removed from the website
+    (see clean_website), so the page can say so."""
     conn = op.conn
     with db.write_transaction(conn):
         account = get_account(conn, account_id)
         name = _clean_name(name)
         type_id = _check_type(conn, type_id, account["class_id"])
         _check_name_free(conn, name, account_id)
-        writer.update(op, "accounts", account_id, {"name": name, "type_id": type_id, "notes": _clean_notes(notes)})
+        values = {"name": name, "type_id": type_id, "notes": _clean_notes(notes)}
+        removed: list[str] = []
+        if website is not UNCHANGED:
+            values["website"], removed = clean_website(website)
+        writer.update(op, "accounts", account_id, values)
+        return removed
 
 
 def change_class(op: Operation, account_id: int, new_type_id: int | None) -> None:

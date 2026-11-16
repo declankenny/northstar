@@ -16,6 +16,7 @@ import { clearFlash, peekFlash } from "./flash";
 import { WHEN } from "./Tile";
 import { useRequest } from "./useRequest";
 import { formatInteger } from "./locale";
+import { siteName, websiteLabel, websiteRemovedNotice } from "./website";
 
 type Dialog =
   | { kind: "balance" }
@@ -50,6 +51,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [menu, setMenu] = useState(false);
   const [flash] = useState(peekFlash);                       // a notice left by the page that sent the person here
+  const [saved, setSaved] = useState<string | null>(null);     // what saving the website cleaned out of it, until something else is done
   useEffect(() => clearFlash(), []);
   const [historyKey, setHistoryKey] = useState(0);              // raised when the account's balances change, so the history reads again
 
@@ -86,6 +88,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
     chart.reload();    // every change is asked of the chart again
     setHistoryKey((key) => key + 1);
     setFailure(null);
+    setSaved(null);
     setDialog(null);
   };
   const liability = account.class_name === "Liability";
@@ -103,6 +106,7 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
     <div className="acct">
       <div className="crumb"><Link to={PATHS.accounts}>Accounts</Link> / {account.name}</div>
       {flash && <p className="notice ok" role="status">{flash}</p>}
+      {saved && <p className="notice ok" role="status">{saved}</p>}
       <div className="top">
         <div>
           <div className="titlerow">
@@ -115,6 +119,14 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
             {!open
               ? "This account is closed. Reopen it to add or change its balances."
               : account.earliest_date ? `First balance on ${formatDate(account.earliest_date)}` : "No balances yet"}
+            {account.website && (
+              <>
+                {" · "}
+                <a href={account.website} target="_blank" rel="noopener noreferrer" aria-label={websiteLabel(account.website, account.name)}>
+                  {siteName(account.website)} <span aria-hidden="true">↗</span>
+                </a>
+              </>
+            )}
           </div>
         </div>
         <div className="actions-bar">
@@ -222,7 +234,11 @@ export function AccountPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
       )}
       {dialog?.kind === "edit" && (
         <EditAccountDialog account={account} onClose={() => setDialog(null)}
-          onSave={async (change) => apply(await editAccount(id, change))} />
+          onSave={async (change) => {
+            const page = await editAccount(id, change);
+            apply(page);
+            setSaved(websiteRemovedNotice(page.website_removed));
+          }} />
       )}
       {dialog?.kind === "class" && (
         <ChangeClassDialog account={account} isAdmin={isAdmin} onClose={() => setDialog(null)}
