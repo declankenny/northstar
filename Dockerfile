@@ -4,7 +4,7 @@
 # every architecture, so a multi-architecture build does not run Node under emulation. Only its output reaches the
 # final image, so Node and node_modules are not in it. The build writes to ../northstar/web/spa, which is
 # /northstar/web/spa here.
-FROM --platform=$BUILDPLATFORM node:24-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS frontend
+FROM --platform=$BUILDPLATFORM node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
