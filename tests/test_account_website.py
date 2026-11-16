@@ -27,6 +27,10 @@ def test_blank_clears_the_website(text):
     ("http://bank.example", "http://bank.example"),
     ("https://bank.example:8443/a/b", "https://bank.example:8443/a/b"),
     ("https://[::1]/x", "https://[::1]/x"),
+    ("https://192.168.1.10:8080/x", "https://192.168.1.10:8080/x"),
+    ("https://1.2.3/", "https://1.2.3/"), ("https://4294967295/", "https://4294967295/"), ("https://0x7f.1/", "https://0x7f.1/"),
+    ("https://bank.example./", "https://bank.example./"), ("https://1password.example/", "https://1password.example/"),
+    ("https://bank1.example/", "https://bank1.example/"),
     ("HTTPS://WWW.Bank.Example/Path", "https://www.bank.example/Path"),         # the scheme and host are lower case, the path is left as it is
     ("https://bank.example/?", "https://bank.example/"),                         # an empty query is nothing to say was removed
 ])
@@ -53,6 +57,9 @@ def test_sign_in_details_the_query_and_the_fragment_are_removed_and_said(text, s
     # a host a browser's URL parser would reject, so the saved link would not open
     "https://bank.example%2Flogin/", "https://bank.example|other/", "https://bank%2eexample%3f/", "https://bank^example/",
     "https://bank<example>/", "https://[::1%25eth0]/", "https://[bank.example]/", "https://[::1/",
+    # a host that ends in a number is an IPv4 address to a browser, and must be one
+    "https://999.999.999.999/", "https://1.2.3.4.5/", "https://256.1.1.1/", "https://1.2.3.256/", "https://1.2.65536/", "https://4294967296/",
+    "https://1.2.3.09/", "https://bank.1/", "https://1.2..4/",
     # DEL and the C1 controls, in the host and elsewhere
     "https://bank.example/\x7f", "https://bank\x7f.example/", "https://bank.example/a\x85b",
 ])

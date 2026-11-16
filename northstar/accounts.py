@@ -131,7 +131,41 @@ def _host_is_valid(hostport: str, host: str) -> bool:
         except ValueError:
             return False
         return True
-    return not any(ch in _HOST_FORBIDDEN for ch in host)
+    return not any(ch in _HOST_FORBIDDEN for ch in host) and _numeric_host_is_valid(host)
+
+
+def _ipv4_number(part: str) -> int | None:
+    """One part of a numeric host as a browser reads it: decimal, 0x hex or leading-0 octal. None when it is not a number."""
+    if not part:
+        return None
+    radix = 10
+    if part[:2].lower() == "0x":
+        part, radix = part[2:], 16
+    elif len(part) > 1 and part[0] == "0":
+        part, radix = part[1:], 8
+    if not part:
+        return 0
+    try:
+        return int(part, radix) if part.isascii() and part.isalnum() else None
+    except ValueError:
+        return None
+
+
+def _numeric_host_is_valid(host: str) -> bool:
+    """A browser reads a host whose last label is a number as an IPv4 address (so 999.999.999.999 and 1.2.3.4.5 are refused, and 1.2.3
+    means 1.2.0.3), and refuses it when it is not one. Any other host is not checked further (WHATWG URL, "ends in a number")."""
+    labels = host.split(".")
+    if labels[-1] == "" and len(labels) > 1:
+        labels.pop()
+    last = labels[-1]
+    if not (last.isascii() and last.isdigit()) and not (last[:2].lower() == "0x" and _ipv4_number(last) is not None):
+        return True
+    if len(labels) > 4:
+        return False
+    numbers = [_ipv4_number(label) for label in labels]
+    if any(n is None for n in numbers):
+        return False
+    return all(n <= 255 for n in numbers[:-1]) and numbers[-1] < 256 ** (5 - len(numbers))
 
 
 def clean_website(text: str | None) -> tuple[str | None, list[str]]:
